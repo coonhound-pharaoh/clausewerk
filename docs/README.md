@@ -1,10 +1,12 @@
 # Clausewerk documentation
 
-Two specifications sit at the repository root and are the **canonical sources of truth**:
+Three specifications sit at the repository root and are the **canonical sources of truth**:
 
 - [`ARCHITECTURE.md`](../ARCHITECTURE.md) — assembly and negotiation, ending at `contract.docx`.
 - [`LIFECYCLE-ARCHITECTURE.md`](../LIFECYCLE-ARCHITECTURE.md) — the LCMA: everything after
   signature. Obligations, renewals, amendments, wind-down.
+- [`CLAUSE-LIBRARY-ARCHITECTURE.md`](../CLAUSE-LIBRARY-ARCHITECTURE.md) — the CLA: the library
+  itself. Fallback ladders, concessions, version history, negotiation intelligence.
 
 Everything in this folder is *complementary* to that document, never a restatement of it. Where a
 document here and `ARCHITECTURE.md` disagree, `ARCHITECTURE.md` wins and the document here is a

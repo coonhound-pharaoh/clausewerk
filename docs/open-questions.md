@@ -11,12 +11,16 @@ underspecified, or in tension with its own premises.
 | 1 | Auto-approve vs. the audit story | **Decided** — [ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md) |
 | 2 | Who may override the validation gate | **Decided** — [ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md) |
 | 3 | Clause expiring mid-flight | **Decided** — [LCMA §2](../LIFECYCLE-ARCHITECTURE.md), warnings implemented |
-| 4 | The redline matcher's production form | Open — restated below |
-| 5 | Who authors validation rules | Open — restated below |
-| 6 | Ticket routing and assignment | Open — restated below |
-| 7 | Supersession | Open — restated below |
+| 4 | The redline matcher's production form | **Decided** — keyword scorer is retained as the fallback |
+| 5 | Who authors validation rules | **Decided** — attorneys, through a Legal gate |
+| 6 | Ticket routing and assignment | **Deferred** — documented below, not now |
+| 7 | Supersession | **Decided** — [ADR-0009](decisions/ADR-0009-concession-is-not-supersession.md) |
 | 8 | Lifecycle management | **Architected** — [`LIFECYCLE-ARCHITECTURE.md`](../LIFECYCLE-ARCHITECTURE.md) |
-| 9 | Smaller gaps | Deferred |
+| 9 | Clause library — concessions, ladders, negotiation intelligence | **Architected** — [`CLAUSE-LIBRARY-ARCHITECTURE.md`](../CLAUSE-LIBRARY-ARCHITECTURE.md) |
+| 10 | Smaller gaps | Deferred |
+
+*Numbering note: the original §9 "smaller gaps" moved to §10 when the clause library took the
+number. Every other number is stable — they are referred to by number in conversation.*
 
 ---
 
@@ -61,78 +65,84 @@ Negotiate inbox and the Dossier. See [LCMA §7](../LIFECYCLE-ARCHITECTURE.md).
 
 ---
 
-## 4. The redline matcher's production form
+## 4. The redline matcher's production form — decided ✅
 
-*Restated — the original phrasing buried the question.*
+**Decision: yes — the keyword scorer is retained as the deterministic fallback** when the matcher
+is rebuilt on vector search.
 
-**The question: when the redline matcher is rebuilt on vector search, does the current keyword
-scorer survive as its offline fallback — yes or no?**
+Consequences to hold to:
 
-Why it matters. Today the matcher scores clauses with fixed additive keyword weights and a 0.78
-threshold. §5 says production replaces this with embeddings and k-NN retrieval. Every other
-inference call in the system has a deterministic fallback so the pipeline runs with the model
-offline ([ADR-0005](decisions/ADR-0005-deterministic-fallbacks.md)).
+- Negotiate keeps a working offline path, so the full-degradation claim in §5 stays true for the
+  whole system rather than "everything except negotiation".
+- The two implementations need **comparable score semantics**, or the 0.78 threshold means
+  different things depending on which one ran. Either the vector matcher is calibrated onto the
+  existing scale, or each carries its own threshold and the UI states which is in effect.
+- The keyword rules become long-lived infrastructure rather than scaffolding, and need an owner —
+  see [ADR-0005](decisions/ADR-0005-deterministic-fallbacks.md) on the cost of maintaining two
+  implementations of the same judgement.
 
-If the keyword scorer is deleted when vectors arrive, Negotiate becomes the **only** part of
-Clausewerk that stops working when the model is unavailable, and the claim of a full degradation
-path narrows to "everything except negotiation."
+## 5. Who authors validation rules — decided ✅
 
-Two sub-questions follow: are scores from the two implementations comparable (does 0.78 still mean
-the same thing), and does the vector matcher inherit the threshold semantics or need its own?
+**Decision: attorneys author and approve them, through a Legal gate — not developers through a code
+review.**
 
-## 5. Who authors validation rules
+*The original framing was wrong and worth correcting: it assumed the rules would be maintained as
+code by engineers merging changes. The clauses in the prototype are placeholders, and in production
+the people writing both clause text and conflict rules are lawyers.*
 
-*Restated.*
+What this implies for the build:
 
-**The question: clause text can only enter the system through a named human in the Review queue.
-Validation rules are code and have no equivalent gate. Should they?**
+- Conflict rules need an **authoring surface for non-developers**, not a source file. A rule is a
+  structured statement over the decision set — "if a clause from category A is present and a clause
+  from category B is present, and condition C holds, raise a finding of severity S."
+- Rules go through the same gate as clause text: authored, reviewed, approved by a named human,
+  versioned, effective-dated, and retirable — the Review queue pattern applied to a second content
+  type ([ADR-0003](decisions/ADR-0003-review-queue-is-the-only-mutation-surface.md)).
+- Rule changes are change-controlled, because a rule change silently alters which contracts are
+  blocked. Every finding must cite the rule version that produced it.
+- This makes the rule catalogue a **library asset**, governed like the clause library in
+  [`CLAUSE-LIBRARY-ARCHITECTURE.md`](../CLAUSE-LIBRARY-ARCHITECTURE.md).
 
-Why it matters. There are four conflict rules today, marked "Currently" in the spec, over a
-48-category library — the combinatorial surface is much larger. New rules will be written. But a
-validation rule is a *legal* judgement expressed as code: "an uncapped indemnity contradicts a
-liability cap" is exactly the kind of assertion the Review queue exists to make a named lawyer
-approve.
+Still open: the expressiveness of the rule grammar. Too restrictive and lawyers cannot say what
+they mean; too open and it becomes a programming language with no gate.
 
-Today it would be approved by whoever merges the pull request. A bad rule is a false gate that
-blocks good contracts; a missing rule is a shipped contradiction. §5 says the catalogue is
-"versioned", which is the entire specification of its lifecycle.
+## 6. Ticket routing and assignment — deferred, documented
 
-## 6. Ticket routing and assignment
-
-*Restated.*
+**Status: acknowledged as important, explicitly not being solved now.** Recorded so it is not
+rediscovered later.
 
 **The question: when a Review ticket is created, which specific lawyer gets it?**
 
-Why it matters. Clause records carry a named `reviewer`. When a redline against `DP-H-014`
-escalates, does it route to that clause's reviewer, to a shared queue, or round-robin? And what
-happens when the named reviewer has left the company?
+Clause records carry a named `reviewer`. When a redline against `DP-H-014` escalates, does it route
+to that clause's reviewer, to a shared queue, or round-robin? And what happens when the named
+reviewer has left?
 
-This is not just workload distribution. The reviewer name is part of the provenance chain a
-regulator walks backwards, so routing determines whose name ends up on promoted language. §5 names
-a notification service responsible for "Legal review assignment" and specifies nothing further.
+Why it will matter: the reviewer's name is part of the provenance chain a regulator walks
+backwards, so routing determines whose name ends up on promoted language. §5 names a notification
+service responsible for "Legal review assignment" and specifies nothing further.
 
-## 7. Supersession
+Minimum viable answer when it is picked up: a shared queue with explicit claim, plus escalation to
+the clause's named reviewer if unclaimed. That is enough to build against and can be refined once
+there is real volume data.
 
-*Restated — and the honest answer is that nothing in the software implements it.*
+## 7. Supersession — decided ✅
 
-**The question: when Legal promotes a clause that replaces an older one, what should happen to the
-old clause?**
+**Decision: supersession, concession, and promotion are three different acts.** Specified in
+[ADR-0009](decisions/ADR-0009-concession-is-not-supersession.md) and
+[`CLAUSE-LIBRARY-ARCHITECTURE.md`](../CLAUSE-LIBRARY-ARCHITECTURE.md).
 
-Where it stands. §5 lists "supersession links" among the clause registry's stored fields, so the
-spec assumes the concept exists. Nothing describes the mechanism, and the prototype has no
-implementation — only a `retiredReason` string carrying human-readable text like
-`'Replaced by SC-H-012'`. That is a note, not a link: nothing can traverse it, and nothing enforces
-that the named clause exists.
+- **A Review ticket carrying changed clause text is not a supersession — it is negotiation**, and
+  is recorded as a **concession** scoped to that one agreement. Vendor text is quarantined and
+  never becomes selectable library language.
+- **Supersession replaces a clause**, as a deliberate Legal act with a recorded reason and
+  approver.
+- **Old versions are retained in version history**, permanently, so an agreement executed under
+  `@v1` still resolves `@v1`.
+- **Executed agreements carrying superseded clauses surface at renewal**, via the LCMA drift
+  report, which shows what changed and why.
 
-The decisions needed:
-
-- Does verifying a Review ticket derived from clause X automatically supersede X?
-- Does superseding auto-retire the predecessor, or leave it active until Legal retires it?
-- How does supersession coexist with "versions are never overwritten"
-  ([ADR-0006](decisions/ADR-0006-clause-expiry-is-computed-not-stored.md))? Presumably a supersession
-  link is a pointer *between* immutable versions rather than a mutation of either.
-- Do executed agreements referencing a superseded clause surface that at renewal? (The LCMA drift
-  report is the natural place, and would make supersession genuinely useful rather than decorative.)
+Clause state becomes `active` | `superseded` | `retired` | `expired`, because "replaced by something
+better" and "withdrawn" are different answers to an auditor's question.
 
 ## 8. Lifecycle management — architected ✅
 
@@ -143,7 +153,21 @@ pipeline, wind-down and survival obligations, and the data model additions.
 Its own open questions are listed in [LCMA §10](../LIFECYCLE-ARCHITECTURE.md) — chiefly the size of
 the obligation-template authoring backlog, and whether the system should assert breach.
 
-## 9. Smaller gaps — deferred
+## 9. Clause library — architected ✅
+
+Specified in [`CLAUSE-LIBRARY-ARCHITECTURE.md`](../CLAUSE-LIBRARY-ARCHITECTURE.md): the three
+populations (standard positions, fallback ladders, concessions), version history and supersession,
+and the negotiation-intelligence layer that turns concession data into proposed library changes.
+
+The load-bearing idea is the **fallback ladder** — a pre-approved preferred position, acceptable
+fallback, and floor per category. It moves Legal's involvement from per-negotiation to
+per-category, which is the difference between a system that scales and one that doesn't.
+
+Its own open questions are in [CLA §11](../CLAUSE-LIBRARY-ARCHITECTURE.md) — chiefly ladder depth,
+how much weight to give old concessions, and how many similar concessions constitute a pattern
+worth proposing on.
+
+## 10. Smaller gaps — deferred
 
 | Gap | Where |
 |---|---|

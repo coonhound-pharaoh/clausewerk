@@ -1,7 +1,10 @@
 # Clausewerk — Lifecycle Management Architecture (LCMA)
 
 Companion to [`ARCHITECTURE.md`](ARCHITECTURE.md), which specifies assembly and negotiation and
-terminates at `contract.docx`. This document specifies what happens **after signature**.
+terminates at `contract.docx`. This document specifies what happens **after signature**. The third
+specification, [`CLAUSE-LIBRARY-ARCHITECTURE.md`](CLAUSE-LIBRARY-ARCHITECTURE.md), covers the
+library itself — fallback ladders, concessions, and the version history this document's renewal
+drift report depends on.
 
 > Read as *Lifecycle Management Architecture* — the lifecycle-management system deliberately
 > excluded from the original architecture. Where the two documents overlap, `ARCHITECTURE.md`
@@ -153,7 +156,10 @@ exists.
 **Renew.** The notice window opens; the system proposes renew / renegotiate / lapse. Renewal
 re-enters **Assembly** with the original manifest as the starting point, re-resolved against the
 current library. A drift report shows exactly which clauses would change and why — this is where
-retired language is caught and replaced.
+retired and **superseded** language is caught and replaced. The report walks the agreement's pinned
+clause versions against current ones; see
+[CLA §5](CLAUSE-LIBRARY-ARCHITECTURE.md) and
+[ADR-0009](docs/decisions/ADR-0009-concession-is-not-supersession.md).
 
 **Amend.** An amendment is a **new assembly run scoped to the changed categories**, producing an
 amending instrument that references the original. The original executed record is never edited.

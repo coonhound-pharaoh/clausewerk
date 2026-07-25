@@ -7,6 +7,89 @@ running log of *what we decided and why*, readable without opening the code.
 
 ---
 
+## 2026-07-25 · What we concede and what we stand for are different records
+
+**Decision.** Accepting a vendor's wording is a **concession** — a note that on *this one deal* we
+agreed to something other than our standard position. It does not change the library. The next deal
+still starts from our standard position.
+
+Changing the library is a separate, deliberate decision by Legal. Replacing a clause outright is a
+third thing again, called **supersession**, and it keeps the old version on file permanently.
+
+**Why.** Today the system does all three with one action: accept a vendor's redline and it quietly
+becomes approved language for everyone. That means the library drifts toward whatever vendors
+pushed hardest on, and nobody ever decided that should happen.
+
+**The commercial payoff.** Once concessions are recorded properly, we have something we have never
+had: a structured record of what we actually give away, to whom, at what deal size. That record is
+what the strategic library gets built from.
+
+**Also decided.** Signed agreements carrying replaced language get flagged at renewal, showing what
+changed and why. That is what makes keeping old versions worth doing rather than just tidy.
+
+---
+
+## 2026-07-25 · The library gets a documented retreat path
+
+**Decision.** Each risk area gets a **ladder**: our preferred position, an acceptable fallback, and
+a floor we do not go below. Every rung is proper approved language written by a lawyer.
+
+**Why this is the big one.** Today, when a vendor pushes back on anything, it goes to Legal. That
+makes Legal the bottleneck on every negotiation. With a ladder, Legal approves the retreat path
+once, in advance — so the system can settle common push-backs on its own, and Legal only sees the
+asks that fall below the floor.
+
+In plain terms: **Legal's involvement moves from every deal to every category, occasionally.** That
+is the difference between a system that scales and one that doesn't.
+
+**The floor is absolute.** No confidence score, no auto-approve, and no shortcut gets past it.
+
+---
+
+## 2026-07-25 · The library learns from what we gave away
+
+**Decision.** The system counts patterns in our concessions and proposes library changes for Legal
+to accept or reject. For example: *"we conceded this point on 14 of 17 deals, always to the same
+position — our standard position may be fiction."*
+
+**Why.** If we always concede the same point, our written standard is not our real standard, and
+everyone wastes time discovering that deal by deal.
+
+**Guardrail.** These are proposals with the evidence attached, never automatic changes, and the
+software never writes contract language. It counts; lawyers decide.
+
+**Note.** This data is commercially sensitive — it is a summary of exactly what we will give away
+under pressure. It stays internal to Legal and Audit and must never appear in anything vendor-facing.
+
+---
+
+## 2026-07-25 · Lawyers write the contradiction rules, not developers
+
+**Decision.** The rules that detect contradictions in a contract are written and approved by
+attorneys, through the same approval process as clause wording — not by engineers changing code.
+
+**Correction.** I had framed this as a code-review question. That was wrong: the sample clauses are
+placeholders, and in practice attorneys own this.
+
+**What it means for the build.** The rules need a proper authoring screen for non-technical users,
+version control, effective dates, and a named approver — the same treatment clause wording gets.
+Every warning the system raises must say which version of which rule produced it.
+
+---
+
+## 2026-07-25 · Keep the simple matcher as the backup
+
+**Decision.** When we upgrade the vendor-redline matcher to smarter search, we keep the current
+simple keyword method as the offline backup.
+
+**Why.** Otherwise negotiation becomes the only part of Clausewerk that stops working when the AI
+is unavailable, and we lose the ability to say the whole system runs without it.
+
+**Watch out for.** The two methods must score things on the same scale, or our confidence threshold
+means different things depending on which one is running.
+
+---
+
 ## 2026-07-25 · Auto-approve must leave a trace
 
 **Decision.** Every time someone approves a vendor's change, the system now records whether the

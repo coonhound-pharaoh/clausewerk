@@ -6,9 +6,14 @@ Scope: intended functionality, the deterministic/inference split, and back- and 
 > Where this document and the prototype disagreed, the discrepancies are catalogued — and now
 > resolved — in [`docs/spec-vs-implementation.md`](docs/spec-vs-implementation.md).
 >
-> **Scope:** this document ends at `contract.docx`. Everything after signature — obligations,
-> renewals, amendments, termination, wind-down — is specified in
-> [`LIFECYCLE-ARCHITECTURE.md`](LIFECYCLE-ARCHITECTURE.md) (the LCMA).
+> **Scope:** this document ends at `contract.docx`. Two companion specifications extend it:
+> [`LIFECYCLE-ARCHITECTURE.md`](LIFECYCLE-ARCHITECTURE.md) (the LCMA) covers everything after
+> signature, and [`CLAUSE-LIBRARY-ARCHITECTURE.md`](CLAUSE-LIBRARY-ARCHITECTURE.md) (the CLA)
+> covers the library itself — fallback ladders, concessions, and version history.
+>
+> The CLA **changes the Review-queue behaviour described in §2.8**: accepting vendor language is a
+> deal-scoped *concession*, not a new library clause. See
+> [ADR-0009](docs/decisions/ADR-0009-concession-is-not-supersession.md).
 
 ---
 
