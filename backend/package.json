@@ -1,0 +1,16 @@
+{
+  "name": "clausewerk-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Clausewerk backend — deterministic core. Clause registry, resolution, audit.",
+  "type": "module",
+  "scripts": {
+    "test": "node db/test/registry.test.mjs",
+    "test:mutation": "node db/test/mutation-check.mjs",
+    "verify": "npm run test && npm run test:mutation"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.4"
+  }
+}
