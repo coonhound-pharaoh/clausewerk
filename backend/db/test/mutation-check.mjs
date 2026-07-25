@@ -49,6 +49,49 @@ const MUTATIONS = [
 grant insert on cw.supersession to cw_legal_reviewer;
 grant usage, select on sequence cw.supersession_id_seq to cw_legal_reviewer;`,
     expect: 'a legal reviewer cannot supersede — only legal admin can' },
+
+  // ── Ladders and concessions (CLA) ──
+  { suite: 'ladder.test.mjs',
+    name: 'the floor is not absolute',
+    find: `  if new.conceded_rung is not null and floor_rung is not null
+     and new.conceded_rung > floor_rung and new.override_ref is null then`,
+    repl: `  if false then`,
+    expect: 'conceding below the floor without an override is refused' },
+
+  { suite: 'ladder.test.mjs',
+    name: 'vendor language accepted without an override',
+    find: `  if new.vendor_text is not null and new.override_ref is null then`,
+    repl: `  if false then`,
+    expect: 'accepting vendor language without an override is refused' },
+
+  { suite: 'ladder.test.mjs',
+    name: 'anyone may promote a concession into the library (ADR-0009 regression)',
+    find: `  if cw.app_role() is distinct from 'legal_admin' then
+    raise exception 'only legal_admin may promote a concession into the library'
+      using errcode = 'insufficient_privilege';
+  end if;`,
+    repl: `  if false then raise exception 'unreachable'; end if;`,
+    expect: 'a requester cannot promote' },
+
+  { suite: 'ladder.test.mjs',
+    name: 'a degraded ladder reports as intact (silent collapse)',
+    find: `         when count(*) filter (where not r.selectable) > 0 then 'degraded'`,
+    repl: `         when false then 'degraded'`,
+    expect: 'an expired rung degrades the ladder rather than vanishing' },
+
+  { suite: 'ladder.test.mjs',
+    name: 'viewers can read the concession record',
+    find: `grant select on cw.concession to cw_auditor;`,
+    repl: `grant select on cw.concession to cw_auditor, cw_viewer;`,
+    expect: 'a viewer cannot read concessions at all' },
+
+  { suite: 'ladder.test.mjs',
+    name: 'requesters see every buyer’s concessions',
+    find: `create policy read_scoped on cw.concession for select using (
+  cw.app_role() in ('legal_reviewer','legal_admin','auditor')
+  or (cw.app_role() = 'requester' and cw.owns_agreement(concession.agreement_id)));`,
+    repl: `create policy read_scoped on cw.concession for select using (true);`,
+    expect: 'a requester sees only their own deals' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();
@@ -72,8 +115,9 @@ for (const m of MUTATIONS) {
   }
 
   let out = '', failed = false;
+  const suite = m.suite || 'registry.test.mjs';
   try {
-    out = execFileSync(process.execPath, [join(HERE, 'registry.test.mjs')],
+    out = execFileSync(process.execPath, [join(HERE, suite)],
       { env: { ...process.env, CW_MIGRATIONS: dir }, encoding: 'utf8' });
   } catch (e) { failed = true; out = (e.stdout || '') + (e.stderr || ''); }
 

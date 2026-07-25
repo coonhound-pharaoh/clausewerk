@@ -3,8 +3,8 @@
 The deterministic core. This is the half of the system that must be provably
 correct and uses no AI at all.
 
-**Status:** clause registry built and verified. Resolution engine and document
-service not yet started.
+**Status:** clause registry, fallback ladders and the concession record built and
+verified. Resolution engine and document service not yet started.
 
 ## Running it
 
@@ -24,11 +24,13 @@ not mocked. Same SQL will run on Supabase unchanged.
 
 ```
 db/migrations/
-  0001_foundation.sql       roles, append-only hash-chained audit log
-  0002_clause_registry.sql  categories, clauses, immutable versions, supersession
+  0001_foundation.sql             roles, append-only hash-chained audit log
+  0002_clause_registry.sql        categories, clauses, immutable versions, supersession
+  0003_ladders_and_concessions.sql  fallback ladders, concessions, promotion, analytics
 db/test/
-  registry.test.mjs         33 tests
-  mutation-check.mjs        proves those tests can fail
+  registry.test.mjs         34 tests
+  ladder.test.mjs           29 tests
+  mutation-check.mjs        12 mutations — proves those tests can fail
 ```
 
 ## The design in one page
@@ -75,6 +77,39 @@ attack.
 authenticated may read clause text; only `legal_admin` may change the library;
 `viewer` cannot read the audit log at all, because it names who conceded what.
 
+## Ladders and concessions
+
+**A ladder is a pre-approved retreat path** — rung 0 is the preferred position,
+the last rung is the floor. Every rung is ordinary approved clause text, so a
+ladder is metadata over clauses rather than a new kind of content. Rungs must be
+contiguous from 0 (or "descend one rung" is meaningless) and exactly one must be
+the floor.
+
+**Below the floor, an override is mandatory.** Enforced by trigger, because the
+rule depends on the ladder's floor and a check constraint cannot reach another
+table. Accepting vendor wording outright requires an override too.
+
+**An expiring rung degrades a ladder; it does not silently collapse it.**
+Whether a ladder should close up when a middle rung lapses is deliberately
+undecided (CLA §11 q4), so `cw.ladder_health` reports `intact` / `degraded` /
+`floor_unusable` / `floorless` / `empty` and leaves the decision to the caller.
+Silent collapse would quietly lower our floor.
+
+**Conceded vendor wording is quarantined.** It lives in `cw.concession`, is
+referenced by no selectable view, and is not in the clause library at all. The
+only route in is `cw.promote_concession()` — a deliberate `legal_admin` act that
+mints a normal clause version marked `provenance = 'promoted'` with a
+`Policy-DERIVED-*` citation, and refuses to run twice on the same concession.
+This is ADR-0009: accepting a vendor's ask is a concession, not a library change.
+
+**The analytics are plain counting.** `cw.concession_rate` and
+`cw.library_proposal` aggregate what we actually gave away, and propose library
+changes with the evidence attached. No model is involved and none writes text.
+
+**Concession data is the most sensitive thing here** — an aggregate of exactly
+what we concede under pressure. Legal and Audit see all of it, a Requester sees
+only their own deals, and a Viewer sees none of it.
+
 ## Why there is a mutation check
 
 A test suite that has never failed proves nothing. `mutation-check.mjs`
@@ -82,10 +117,16 @@ deliberately breaks one guarantee at a time — removes the unique constraint on
 category short codes, makes clause bodies editable, lets expired clauses be
 selected — and asserts the suite catches each one.
 
-It has already earned its place: it caught two tests that were passing for the
-wrong reason. Both referenced clause versions that did not exist, so they failed
-on a foreign key rather than on the rule under test, and would have kept passing
-if the rule were deleted.
+It has already earned its place three times:
+
+- Two tests referenced clause versions that did not exist, so they failed on a
+  foreign key rather than the rule under test — and would have kept passing if
+  the rule were deleted.
+- The "a viewer cannot read concessions" test was passing for an **accidental**
+  reason. The row-level policy's subquery touched `cw.agreement`, which viewers
+  cannot read, so the denial named the wrong table. The policy now uses a
+  `security definer` ownership function, and the test asserts the denial names
+  `concession` specifically.
 
 ## Mapping to the specifications
 
@@ -99,10 +140,13 @@ if the rule were deleted.
 
 ## Next
 
-1. **Ladders and concessions** — [CLA](../CLAUSE-LIBRARY-ARCHITECTURE.md) §3–4.
-   Concessions must be quarantined so vendor text can never become selectable.
-2. **Resolution engine** — the pure function, in Python, reading
-   `cw.selectable_clause`. Must pin a library snapshot per run so a result is
-   reproducible forever.
-3. **Document service** — Python, `python-docx`, generation and tracked-change
+1. **Resolution engine** — the pure function, in Python, reading
+   `cw.selectable_clause` and descending a ladder when a vendor pushes back.
+   Must pin a library snapshot *and* the ladder configuration per run, or the
+   same manifest resolves differently next quarter and the determinism
+   guarantee is lost (CLA §9).
+2. **Document service** — Python, `python-docx`, generation and tracked-change
    parsing.
+3. **Agreement record** — `cw.agreement` is currently the minimal subset needed
+   by concessions. [LCMA](../LIFECYCLE-ARCHITECTURE.md) §5 extends it with the
+   snapshot pin, decision set, term and status machine.

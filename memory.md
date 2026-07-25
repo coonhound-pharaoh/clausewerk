@@ -181,3 +181,23 @@ clauses have no approval date recorded at all. The old code invented one, which 
 expired. We chose **not** to invent dates in software. Those clauses are now flagged as missing
 their paperwork. Filling that in is Legal's job, and hiding it in code would only have buried the
 problem again.
+
+---
+
+## 2026-07-25 · A protection that worked by accident is not a protection
+
+**What happened.** While building the concession record, our test proved that a
+read-only Viewer could not see concession data. It passed — but for the wrong
+reason. The rule was tripping over an unrelated permission on a different table,
+not actually enforcing "viewers may not see this."
+
+Had anyone later adjusted that unrelated permission, the most commercially
+sensitive data we hold — the record of what we concede under pressure — would
+have become visible, and the test would still have said everything was fine.
+
+**Why it was caught.** Not by the tests. By the deliberate practice of breaking
+each protection on purpose and checking the tests notice. That practice has now
+caught three faults the normal tests missed.
+
+**Decision.** Keep doing it, and treat "the test passed" as a weaker claim than
+"the test failed when we broke the thing it guards."
