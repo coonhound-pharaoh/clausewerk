@@ -42,10 +42,16 @@ ${transcript}`;
       const cleaned = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/, '').trim();
       const parsed = JSON.parse(cleaned);
       if (parsed && Array.isArray(parsed.risks)) {
-        // Filter risks to known categories — drop any hallucinated ones
-        const allowed = new Set(cats.length ? cats : []);
+        // Filter risks to known categories — drop any hallucinated ones.
+        // FAIL CLOSED: with no category enum loaded we cannot validate the
+        // model's output at all, so refuse it and fall through to the
+        // deterministic classifier. Passing it through would let unvalidated
+        // categories cross the trust boundary — the one thing this filter
+        // exists to prevent.
+        if (!cats.length) throw new Error('CATEGORIES unavailable — refusing unvalidated LLM manifest');
+        const allowed = new Set(cats);
         const risks = parsed.risks
-          .filter(r => allowed.size === 0 || allowed.has(r.category))
+          .filter(r => allowed.has(r.category))
           .map(r => ({
             category: r.category,
             severity: r.severity === 'High' ? 'High' : 'Standard',
@@ -99,7 +105,11 @@ ${transcript}`;
 }
 
 // Resolve manifest against ledger: one clause per category, High wins.
-function resolveClauses(manifest, ledger) {
+// opts.strictMode (default true) excludes inactive clauses — retired or expired
+// — from the candidate pool. With it off they remain selectable but any
+// resulting selection is flagged on the decision, never silently accepted.
+function resolveClauses(manifest, ledger, opts) {
+  const strictMode = !opts || opts.strictMode !== false;
   const decisions = [];
 
   // V3.1 — Always-include baseline clauses injected as synthetic risks.
@@ -124,9 +134,22 @@ function resolveClauses(manifest, ledger) {
   for (const risk of manifest.risks) {
     // Exclude always-include clauses from manifest-driven selection — they
     // were already placed by the baseline pass above.
-    const candidates = ledger.filter(c => c.cat === risk.category && !c.alwaysInclude);
+    const inCategory = ledger.filter(c => c.cat === risk.category && !c.alwaysInclude);
+    // Retired and expired clauses must not be selectable. The baseline pass
+    // above already gates on `active`; this is the manifest-driven equivalent.
+    const candidates = strictMode ? inCategory.filter(c => c.active !== false) : inCategory;
     if (candidates.length === 0) {
-      decisions.push({ risk, selected: null, suppressed: [], reason: 'No clause available in Ledger' });
+      decisions.push({
+        risk,
+        selected: null,
+        suppressed: [],
+        // Distinguish "we never had one" from "we had one and it lapsed" —
+        // they are different library problems and need different fixes.
+        reason: inCategory.length
+          ? `No active clause available in Ledger · ${inCategory.length} candidate(s) retired or expired`
+          : 'No clause available in Ledger',
+        expiredOnly: inCategory.length > 0,
+      });
       continue;
     }
     // Prefer matching severity
@@ -141,6 +164,11 @@ function resolveClauses(manifest, ledger) {
       reason: exactMatch
         ? `Matched ${risk.severity} variant for ${risk.category}`
         : `No ${risk.severity} variant; fell back to ${fallback.sev}`,
+      // Only reachable with strict mode off. A non-active clause in a contract
+      // is a warning that must travel with the decision, not a silent pass.
+      ...(selected.active === false ? {
+        warning: `${selected.id} is not active (${selected.retiredReason || 'expired'}) — selected with strict mode off`,
+      } : {}),
     });
   }
   return decisions;
@@ -159,6 +187,34 @@ Dated: ${today}`;
   return `${header}\n\n${sections}`;
 }
 
+// Expiry / obsolescence surveillance over the clauses currently in a contract.
+// A negotiation runs for weeks, so clause validity has to be re-checked at every
+// round rather than only at assembly — a clause that was active when the
+// document was forged can lapse before it is signed. Re-reads each selected
+// clause from the live ledger so the check reflects now, not resolution time.
+function expiryWarnings(decisions, ledger) {
+  const byId = new Map((ledger || []).map(c => [c.id, c]));
+  const inPlay = (decisions || [])
+    .map(d => d.selected)
+    .filter(Boolean)
+    .map(c => byId.get(c.id) || c);
+
+  const lapsed = inPlay.filter(c => c.expired);
+  const retired = inPlay.filter(c => c.active === false && !c.expired);
+  const expiringSoon = inPlay.filter(c => c.active !== false && c.expiresSoon);
+
+  return {
+    lapsed,
+    retired,
+    expiringSoon,
+    // Blocking conditions: language that is no longer approved is already in
+    // the document. Expiring-soon is a warning, not a block.
+    blocking: lapsed.length + retired.length,
+    total: lapsed.length + retired.length + expiringSoon.length,
+  };
+}
+
 window.classifyToManifest = classifyToManifest;
 window.resolveClauses = resolveClauses;
 window.assembleDossier = assembleDossier;
+window.expiryWarnings = expiryWarnings;

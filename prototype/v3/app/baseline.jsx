@@ -120,7 +120,7 @@ const BASELINE_FRAMEWORK = [
   // § 9  COMPLIANCE & ETHICS
   // ══════════════════════════════════════════════════════════════════════
   {
-    id: 'AC-B-011', cat: 'Anti-Corruption', sev: 'Standard',
+    id: 'AB-B-011', cat: 'Anti-Corruption', sev: 'Standard',
     title: 'Anti-corruption — FCPA / UK Bribery Act',
     frameworkSection: '9.2',
     text: 'Vendor represents, warrants, and covenants that it shall comply with the U.S. Foreign Corrupt Practices Act, the UK Bribery Act 2010, and all other applicable anti-corruption and anti-bribery laws. Vendor shall not, directly or indirectly, offer, promise, authorize, or give any payment or thing of value to any government official, political party, or private person for the purpose of obtaining or retaining business or securing an improper advantage. Vendor shall maintain policies, training, and books-and-records sufficient to evidence compliance, and shall permit Customer to audit such records upon reasonable notice.',

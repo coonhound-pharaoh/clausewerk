@@ -57,4 +57,4 @@ triple (Manifest), and a clause **ID plus a score** (Negotiate).
 
 - [ADR-0002](ADR-0002-manifest-is-the-trust-boundary.md) — where the rule is enforced structurally
 - [ADR-0003](ADR-0003-review-queue-is-the-only-mutation-surface.md) — the only way new language enters
-- [`spec-vs-implementation §5`](../spec-vs-implementation.md#5-the-classifiers-category-filter-fails-open) — the enforcement point currently fails open
+- [`spec-vs-implementation §5`](../spec-vs-implementation.md) — the enforcement point now fails closed

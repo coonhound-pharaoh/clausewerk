@@ -59,5 +59,5 @@ carried across as *evidence shown to reviewers* and never reaches a contract doc
 
 - [ADR-0001](ADR-0001-model-never-authors-contract-language.md) — the rule this enforces
 - [`data-model.md`](../data-model.md) — the manifest schema
-- [`spec-vs-implementation §5`](../spec-vs-implementation.md#5-the-classifiers-category-filter-fails-open) — the filter fails open when `window.CATEGORIES` is empty
-- [`open-questions §1`](../open-questions.md) — `autoApprove` bypasses the human at a different boundary
+- [`spec-vs-implementation §5`](../spec-vs-implementation.md) — the filter now fails closed when `window.CATEGORIES` is empty
+- [ADR-0008](ADR-0008-governance-roles-and-recorded-overrides.md) — auto-approval and gate overrides, the other places a human could be bypassed

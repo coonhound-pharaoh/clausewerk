@@ -1,9 +1,10 @@
 # Prototype
 
-Ingested verbatim from `Downloads/Interview Pitch` on 2026-07-25. Nothing was refactored, renamed,
-or fixed on the way in — including the issues catalogued in
-[`../docs/spec-vs-implementation.md`](../docs/spec-vs-implementation.md). This tree is the record
-of what was built, not a maintained codebase.
+Ingested verbatim from `Downloads/Interview Pitch` on 2026-07-25, then repaired: the eight defects
+catalogued in [`../docs/spec-vs-implementation.md`](../docs/spec-vs-implementation.md) are all
+fixed in [`v3/`](v3), with the fixes verified against the running application.
+
+`v2/` and `pitch/` remain untouched — they are historical records, not maintained code.
 
 ## What's here
 
@@ -36,9 +37,10 @@ Two consequences of that stack worth knowing before you debug anything:
 1. **It needs network access.** React, Babel, Tailwind, JSZip, and Google Fonts all come from
    CDNs. Offline, the page renders nothing.
 2. **Script order is load-bearing.** `data.jsx` must run first because it populates
-   `window.CATEGORIES`, which the classifier's enum filter depends on — and that filter
-   [fails open](../docs/spec-vs-implementation.md#5-the-classifiers-category-filter-fails-open) if
-   the global is missing. The order is fixed in each entry HTML; preserve it.
+   `window.CATEGORIES`, which the classifier's enum filter depends on. That filter now
+   [fails closed](../docs/spec-vs-implementation.md) — a missing global means the LLM manifest is
+   refused and the deterministic classifier runs — but the order is still fixed in each entry HTML
+   and should be preserved.
 
 `dist/Clausewerk.html` is a bundler export with its sources inlined as UUID-keyed payloads rather
 than plaintext, so it is the right file to *send someone* and the wrong file to read or edit. Use

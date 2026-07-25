@@ -3,9 +3,12 @@
 Reference specification derived from the V3 prototype ([`prototype/v3/Clausewerk V3.html`](prototype/v3/Clausewerk%20V3.html) + [`prototype/v3/app/*.jsx`](prototype/v3/app)).
 Scope: intended functionality, the deterministic/inference split, and back- and front-end requirements.
 
-> Where this document and the prototype disagree, the disagreements are catalogued in
-> [`docs/spec-vs-implementation.md`](docs/spec-vs-implementation.md). This document states the
-> intended design and remains authoritative; the drift list says where the code has not caught up.
+> Where this document and the prototype disagreed, the discrepancies are catalogued — and now
+> resolved — in [`docs/spec-vs-implementation.md`](docs/spec-vs-implementation.md).
+>
+> **Scope:** this document ends at `contract.docx`. Everything after signature — obligations,
+> renewals, amendments, termination, wind-down — is specified in
+> [`LIFECYCLE-ARCHITECTURE.md`](LIFECYCLE-ARCHITECTURE.md) (the LCMA).
 
 ---
 

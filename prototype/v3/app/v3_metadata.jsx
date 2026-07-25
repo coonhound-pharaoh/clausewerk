@@ -144,27 +144,40 @@ const V3_METADATA = {
 
 // Apply metadata overlay + defaults to every ledger entry.
 function enrichLedger(base) {
-  const today = new Date('2026-04-24');
+  // Real clock by default, so clauses actually expire. window.CLAUSEWERK_TODAY
+  // pins it for demos and screenshots, where stable expiry states matter.
+  const today = window.CLAUSEWERK_TODAY ? new Date(window.CLAUSEWERK_TODAY) : new Date();
   return base.map(c => {
     const meta = V3_METADATA[c.id] || {};
     // Clause-level fields (e.g. baseline clauses ship their own metadata) win
     // over defaults; V3_METADATA overlay wins over both.
-    const expires = meta.expires || c.expires || defaultExpiry(c.created || meta.created);
-    const expiresDate = new Date(expires);
-    const isExpired = expiresDate < today;
-    const daysToExpiry = Math.round((expiresDate - today) / (1000*60*60*24));
+    // Expiry can only be derived from a KNOWN creation date. Defaulting an
+    // unrecorded date to a fixed past epoch silently birth-expires every clause
+    // that never got metadata — which is what retired the entire Baseline
+    // Framework, a set flagged alwaysInclude and therefore expected in every
+    // contract. A clause with no recorded provenance is not expired; it is
+    // unprovenanced, which is a different problem and is flagged as one.
+    const knownCreated = meta.created || c.created || null;
+    const expires = meta.expires || c.expires || (knownCreated ? defaultExpiry(knownCreated) : null);
+    const expiresDate = expires ? new Date(expires) : null;
+    const isExpired = expiresDate ? expiresDate < today : false;
+    const daysToExpiry = expiresDate ? Math.round((expiresDate - today) / (1000*60*60*24)) : null;
     return {
       ...c,
       rationale: meta.rationale || c.rationale || `Pre-approved ${c.sev.toLowerCase()} clause for ${c.cat}.`,
       citations: meta.citations || c.citations || [`Policy-${c.id}`],
-      created: meta.created || c.created || '2024-01-01',
+      created: knownCreated,
       expires,
       reviewer: meta.reviewer || c.reviewer || 'Legal',
       active: (meta.active !== false && c.active !== false) && !isExpired,
       retiredReason: meta.retiredReason || null,
       daysToExpiry,
-      expiresSoon: daysToExpiry > 0 && daysToExpiry <= 90,
+      expiresSoon: daysToExpiry != null && daysToExpiry > 0 && daysToExpiry <= 90,
       expired: isExpired,
+      // Data-quality flag, not a validity flag. An unprovenanced clause is
+      // selectable but cannot be temporally governed, so it needs surfacing
+      // rather than silent inclusion or silent expiry.
+      provenanceGap: !knownCreated || !expires,
       vectorBuckets: meta.vectorBuckets || c.vectorBuckets || [{ scope: c.cat, score: 0.85 }],
     };
   });

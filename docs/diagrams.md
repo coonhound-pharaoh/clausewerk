@@ -59,7 +59,7 @@ flowchart TB
   BASE --> BEMIT["emit Decision<br/>severity = 'Baseline'<br/>reason = 'Always-include · §n'"]
   BEMIT --> LOOP{"for each<br/>manifest risk"}
 
-  LOOP --> CAND["candidates =<br/>same category<br/>AND NOT alwaysInclude"]
+  LOOP --> CAND["candidates =<br/>same category<br/>AND NOT alwaysInclude<br/><b>AND active</b> (strict mode)"]
   CAND --> EMPTY{"any<br/>candidates?"}
 
   EMPTY -->|no| NULLD["Decision selected = <b>null</b><br/>'No clause available in Ledger'<br/><i>a hard flag, never a guess</i>"]
@@ -78,8 +78,9 @@ flowchart TB
   style SUPP stroke-width:2px
 ```
 
-> The baseline pass filters on `active`; the manifest pass does not. See
-> [finding #1](spec-vs-implementation.md#1-retired-and-expired-clauses-stay-in-the-manifest-driven-candidate-pool).
+> Both passes now filter on `active`. The manifest pass did not until
+> [finding #1](spec-vs-implementation.md) was fixed. With strict mode off, inactive clauses are
+> selectable again but every such decision carries a `warning`.
 
 ---
 
@@ -170,8 +171,9 @@ stateDiagram-v2
 
   note left of expired
     active = (not retired) AND (not expired)
-    Evaluated against a hard-coded
-    date in the prototype.
+    Evaluated against the LIVE clock.
+    A clause with no recorded dates
+    never expires: provenanceGap.
   end note
 ```
 

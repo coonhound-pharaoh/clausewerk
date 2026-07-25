@@ -12,7 +12,7 @@ these in the sections where they arise; this collects them so the whole schema i
 
 Where a **`[code]`** name differs from the prose in `ARCHITECTURE.md`, the code name is given and
 the divergence is noted — see
-[spec-vs-implementation §7](spec-vs-implementation.md#7-clause-field-naming-diverges-from-the-prose).
+[spec-vs-implementation §7](spec-vs-implementation.md).
 
 ---
 
@@ -30,8 +30,8 @@ The enumeration every other record keys off. 48 entries in `data.jsx`.
 | `label` | string | **The canonical string.** Manifest `category` values must match exactly |
 | `short` | string(2) | Category code embedded in clause IDs |
 
-Two categories share the short code `AC` (Acceptance, Anti-Corruption) —
-[see finding #4](spec-vs-implementation.md#4-category-short-code-collision-ac).
+Short codes are unique. Acceptance and Anti-Corruption both claimed `AC` until Anti-Corruption was
+moved to `AB` — [finding #4](spec-vs-implementation.md).
 
 `BASELINE_CATEGORIES` `[code]` is a separate list of eight labels the fallback classifier always
 emits: Liability Cap, Termination, Payment Terms, Confidentiality, Compliance, Governing Law,
@@ -72,18 +72,23 @@ Resolution order per field is `V3_METADATA[id]` → clause's own value → compu
 |---|---|---|
 | `rationale` | string | `Pre-approved {sev} clause for {cat}.` — shown to reviewers, **never inserted into the contract** |
 | `citations[]` | string[] | `['Policy-{id}']` |
-| `created` | date | `'2024-01-01'` |
-| `expires` | date | `created` + 2 years |
+| `created` | date \| **null** | `null` — never fabricated |
+| `expires` | date \| **null** | `created` + 2 years, **only if `created` is known**; else `null` |
 | `reviewer` | string | `'Legal'` |
 | `active` | bool | **Computed**: `(meta.active !== false && c.active !== false) && !isExpired` |
 | `retiredReason` | string \| null | `null` |
-| `daysToExpiry` | number | Derived; negative once expired |
+| `daysToExpiry` | number \| null | Derived; negative once expired, `null` if no expiry |
 | `expiresSoon` | bool | `0 < daysToExpiry <= 90` — drives the expiry warning |
-| `expired` | bool | Derived |
+| `expired` | bool | Derived; `false` when no expiry is known |
+| `provenanceGap` | bool | **Data-quality flag**: no recorded creation or expiry date |
 | `vectorBuckets[]` | `{scope, score}[]` | `[{ scope: cat, score: 0.85 }]` |
 
-`active` is the kill switch: false if manually retired **or** past expiry. Expiry is evaluated
-against a [hard-coded date](spec-vs-implementation.md#6-expiry-is-evaluated-against-a-frozen-clock).
+`active` is the kill switch: false if manually retired **or** past expiry. Expiry runs against the
+live clock, overridable via `window.CLAUSEWERK_TODAY`.
+
+A clause with no recorded dates is **not** expired — it is unprovenanced, and carries
+`provenanceGap: true`. It stays selectable but can never be temporally governed. 54 of the 102
+seeded clauses are in this state; see [finding #8](spec-vs-implementation.md).
 
 ---
 
@@ -113,15 +118,16 @@ The trust boundary. The only artifact crossing from inference to determinism.
 | `severity` | `'Standard' \| 'High'` | Coerced: anything not exactly `'High'` becomes `'Standard'` |
 | `justification` | string | One sentence from the transcript. Evidence for the reviewer — **never contract text** |
 
-Both guards are in `engine.jsx`. The category filter
-[fails open](spec-vs-implementation.md#5-the-classifiers-category-filter-fails-open) if
-`window.CATEGORIES` is empty.
+Both guards are in `engine.jsx`. The category filter **fails closed**: if `window.CATEGORIES` is
+empty the LLM manifest is refused outright and the deterministic classifier runs instead — see
+[finding #5](spec-vs-implementation.md).
 
 ---
 
 ## Decision `[code]`
 
-Output of `resolveClauses(manifest, ledger)`. One per risk, plus one per baseline clause.
+Output of `resolveClauses(manifest, ledger, opts)`. One per risk, plus one per baseline clause.
+`opts.strictMode` defaults to true and excludes inactive clauses.
 
 ```js
 { risk, selected, suppressed: [], reason: 'Matched High variant for Data Privacy' }
@@ -132,20 +138,26 @@ Output of `resolveClauses(manifest, ledger)`. One per risk, plus one per baselin
 | `risk` | Risk | The manifest risk, or a synthetic one for baseline clauses |
 | `selected` | Clause \| **null** | `null` means no clause existed — a hard flag, never a guess |
 | `suppressed[]` | Clause[] | Candidates that lost. **Retained deliberately** — see [ADR-0004](decisions/ADR-0004-suppressed-candidates-are-retained.md) |
-| `reason` | string | Why this clause; one of four strings (below) |
+| `reason` | string | Why this clause; one of five strings (below) |
 | `baseline` | bool? | True for Baseline Framework entries |
+| `warning` | string? | Present when an inactive clause was selected (strict mode off) |
+| `expiredOnly` | bool? | True when candidates existed but all had lapsed |
 
 Baseline decisions carry a **synthetic risk** with `severity: 'Baseline'` — a third value that
 appears only here and never in a manifest.
 
-The four `reason` strings, verbatim:
+The five `reason` strings, verbatim:
 
 | Situation | `reason` |
 |---|---|
 | Baseline clause | `Always-include · Baseline Framework §{n}` |
 | Severity matched | `Matched {severity} variant for {category}` |
 | Severity fell back | `No {severity} variant; fell back to {sev}` |
-| Nothing available | `No clause available in Ledger` |
+| Nothing ever existed | `No clause available in Ledger` |
+| All candidates lapsed | `No active clause available in Ledger · N candidate(s) retired or expired` |
+
+The last two are deliberately distinct: "we never had one" and "we had one and it lapsed" are
+different library problems requiring different fixes.
 
 ---
 
@@ -161,7 +173,9 @@ Produced by `CONFLICT_RULES`, each a pure `(decisions) => Finding[] | null`.
 | `detail` | string | The explanation; hidden in `compact` mode |
 | `refs[]` | string[] | Clause IDs involved |
 
-The gate [blocks on any finding, not only High](spec-vs-implementation.md#3-the-validation-gate-blocks-on-any-finding-not-only-high-severity).
+The gate blocks on **High-severity findings only** — see [finding #3](spec-vs-implementation.md).
+Overriding it is a socialised, per-finding request under
+[ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md).
 
 ---
 

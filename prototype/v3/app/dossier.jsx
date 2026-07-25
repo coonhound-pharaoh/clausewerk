@@ -1,5 +1,5 @@
 // R11 — Dossier: audit default + document-as-document
-function DossierPanel({ manifest, decisions, dossier, setTab }) {
+function DossierPanel({ manifest, decisions, dossier, setTab, ledger }) {
   const [view, setView] = useState('audit'); // audit is now default
   const [signed, setSigned] = useState({});
 
@@ -72,6 +72,12 @@ function DossierPanel({ manifest, decisions, dossier, setTab }) {
           </div>
           <button onClick={download} className="btn btn-primary">↓ download .docx</button>
         </div>
+      </div>
+
+      {/* Signature checkpoint. The last moment before this language leaves the
+          building is the last moment to catch a clause that lapsed since Forge. */}
+      <div className="px-8 pt-4">
+        <ExpiryNotice decisions={decisions} ledger={ledger} where="signature"/>
       </div>
 
       <div className="flex-1 overflow-hidden flex">

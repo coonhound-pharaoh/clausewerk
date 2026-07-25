@@ -117,7 +117,7 @@ function ClausewerkApp() {
             <LedgerPanel ledger={ledger} setLedger={setLedger} tweaks={tweaks}/>
           )}
           {tab === 'forge' && (
-            <ForgePanel manifest={manifest} ledger={ledger}
+            <ForgePanel manifest={manifest} ledger={ledger} tweaks={tweaks}
                         decisions={decisions} setDecisions={setDecisions}
                         setDossier={setDossier} setTab={setTab} setPhase={setPhase}
                         setDossierReady={setDossierReady} autoRun={forgeAutoRun}
@@ -127,12 +127,27 @@ function ClausewerkApp() {
           {tab === 'validate' && (
             <ValidatePanel manifest={manifest} decisions={decisions}
                            findings={conflictFindings} setTab={setTab}
-                           onAcknowledge={() => setConflictAck(true)}
+                           onAcknowledge={(who) => {
+                             // Overriding a validation gate is a recorded act.
+                             // Record WHICH contradictions were accepted, not
+                             // merely that someone proceeded.
+                             const gating = (conflictFindings || []).filter(f => f.severity === 'High');
+                             setConflictAck(true);
+                             setAuditLog(prev => [...prev, {
+                               ts: new Date().toISOString(),
+                               actor: 'human',
+                               role: who || 'unattributed',
+                               type: 'human_override_gate',
+                               vendor: manifest?.vendor || '—',
+                               override_count: gating.length,
+                               overridden: gating.map(f => ({ rule: f.rule, title: f.title, refs: f.refs })),
+                             }]);
+                           }}
                            acknowledged={conflictAck}/>
           )}
           {tab === 'dossier' && (
             <DossierPanel manifest={manifest} decisions={decisions} dossier={dossier} setTab={setTab}
-                          conflictFindings={conflictFindings}/>
+                          conflictFindings={conflictFindings} ledger={ledger}/>
           )}
           {tab === 'negotiate' && (
             <NegotiatePanel ledger={ledger} manifest={manifest} decisions={decisions}

@@ -1,8 +1,10 @@
 # Clausewerk documentation
 
-[`ARCHITECTURE.md`](../ARCHITECTURE.md) at the repository root is the **canonical specification**.
-It is the narrative source of truth: intent, pipeline, the deterministic/inference split, and the
-back- and front-end requirements.
+Two specifications sit at the repository root and are the **canonical sources of truth**:
+
+- [`ARCHITECTURE.md`](../ARCHITECTURE.md) — assembly and negotiation, ending at `contract.docx`.
+- [`LIFECYCLE-ARCHITECTURE.md`](../LIFECYCLE-ARCHITECTURE.md) — the LCMA: everything after
+  signature. Obligations, renewals, amendments, wind-down.
 
 Everything in this folder is *complementary* to that document, never a restatement of it. Where a
 document here and `ARCHITECTURE.md` disagree, `ARCHITECTURE.md` wins and the document here is a
@@ -37,7 +39,7 @@ bug.
 |---|---|
 | [`data-model.md`](data-model.md) | Consolidated record shapes — manifest, clause, decision, finding, redline, ticket, audit event |
 | [`diagrams.md`](diagrams.md) | Pipeline, trust boundary, resolution algorithm, redline adjudication, review-ticket lifecycle |
-| [`decisions/`](decisions/) | Architecture Decision Records — the seven choices the system is built on |
+| [`decisions/`](decisions/) | Architecture Decision Records — the eight choices the system is built on |
 | [`glossary.md`](glossary.md) | Terms of art, in the specific sense Clausewerk uses them |
 | [`spec-vs-implementation.md`](spec-vs-implementation.md) | Seven verified places the v3 code and the spec disagree |
 | [`open-questions.md`](open-questions.md) | Gaps, tensions, and deferred scope in the current specification |

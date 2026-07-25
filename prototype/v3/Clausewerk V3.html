@@ -170,6 +170,15 @@
 <body>
 <div id="root" style="height:100vh"></div>
 
+<script>
+  // The clause clock runs LIVE — enrichLedger() uses the real date, so clauses
+  // genuinely expire and the expiry warnings are real rather than staged.
+  // Setting window.CLAUSEWERK_TODAY = 'YYYY-MM-DD' here pins it, for stable
+  // screenshots or for demonstrating a future library state. Left unset on
+  // purpose: the seeded library is healthy against a live clock (a handful
+  // expired, every category still resolving), so nothing needs freezing.
+</script>
+
 <script type="text/babel" src="./app/data.jsx"></script>
 <script type="text/babel" src="./app/baseline.jsx"></script>
 <script type="text/babel" src="./app/v3_metadata.jsx"></script>

@@ -42,7 +42,8 @@ inference side to the deterministic side.
 
 | Path | What it is |
 |---|---|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | **The specification.** Intent, pipeline, the deterministic/inference split, back- and front-end requirements. Authoritative |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | **The specification.** Assembly and negotiation — intent, pipeline, the deterministic/inference split, back- and front-end requirements. Ends at `contract.docx` |
+| [`LIFECYCLE-ARCHITECTURE.md`](LIFECYCLE-ARCHITECTURE.md) | **The LCMA.** Everything after signature — obligations derived by clause ID, renewals, amendments, wind-down |
 | [`docs/`](docs) | Data model, diagrams, decision records, glossary, and the spec-vs-code drift list |
 | [`prototype/`](prototype) | The working prototype, ingested verbatim — v3 (current), v2, the pitch deck, and a single-file build |
 
@@ -61,8 +62,9 @@ specification derived from the v3 prototype, which is ingested here and runs.
 
 Two things to know before building on it:
 
-- Seven verified discrepancies between the spec and the v3 code are catalogued in
-  [`docs/spec-vs-implementation.md`](docs/spec-vs-implementation.md). None are fixed — the ingest
-  was deliberately verbatim.
-- Lifecycle management is out of scope for the current architecture document. The pipeline
-  terminates at `contract.docx`; there is no model of an executed agreement's own lifecycle.
+- Eight discrepancies between the spec and the v3 code were found and **all are now fixed**, with
+  the fixes verified against the running prototype. See
+  [`docs/spec-vs-implementation.md`](docs/spec-vs-implementation.md).
+- Lifecycle management is **architected but not built** — see
+  [`LIFECYCLE-ARCHITECTURE.md`](LIFECYCLE-ARCHITECTURE.md). The expiry-warning machinery it
+  specifies is live in the prototype; everything past signature is specification.

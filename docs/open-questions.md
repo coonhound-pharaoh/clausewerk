@@ -1,139 +1,160 @@
 # Open questions
 
-What the architecture does **not** settle. Read this before designing anything that depends on an
-answer it doesn't give.
+What the architecture does **not** settle, and what has since been decided.
 
-Distinct from [`spec-vs-implementation.md`](spec-vs-implementation.md), which records places the
-code and the spec disagree. These are places the *spec itself* is silent, underspecified, or in
-tension with its own premises.
+Distinct from [`spec-vs-implementation.md`](spec-vs-implementation.md), which tracked places the
+code disagreed with the spec (all now resolved). These are places the *spec itself* was silent,
+underspecified, or in tension with its own premises.
+
+| # | Question | Status |
+|---|---|---|
+| 1 | Auto-approve vs. the audit story | **Decided** — [ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md) |
+| 2 | Who may override the validation gate | **Decided** — [ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md) |
+| 3 | Clause expiring mid-flight | **Decided** — [LCMA §2](../LIFECYCLE-ARCHITECTURE.md), warnings implemented |
+| 4 | The redline matcher's production form | Open — restated below |
+| 5 | Who authors validation rules | Open — restated below |
+| 6 | Ticket routing and assignment | Open — restated below |
+| 7 | Supersession | Open — restated below |
+| 8 | Lifecycle management | **Architected** — [`LIFECYCLE-ARCHITECTURE.md`](../LIFECYCLE-ARCHITECTURE.md) |
+| 9 | Smaller gaps | Deferred |
 
 ---
 
-## 1. `autoApprove` is in tension with the audit story
+## 1. Auto-approve vs. the audit story — decided ✅
 
-**The tension.** §6 lists a runtime tweak `autoApprove (≥0.90)`. §2.7 states there are "three human
-outcomes" for a redline — approve, edit, escalate — and that approvals insert immutable text.
+**Decision: auto-approval must be auditable.** Every approval now records whether the auto-approve
+hint was showing, the score, and the threshold, making the rate of nudged approvals measurable. The
+event type `auto_approve` with `actor: 'controller'` is reserved for genuine machine approval, so it
+can never be logged as a human act.
 
-If a ≥0.90 match auto-approves, a clause substitution happens in a negotiated contract with **no
-human act at all**. The invariant survives (the inserted text is still pre-approved, still fetched
-by ID), so nothing unapproved reaches the document. But the *second* pillar — "Legal reviews
-decisions, not prose" — quietly loses its reviewer for that decision.
+Worth noting, because it changes the shape of the original concern: in the v3 prototype
+`autoApprove` **never actually approves**. It renders an advisory "confirm anyway" hint and a human
+still clicks. The gap was that the hint's influence was invisible, not that an action was
+unattributed.
 
-**Unsettled:** whether auto-approved substitutions are (a) permitted at all in production,
-(b) permitted but flagged for retrospective sampling, or (c) permitted only below some contract
-value or above some clause-criticality threshold. The audit log records `human_approve`; there is
-no event type for a machine approval, which suggests the log was designed before this tweak
-existed.
+See [ADR-0008 §4](decisions/ADR-0008-governance-roles-and-recorded-overrides.md).
 
-## 2. Who may override the validation gate
+## 2. Who may override the validation gate — decided ✅
 
-§2.5: the gate "can be explicitly overridden by a human, and the override is a recorded act."
+**Decision: a Requester may override, but not unilaterally.** Override becomes a *request* that is
+socialised to stakeholders and approved by a Legal reviewer, recorded per-finding rather than as a
+blanket acknowledgement. A **Viewer** role is added so a contract can be shown to someone for
+socialisation without granting them the ability to change it.
 
-§5's RBAC model names four roles — Requester, Legal reviewer, Legal admin, Auditor — and assigns
-exactly two permissions: only Legal admin can activate clauses, only Auditor-and-above can read the
-full log. **Override authority is never assigned.**
+See [ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md) for the five-role
+model and the request state machine.
 
-Taken literally, a Requester could override a High-severity finding on their own contract. That is
-almost certainly not intended.
+## 3. Clause expiring mid-flight — decided ✅
 
-**Also unsettled:** whether override is per-finding or blanket. The prototype implements one
-acknowledgement clearing all findings at once
-([finding #3](spec-vs-implementation.md#3-the-validation-gate-blocks-on-any-finding-not-only-high-severity)).
-A blanket override records *that* someone proceeded, not *which* contradictions they accepted —
-weaker than the audit story elsewhere in the system.
+**Decision: expiry and obsolescence produce warnings throughout, and block at signature.**
 
-## 3. What happens when a clause expires mid-flight
+- The clause clock and the agreement clock are formally separated — [LCMA §2](../LIFECYCLE-ARCHITECTURE.md).
+- Before execution, the live clause clock governs: warnings at **every negotiation round**,
+  blocking at **signature**.
+- At execution the library snapshot is pinned, and the clause clock becomes advisory — an executed
+  contract is never invalidated by later library changes.
+- Renewal releases the pin and re-resolves against the current library, which is how executed
+  agreements converge on current language.
 
-§5 requires that resolution be reproducible forever, pinning a library snapshot into every run
-record, and that clause versions are never overwritten.
+Implemented in the prototype: `expiryWarnings()` in `engine.jsx`, `<ExpiryNotice>` rendered in the
+Negotiate inbox and the Dossier. See [LCMA §7](../LIFECYCLE-ARCHITECTURE.md).
 
-Neither §2.3 nor §5 says what happens when a clause **expires between assembly and execution** —
-a realistic window, since negotiation rounds take weeks.
-
-Candidate readings, all defensible, all different:
-
-- The pinned snapshot governs; the contract executes on the clause as resolved. *(Favours
-  reproducibility.)*
-- Expiry invalidates the pending contract and forces re-resolution. *(Favours currency.)*
-- Expiry raises a warning at signature without blocking. *(Favours getting deals done.)*
-
-This needs an answer before the run store is designed, because it determines whether run records
-hold snapshot IDs or live references.
+---
 
 ## 4. The redline matcher's production form
 
-§2.7 describes matching as "inference-shaped, deterministic in the prototype" — additive keyword
-scoring with fixed weights. §4 lists it as inference use #3. §5 specifies a vector index with
-per-clause embeddings and k-NN retrieval.
+*Restated — the original phrasing buried the question.*
 
-So the target is clear and the prototype is a stand-in. What is unspecified is the **contract
-between them**: whether the production matcher keeps the 0.78 threshold semantics, whether scores
-remain comparable across the two implementations, and whether the deterministic scorer survives as
-the offline fallback (§4 says the failure mode is "escalate to Legal", which implies it does not).
+**The question: when the redline matcher is rebuilt on vector search, does the current keyword
+scorer survive as its offline fallback — yes or no?**
 
-If the keyword scorer is *not* retained, the matcher becomes the one inference call with no
-deterministic substitute, and the §5 claim of a full degradation path weakens to "everything except
-Negotiate".
+Why it matters. Today the matcher scores clauses with fixed additive keyword weights and a 0.78
+threshold. §5 says production replaces this with embeddings and k-NN retrieval. Every other
+inference call in the system has a deterministic fallback so the pipeline runs with the model
+offline ([ADR-0005](decisions/ADR-0005-deterministic-fallbacks.md)).
 
-## 5. The conflict rule catalogue is a stub
+If the keyword scorer is deleted when vectors arrive, Negotiate becomes the **only** part of
+Clausewerk that stops working when the model is unavailable, and the claim of a full degradation
+path narrows to "everything except negotiation."
 
-§2.5 lists four rules and marks the table "Currently". Four pairwise rules over a 48-category
-library is thin — the combinatorial surface is large and the four chosen are illustrative
-(governing law vs. dispute seat, liability carve-outs, SLA vs. termination, regulated data vs.
-insurance).
+Two sub-questions follow: are scores from the two implementations comparable (does 0.78 still mean
+the same thing), and does the vector matcher inherit the threshold semantics or need its own?
 
-**Unsettled:** who authors new rules and through what gate. Clause text has a rigorous promotion
-path (Review queue, named human, confirmation modal). Validation rules are *code* and have none
-described. A bad rule is a false gate; a missing rule is a shipped contradiction. §5 says the rule
-catalogue is "versioned" — that is the entire specification of its lifecycle.
+## 5. Who authors validation rules
+
+*Restated.*
+
+**The question: clause text can only enter the system through a named human in the Review queue.
+Validation rules are code and have no equivalent gate. Should they?**
+
+Why it matters. There are four conflict rules today, marked "Currently" in the spec, over a
+48-category library — the combinatorial surface is much larger. New rules will be written. But a
+validation rule is a *legal* judgement expressed as code: "an uncapped indemnity contradicts a
+liability cap" is exactly the kind of assertion the Review queue exists to make a named lawyer
+approve.
+
+Today it would be approved by whoever merges the pull request. A bad rule is a false gate that
+blocks good contracts; a missing rule is a shipped contradiction. §5 says the catalogue is
+"versioned", which is the entire specification of its lifecycle.
 
 ## 6. Ticket routing and assignment
 
-§5 names a notification service responsible for "Legal review assignment", and §2.8 shows Legal
-adjudicating tickets. Nothing specifies **which** reviewer gets a given ticket.
+*Restated.*
 
-Clause records carry a named `reviewer`. Whether a ticket derived from clause `DP-H-014` routes to
-that clause's reviewer, to a queue, or round-robin is undefined — as is what happens when the named
-reviewer has left. Matters more than it looks: the reviewer name is part of the provenance chain a
-regulator walks backwards.
+**The question: when a Review ticket is created, which specific lawyer gets it?**
 
-## 7. Supersession is named but not mechanised
+Why it matters. Clause records carry a named `reviewer`. When a redline against `DP-H-014`
+escalates, does it route to that clause's reviewer, to a shared queue, or round-robin? And what
+happens when the named reviewer has left the company?
 
-§5's clause registry includes "supersession links" among the stored fields. No section describes
-how a clause is superseded: whether promoting a Review ticket supersedes the clause it was derived
-from, whether superseding auto-retires the predecessor, or how supersession interacts with the
-"never overwritten" rule.
+This is not just workload distribution. The reviewer name is part of the provenance chain a
+regulator walks backwards, so routing determines whose name ends up on promoted language. §5 names
+a notification service responsible for "Legal review assignment" and specifies nothing further.
 
-The prototype's `retiredReason` field carries strings like `'Replaced by SC-H-012'` — a
-human-readable pointer, not a link. That is a reasonable prototype shortcut and an unreasonable
-production schema.
+## 7. Supersession
 
-## 8. Lifecycle management is out of scope
+*Restated — and the honest answer is that nothing in the software implements it.*
 
-The current `ARCHITECTURE.md` deliberately excludes the lifecycle-management system — post-execution
-obligations, renewals, expiry notices, amendments against an executed agreement.
+**The question: when Legal promotes a clause that replaces an older one, what should happen to the
+old clause?**
 
-Its absence is visible in the design: the pipeline terminates at `contract.docx` and the Outbox, and
-the Ledger's temporal model (`created`/`expires`/`active`) governs *clause* validity, with nothing
-modelling *agreement* validity. Those are different clocks and will need different records.
+Where it stands. §5 lists "supersession links" among the clause registry's stored fields, so the
+spec assumes the concept exists. Nothing describes the mechanism, and the prototype has no
+implementation — only a `retiredReason` string carrying human-readable text like
+`'Replaced by SC-H-012'`. That is a note, not a link: nothing can traverse it, and nothing enforces
+that the named clause exists.
 
-Two hooks already exist and are worth not painting over:
+The decisions needed:
 
-- The Records Retention clause the system issues implies a 7-year audit horizon that §5 already
-  matches.
-- `assembleDossier` stamps an execution date but nothing consumes it.
+- Does verifying a Review ticket derived from clause X automatically supersede X?
+- Does superseding auto-retire the predecessor, or leave it active until Legal retires it?
+- How does supersession coexist with "versions are never overwritten"
+  ([ADR-0006](decisions/ADR-0006-clause-expiry-is-computed-not-stored.md))? Presumably a supersession
+  link is a pointer *between* immutable versions rather than a mutation of either.
+- Do executed agreements referencing a superseded clause surface that at renewal? (The LCMA drift
+  report is the natural place, and would make supersession genuinely useful rather than decorative.)
 
-## 9. Smaller gaps
+## 8. Lifecycle management — architected ✅
+
+Specified in [`LIFECYCLE-ARCHITECTURE.md`](../LIFECYCLE-ARCHITECTURE.md): the two-clock model,
+obligation extraction by clause ID rather than by parsing prose, the operate/renew/amend/terminate
+pipeline, wind-down and survival obligations, and the data model additions.
+
+Its own open questions are listed in [LCMA §10](../LIFECYCLE-ARCHITECTURE.md) — chiefly the size of
+the obligation-template authoring backlog, and whether the system should assert breach.
+
+## 9. Smaller gaps — deferred
 
 | Gap | Where |
 |---|---|
 | The 31 fallback interview probes are counted but never enumerated | §2.1 |
 | The thirteen risk dimensions are named but not mapped to the 48 categories | §2.1 vs §2.3 |
-| `strictMode`, `density`, `showTrace` semantics are named, not defined | §6 |
+| `density`, `showTrace` semantics are named, not defined | §6 |
 | Prompt versioning is required; no versioning scheme is given | §5 |
 | "Tamper-evident (hash-chained)" audit log — no chaining scheme specified | §5 |
-| Whether `justification` is retained after execution, given it is model-authored text living beside a contract | §2.2, §2.6 |
+| Whether `justification` is retained after execution | §2.2, §2.6 |
+| 54 seeded clauses carry no approval date, so they can never be temporally governed | [spec-vs-implementation §8](spec-vs-implementation.md) |
 
-That last one is worth a decision rather than a default. The justification is the reviewer's
-evidence and belongs in the audit trail — but it is also the only model-authored prose anywhere
-near the artifact, and the system's headline claim is a character count of exactly that.
+The last two are worth decisions rather than defaults. The justification is the reviewer's evidence
+and belongs in the audit trail — but it is also the only model-authored prose anywhere near the
+artifact, and the system's headline claim is a character count of exactly that.

@@ -1,5 +1,5 @@
 // R10 — Forge: theatrical run with query/resolve/land beats + python console
-function ForgePanel({ manifest, ledger, decisions, setDecisions, setDossier, setTab, setPhase, setDossierReady, autoRun }) {
+function ForgePanel({ manifest, ledger, decisions, setDecisions, setDossier, setTab, setPhase, setDossierReady, autoRun, tweaks }) {
   const [running, setRunning] = useState(false);
   const [step, setStep] = useState(-1);
   const [beat, setBeat] = useState(null); // { index, phase: 'query'|'resolve'|'land' }
@@ -29,7 +29,7 @@ function ForgePanel({ manifest, ledger, decisions, setDecisions, setDossier, set
     setPhase('forging');
     setStep(0);
     setConsoleLines([]);
-    const all = resolveClauses(manifest, ledger);
+    const all = resolveClauses(manifest, ledger, tweaks);
     const built = [];
     for (let i = 0; i < all.length; i++) {
       const risk = all[i].risk;

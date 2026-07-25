@@ -1,171 +1,180 @@
 # Spec vs. implementation
 
-Where [`ARCHITECTURE.md`](../ARCHITECTURE.md) and the ingested v3 prototype disagree.
+Where [`ARCHITECTURE.md`](../ARCHITECTURE.md) and the v3 prototype disagreed, and what was done
+about it.
 
-`ARCHITECTURE.md` states the **intended** design and stays authoritative. This document records
-the places the prototype does not yet match it, so nobody reads the spec, greps the code, and
-concludes one of the two is lying.
+**All findings below are now resolved in [`prototype/v3/`](../prototype/v3).** Fixes were verified
+by loading the prototype and exercising the engine directly, not by inspection alone — results are
+quoted per finding.
 
-**Method:** these were found by reading the ingested sources under
-[`prototype/v3/app/`](../prototype/v3/app), not by running the application. Line references are to
-the files as ingested. Each finding names the exact lines so you can re-check it.
+| # | Finding | Status |
+|---|---|---|
+| 1 | Retired/expired clauses stayed in the candidate pool | **Fixed** |
+| 2 | `strictMode` declared but never read | **Fixed** — now wired |
+| 3 | Validation gate blocked on any finding, not only High | **Fixed** |
+| 4 | Category short-code collision (`AC`) | **Fixed** |
+| 5 | Classifier's category filter failed open | **Fixed** — now fails closed |
+| 6 | Expiry evaluated against a frozen clock | **Fixed** — clock is live |
+| 7 | Clause field naming diverges from the prose | **Not a defect** — documented, not changed |
+| 8 | 54 clauses were birth-expired by a fabricated creation date | **Fixed** — found while fixing #6 |
 
-**Status of this list:** descriptive, not a work queue. Nothing here has been fixed — the ingest
-was verbatim on purpose.
+Verification snapshot, live clock `2026-07-25`, full 30-category manifest against the seeded
+102-clause library:
+
+```
+duplicate short codes ...... 0
+inactive clauses in ledger .. 6
+inactive leaked (strict) .... 0     ← was the bug in #1
+inactive selected (loose) ... 1     ← permitted, and 100% carry a warning
+baseline clauses in contract  20
+unresolved categories ....... 0
+live expiry warnings ........ 7 expiring soon, 0 lapsed
+```
 
 ---
 
-## 1. Retired and expired clauses stay in the manifest-driven candidate pool
+## 1. Retired and expired clauses stayed in the candidate pool ✅
 
-**Severity: high — it defeats the kill switch for exactly the clauses the kill switch is for.**
+The manifest pass filtered on category and `alwaysInclude` but not `active`, while the baseline pass
+twelve lines above did — so the kill switch worked for boilerplate and not for risk-driven clauses.
 
-`ARCHITECTURE.md` §2.4 specifies the manifest pass as: *"candidates = active ledger clauses in that
-category, excluding `alwaysInclude` entries"*. §3 lists *"Expiry & kill-switch evaluation"* as a
-deterministic subsystem gated on `active`.
-
-The code filters on category and `alwaysInclude`, but **not** on `active`:
-
-```js
-// engine.jsx:127
-const candidates = ledger.filter(c => c.cat === risk.category && !c.alwaysInclude);
-```
-
-The baseline pass twelve lines earlier *does* check it:
+**Fix** (`engine.jsx`): the candidate pool is now filtered, and the two failure modes are
+distinguished, because "we never had a clause" and "we had one and it lapsed" are different library
+problems needing different fixes.
 
 ```js
-// engine.jsx:108
-const baseline = ledger.filter(c => c.alwaysInclude && c.active);
+const inCategory = ledger.filter(c => c.cat === risk.category && !c.alwaysInclude);
+const candidates = strictMode ? inCategory.filter(c => c.active !== false) : inCategory;
 ```
 
-The ledger reaching this function is enriched but not filtered — `enrichLedger` computes the
-`active` flag (`v3_metadata.jsx:163`) and `main.jsx:27` memoises the result, which
-`forge.jsx:32` hands to `resolveClauses` whole.
+```
+reason: inCategory.length
+  ? `No active clause available in Ledger · N candidate(s) retired or expired`
+  : 'No clause available in Ledger'
+```
 
-**Effect:** a retired or expired clause remains selectable for a manifest risk. Whether it is
-actually selected is ledger-order-dependent, because `candidates.find(c => c.sev === risk.severity)`
-takes the first severity match in array order. So this surfaces intermittently rather than always
-— which is worse, not better, for a compliance system.
+**Verified:** zero inactive clauses selected across all 30 categories under strict mode.
 
-`SC-RETIRED-01` exists in the seed data specifically to demonstrate the kill switch, and the
-baseline pass honours it while the manifest pass does not.
+## 2. `strictMode` declared but never read ✅
 
-## 2. `strictMode` is declared but never read
+The toggle defaulted to `true` and claimed "Active clauses only" while no resolution code read it.
 
-The tweak that would close finding #1 exists in the UI and is not wired to anything.
+**Fix:** `resolveClauses(manifest, ledger, opts)` now takes options and defaults to strict
+(`opts.strictMode !== false`). `forge.jsx` passes `tweaks` through; `main.jsx` supplies it.
 
-| Location | What it does |
-|---|---|
-| `main.jsx:20` | Defaults `strictMode: true` |
-| `main.jsx:158` | Renders the toggle, labelled "Strict mode (Active clauses only)" |
-| `negotiate.jsx:609` | Displays its state: `strict mode · on (Active only)` |
-
-No code path in resolution reads it. `resolveClauses` (`engine.jsx:102`) does not receive
-`tweaks` at all. The control asserts a guarantee the engine does not implement — and it defaults
-to `true`, so the UI reports "Active only" while finding #1 is live.
-
-## 3. The validation gate blocks on any finding, not only High severity
-
-`ARCHITECTURE.md` §2.5: *"High-severity findings **gate** progression to Dossier."*
-
-The code gates on finding *count*:
+With strict mode **off**, inactive clauses become selectable again — but never silently. Each such
+decision carries a warning that travels with it:
 
 ```js
-// validate.jsx:55 and :67
-findings.length === 0 || acknowledged
+warning: `${selected.id} is not active (${selected.retiredReason || 'expired'}) — selected with strict mode off`
 ```
 
-**Effect:** stricter than specified — a Standard-severity finding also blocks progression until a
-human overrides. The panel computes `high` (`validate.jsx:44`) but uses it only for the display
-tile, never for the gate.
+**Verified:** loose mode selected 1 inactive clause, and 100% of loose inactive selections carried
+a warning.
 
-Note also that the override is one act clearing *all* findings at once
-(`onAcknowledge`, `validate.jsx:58`), not a per-finding acknowledgement. The spec calls the
-override "a recorded act"; whether one blanket acknowledgement satisfies the audit story is
-[an open question](open-questions.md).
+## 3. Validation gate blocked on any finding, not only High ✅
 
-## 4. Category short-code collision: `AC`
+Spec: *"High-severity findings gate progression."* Code gated on `findings.length === 0`, so a
+Standard finding also blocked.
 
-Clause IDs encode the category short code (§2.3: `DP-H-014` = Data Privacy / High / 014). Two of
-the 48 categories in `data.jsx` claim the same short code:
+**Fix** (`validate.jsx`): both gate expressions now read `high === 0 || acknowledged`. The panel
+already computed `high` and used it only for a display tile.
+
+The override is also now genuinely *recorded*, not merely counted — see finding note below and
+[ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md).
+
+## 4. Category short-code collision (`AC`) ✅
+
+Acceptance and Anti-Corruption both claimed `AC`, and clause IDs encode the short code.
+
+**Fix:** Anti-Corruption → `AB` (anti-bribery), and its single clause `AC-B-011` → `AB-B-011`.
+Acceptance keeps `AC` because it owns two existing clause IDs (`AC-S-016`, `AC-H-027`) and the
+baseline entry was the newer V3.1 addition — the smaller blast radius.
+
+**Verified:** zero duplicate short codes across all 48 categories.
+
+## 5. Classifier's category filter failed open ✅
+
+`allowed.size === 0 || allowed.has(r.category)` passed **everything** when `window.CATEGORIES` was
+empty, so the trust boundary held by script load order rather than by construction.
+
+**Fix** (`engine.jsx`) — fail closed, and fall through to the deterministic classifier rather than
+accept unvalidated categories:
 
 ```js
-{ key: 'accept', label: 'Acceptance',      short: 'AC' },
-{ key: 'corr',   label: 'Anti-Corruption', short: 'AC' },
+if (!cats.length) throw new Error('CATEGORIES unavailable — refusing unvalidated LLM manifest');
+const allowed = new Set(cats);
+const risks = parsed.risks.filter(r => allowed.has(r.category));
 ```
 
-**Effect:** an `AC-*` clause ID does not identify its category unambiguously. The system does not
-currently resolve clauses *by* parsed ID — lookup is by the stored `id` string — so this is latent
-rather than active. It becomes real the moment anything parses a clause ID to recover its category,
-which is exactly what the ID format invites, and it is a poor property for an identifier that
-appears in executed contracts and audit exports.
+The throw is inside the existing `try`, so the failure path is the keyword classifier — a degraded
+manifest rather than an unvalidated one. That is the correct trade for the one check the whole
+architecture rests on.
 
-## 5. The classifier's category filter fails open
+## 6. Expiry evaluated against a frozen clock ✅
 
-`ARCHITECTURE.md` §2.2 states the boundary guarantee plainly: *"A hallucinated category cannot
-survive the boundary."*
+`enrichLedger` pinned `today` to a literal `new Date('2026-04-24')`, so nothing ever expired in
+real time.
+
+**Fix** (`v3_metadata.jsx`): the clock is live, with an explicit, visible override for demos.
 
 ```js
-// engine.jsx:46-48
-const allowed = new Set(cats.length ? cats : []);
-const risks = parsed.risks
-  .filter(r => allowed.size === 0 || allowed.has(r.category))
+const today = window.CLAUSEWERK_TODAY ? new Date(window.CLAUSEWERK_TODAY) : new Date();
 ```
 
-`allowed.size === 0` passes **everything**. `cats` derives from `window.CATEGORIES`
-(`engine.jsx:13`), so if that global is missing or empty — load-order failure, a refactor of the
-`window` export convention, or module extraction during a real build — the enum filter silently
-becomes a no-op and unvalidated model output crosses the trust boundary.
+The override is left **unset** in `Clausewerk V3.html`. It isn't needed: against the live clock the
+seeded library is healthy — 6 clauses expired, every category still resolving, and 7 genuine
+expiring-soon warnings. The expiry machinery now demonstrates itself with real dates.
 
-The guarantee holds today because `data.jsx` loads first (`Clausewerk V3.html` script order) and
-populates `window.CATEGORIES`. It holds by load order, not by construction. For the single most
-load-bearing check in the architecture, fail-closed is the correct default.
+## 7. Clause field naming diverges from the prose — not a defect
 
-## 6. Expiry is evaluated against a frozen clock
+Clause records use `cat`/`sev`; manifest risks use `category`/`severity`; `resolveClauses` bridges
+them inline.
 
-`ARCHITECTURE.md` §2.3: *"Expiry is computed, not stored: a clause silently leaves the selectable
-pool on its expiry date."*
+**Deliberately unchanged.** This is a schema-consistency question for the production backend, not a
+bug in the prototype, and renaming across the codebase would be churn with no behavioural payoff.
+It is documented in [`data-model.md`](data-model.md), which uses the code's names, and should be
+settled when the relational schema in §5 is written.
 
-`enrichLedger` pins "today" to a literal:
+## 8. 54 clauses were birth-expired by a fabricated creation date ✅
+
+*Found while fixing #6, and the reason #6 mattered more than it looked.*
+
+54 of the 102 seeded clauses carry no `created` or `expires` anywhere — neither inline nor in the
+`V3_METADATA` overlay. `enrichLedger` fabricated one:
 
 ```js
-// v3_metadata.jsx
-const today = new Date('2026-04-24');
+const expires = meta.expires || c.expires || defaultExpiry(c.created || meta.created);
+// defaultExpiry(undefined) → new Date('2024-01-01') + 2 years → '2026-01-01'
 ```
 
-Every derived field — `active`, `expired`, `daysToExpiry`, `expiresSoon` — is computed against that
-fixed date rather than the current one.
+So every unprovenanced clause was silently stamped as expiring 2026-01-01 — already lapsed at the
+old frozen date. This was invisible only because finding #1 meant resolution ignored `active` and
+used them anyway. Fixing #1 and #6 together would have made 21 of 30 categories unresolvable.
 
-**Effect:** the kill switch and the 90-day expiry warning are demo-deterministic, which is a
-reasonable thing to want in a demo (the seed data's expiry states stay stable and the screenshots
-keep working). It is not the behaviour the spec describes, and the constant is the single line that
-has to change for it to be. Flagged because it is easy to miss and silently wrong in production:
-nothing would ever expire.
+**Fix:** expiry is derived only from a *known* creation date. A clause with no recorded provenance
+is not expired — it is unprovenanced, which is a different condition and is now flagged as one:
 
-## 7. Clause field naming diverges from the prose
+```js
+const knownCreated = meta.created || c.created || null;
+const expires = meta.expires || c.expires || (knownCreated ? defaultExpiry(knownCreated) : null);
+const isExpired = expiresDate ? expiresDate < today : false;
+// …
+provenanceGap: !knownCreated || !expires,
+```
 
-Not a defect; a schema note for anyone building the backend.
+**Verified:** 54 clauses now carry `provenanceGap: true` and remain selectable; 0 categories
+unresolved.
 
-| Concept | Prose in `ARCHITECTURE.md` | Field in code |
-|---|---|---|
-| Clause category | "category" | `c.cat` |
-| Clause severity | "severity" | `c.sev` |
-| Risk category | "category" | `risk.category` |
-| Risk severity | "severity" | `risk.severity` |
-
-Clause records and manifest risks use different names for the same two concepts, and
-`resolveClauses` bridges them inline (`engine.jsx:127`, `:133`). Worth settling deliberately before
-the relational schema in §5 is written, rather than inheriting the split by accident. See
-[`data-model.md`](data-model.md), which documents the code's names.
+`provenanceGap` is a **data-quality** flag, not a validity flag. Those 54 clauses cannot be
+temporally governed at all — they will never expire, never warn, and never leave the pool. That is
+a real gap in the seeded library, and closing it means Legal recording approval dates. Fabricating
+dates in code would only have hidden it again.
 
 ---
 
 ## Not drift
 
-Two things that look like gaps but are declared as such by §7 Prototype fidelity, and are
-substitutions of transport rather than of logic:
-
-- **The "python executor"** — the trace reads `python_docx.replace(...)` while JS runs underneath.
-- **Vector embeddings** — additive keyword scoring stands in for k-NN retrieval.
-
-Also by design: SharePoint/O365 sync, multi-user identity and RBAC, server persistence, and
-e-signature are all narrative in the prototype.
+Declared as such by §7 Prototype fidelity — substitutions of transport, not of logic: the "python
+executor" (JS under a Python-shaped trace), vector embeddings (additive keyword scoring stands in),
+SharePoint/O365 sync, multi-user identity and RBAC, server persistence, and e-signature.

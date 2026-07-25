@@ -1,6 +1,11 @@
 // V3 — Negotiate panel. Vendor redlines enter as a .docx; AI returns a clause ID;
 // Python executor swaps text. Logic-controller separation is visualized.
 
+// Score at or above which the UI surfaces an auto-approve hint. Advisory only —
+// a human still confirms. Recorded on every approval so nudged approvals stay
+// distinguishable from independent ones.
+const AUTO_APPROVE_THRESHOLD = 0.90;
+
 function NegotiatePanel({ ledger, manifest, decisions, auditLog, setAuditLog, pendingReview, setPendingReview, tweaks }) {
   const [stage, setStage] = useState('inbox'); // inbox | diff | resolved
   const [redline, setRedline] = useState(null);
@@ -148,7 +153,7 @@ function NegotiatePanel({ ledger, manifest, decisions, auditLog, setAuditLog, pe
       clause: top.c,
       score: top.score,
       alternates: candidates.slice(1, 3).map(x => ({ id: x.c.id, score: x.score, title: x.c.title })),
-      autoApprove: tweaks.autoApprove && top.score >= 0.90,
+      autoApprove: tweaks.autoApprove && top.score >= AUTO_APPROVE_THRESHOLD,
     });
     logAudit({ type:'ai_suggest', redline: redline.id, clause_id: top.c.id, score: top.score });
     setWorking(false);
@@ -183,7 +188,9 @@ function NegotiatePanel({ ledger, manifest, decisions, auditLog, setAuditLog, pe
   function logAudit(entry) {
     const rec = {
       ts: new Date().toISOString(),
-      actor: entry.type.startsWith('ai_') ? 'controller' : 'human',
+      // Explicit actor always wins. `auto_` is reserved for acts taken without
+      // a human, so such an event can never be mis-attributed to a person.
+      actor: entry.actor || (/^(ai|auto)_/.test(entry.type) ? 'controller' : 'human'),
       vendor: redline?.vendor || manifest?.vendor || '—',
       ...entry,
     };
@@ -191,7 +198,18 @@ function NegotiatePanel({ ledger, manifest, decisions, auditLog, setAuditLog, pe
   }
 
   function approve() {
-    logAudit({ type:'human_approve', redline: redline.id, clause_id: suggestion.clause.id });
+    logAudit({
+      type: 'human_approve',
+      redline: redline.id,
+      clause_id: suggestion.clause.id,
+      score: suggestion.score,
+      // Auto-approve is ADVISORY in this build: crossing the threshold only
+      // surfaces a hint and a human still confirms. Record whether that hint
+      // was showing, so an auditor can tell an independent approval from a
+      // nudged one — and so the rate of nudged approvals is measurable.
+      auto_approve_eligible: !!suggestion.autoApprove,
+      auto_approve_threshold: AUTO_APPROVE_THRESHOLD,
+    });
     setStage('resolved');
   }
 
@@ -307,7 +325,7 @@ function NegotiatePanel({ ledger, manifest, decisions, auditLog, setAuditLog, pe
         )}
       </div>
 
-      {stage === 'inbox' && <NegotiateInbox inbox={inbox} onOpen={loadRedline} onUpload={handleUpload} uploading={uploading} uploadError={uploadError} clearError={() => setUploadError(null)} resolvedTickets={resolvedTickets} archiveTicket={archiveTicket} markAllSeen={markAllSeen}/>}
+      {stage === 'inbox' && <NegotiateInbox inbox={inbox} onOpen={loadRedline} onUpload={handleUpload} uploading={uploading} uploadError={uploadError} clearError={() => setUploadError(null)} resolvedTickets={resolvedTickets} archiveTicket={archiveTicket} markAllSeen={markAllSeen} decisions={decisions} ledger={ledger}/>}
       {stage === 'diff' && redline && (
         <NegotiateDiff
           redline={redline}
@@ -332,7 +350,7 @@ function NegotiatePanel({ ledger, manifest, decisions, auditLog, setAuditLog, pe
   );
 }
 
-function NegotiateInbox({ inbox, onOpen, onUpload, uploading, uploadError, clearError, resolvedTickets, archiveTicket, markAllSeen }) {
+function NegotiateInbox({ inbox, onOpen, onUpload, uploading, uploadError, clearError, resolvedTickets, archiveTicket, markAllSeen, decisions, ledger }) {
   const fileRef = useRef(null);
   const unseen = (resolvedTickets || []).filter(t => !t.buyerNotified).length;
 
@@ -360,6 +378,13 @@ function NegotiateInbox({ inbox, onOpen, onUpload, uploading, uploadError, clear
   return (
     <div className="flex-1 overflow-y-auto p-8">
       <div className="max-w-5xl mx-auto">
+        {/* Every negotiation round is a checkpoint. Weeks can pass between
+            rounds, and a clause already in the document can lapse in that gap. */}
+        {decisions && decisions.length > 0 && (
+          <div className="mb-8">
+            <ExpiryNotice decisions={decisions} ledger={ledger} where="this negotiation round"/>
+          </div>
+        )}
         {resolvedTickets && resolvedTickets.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-3">

@@ -39,7 +39,7 @@ const CATEGORIES = [
   { key: 'waiver', label: 'Waiver',             short: 'WV' },
   { key: 'scope',  label: 'Scope of Services',  short: 'SS' },
   { key: 'pers',   label: 'Personnel Quality',  short: 'PQ' },
-  { key: 'corr',   label: 'Anti-Corruption',    short: 'AC' },
+  { key: 'corr',   label: 'Anti-Corruption',    short: 'AB' },
   { key: 'nonsol', label: 'Non-Solicitation',   short: 'NS' },
   { key: 'assign', label: 'Assignment',         short: 'AS' },
   { key: 'coc',    label: 'Change of Control',  short: 'CO' },

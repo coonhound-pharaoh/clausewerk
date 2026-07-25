@@ -19,6 +19,7 @@ That is the section to read.
 | [0005](ADR-0005-deterministic-fallbacks.md) | Every inference call has a deterministic fallback | Two implementations of every judgement, kept in step |
 | [0006](ADR-0006-clause-expiry-is-computed-not-stored.md) | Clause validity is computed, versions immutable | The library only grows; nothing is ever edited in place |
 | [0007](ADR-0007-one-redline-per-changed-paragraph.md) | One redline per changed paragraph, adjudicated independently | Cross-paragraph negotiation packages become invisible |
+| [0008](ADR-0008-governance-roles-and-recorded-overrides.md) | Five roles; override is a socialised request; auto-approval is recorded | Latency on exactly the deals already under deadline pressure |
 
 ## Format
 

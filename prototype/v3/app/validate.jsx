@@ -52,7 +52,7 @@ function ValidatePanel({ manifest, decisions, findings, setTab, onAcknowledge, a
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => setTab('forge')} className="btn btn-sm">← forge</button>
-          {findings.length === 0 || acknowledged ? (
+          {high === 0 || acknowledged ? (
             <button onClick={() => setTab('dossier')} className="btn btn-primary">→ continue to dossier</button>
           ) : (
             <button onClick={onAcknowledge} className="btn btn-primary" style={{background:'var(--accent-2)', borderColor:'var(--accent-2)'}}>acknowledge · override</button>
@@ -64,7 +64,7 @@ function ValidatePanel({ manifest, decisions, findings, setTab, onAcknowledge, a
         <ValTile label="Rules run" value={CONFLICT_RULES.length}/>
         <ValTile label="Findings" value={findings.length} warn={findings.length > 0}/>
         <ValTile label="High severity" value={high} warn={high > 0}/>
-        <ValTile label="Gate" value={findings.length === 0 || acknowledged ? 'OPEN' : 'BLOCKED'} gateOpen={findings.length === 0 || acknowledged}/>
+        <ValTile label="Gate" value={high === 0 || acknowledged ? 'OPEN' : 'BLOCKED'} gateOpen={high === 0 || acknowledged}/>
       </div>
 
       <div className="flex-1 overflow-y-auto p-8">
@@ -108,5 +108,57 @@ function ValTile({ label, value, warn, gateOpen }) {
   );
 }
 
+// Expiry / obsolescence notice. Rendered at every point where the contract is
+// about to move — each negotiation round and at signature — because clause
+// validity is computed against the clock and can lapse between rounds with no
+// event to announce it. `where` names the checkpoint in the copy.
+function ExpiryNotice({ decisions, ledger, where }) {
+  const w = expiryWarnings(decisions, ledger);
+  if (!w.total) return null;
+  const blocking = w.blocking > 0;
+  const tone = blocking ? 'var(--danger)' : 'var(--accent-2)';
+  return (
+    <div className="p-3" style={{
+      background: `color-mix(in oklch, ${tone}, transparent 92%)`,
+      border: `1px solid color-mix(in oklch, ${tone}, transparent 60%)`,
+    }}>
+      <div className="flex items-baseline gap-2 mb-1">
+        <span className={`chip ${blocking ? 'chip-err' : 'chip-high'}`}>
+          {blocking ? 'obsolete language' : 'expiring'}
+        </span>
+        <span className="text-[13px] font-medium">
+          {blocking
+            ? `${w.blocking} clause${w.blocking === 1 ? '' : 's'} in this contract ${w.blocking === 1 ? 'is' : 'are'} no longer approved`
+            : `${w.expiringSoon.length} clause${w.expiringSoon.length === 1 ? '' : 's'} expiring within 90 days`}
+        </span>
+        {where && <span className="text-[11px]" style={{color:'var(--mute-2)'}}>· checked at {where}</span>}
+      </div>
+      <div className="space-y-0.5">
+        {w.lapsed.map(c => (
+          <div key={c.id} className="font-mono text-[10px]" style={{color:'var(--mute)'}}>
+            {c.id} · expired {c.expires} · {Math.abs(c.daysToExpiry)}d ago
+          </div>
+        ))}
+        {w.retired.map(c => (
+          <div key={c.id} className="font-mono text-[10px]" style={{color:'var(--mute)'}}>
+            {c.id} · retired · {c.retiredReason || 'no reason recorded'}
+          </div>
+        ))}
+        {w.expiringSoon.map(c => (
+          <div key={c.id} className="font-mono text-[10px]" style={{color:'var(--mute-2)'}}>
+            {c.id} · expires {c.expires} · in {c.daysToExpiry}d
+          </div>
+        ))}
+      </div>
+      {blocking && (
+        <div className="text-[12px] mt-2" style={{color:'var(--mute)'}}>
+          Re-run Forge to resolve against currently-approved language, or route to Legal.
+        </div>
+      )}
+    </div>
+  );
+}
+
 window.ConflictReport = ConflictReport;
 window.ValidatePanel = ValidatePanel;
+window.ExpiryNotice = ExpiryNotice;
