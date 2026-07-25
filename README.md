@@ -38,13 +38,31 @@ The **trust boundary** sits between Manifest and Forge. The manifest — a stric
 `{category, severity, justification}` triples — is the *only* thing that crosses from the
 inference side to the deterministic side.
 
-## Documents
+## Repository
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the reference specification: intent, pipeline, the
-  deterministic/inference split, and back- and front-end requirements.
+| Path | What it is |
+|---|---|
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | **The specification.** Intent, pipeline, the deterministic/inference split, back- and front-end requirements. Authoritative |
+| [`docs/`](docs) | Data model, diagrams, decision records, glossary, and the spec-vs-code drift list |
+| [`prototype/`](prototype) | The working prototype, ingested verbatim — v3 (current), v2, the pitch deck, and a single-file build |
+
+Start at [`docs/README.md`](docs/README.md) for a reading order.
+
+## Running the prototype
+
+No build step. Open [`prototype/v3/Clausewerk V3.html`](prototype/v3/Clausewerk%20V3.html) directly
+in a browser — React, Babel, Tailwind, and JSZip load from CDNs, so it needs network access. See
+[`prototype/README.md`](prototype/README.md).
 
 ## Status
 
-Specification stage. `ARCHITECTURE.md` describes the intended system, derived from the V3
-prototype (`v3/Clausewerk V3.html` + `v3/app/*.jsx`); the prototype sources are not yet in this
-repository. Lifecycle management is out of scope for the current architecture document.
+**Prototype built; production system not started.** `ARCHITECTURE.md` is the reference
+specification derived from the v3 prototype, which is ingested here and runs.
+
+Two things to know before building on it:
+
+- Seven verified discrepancies between the spec and the v3 code are catalogued in
+  [`docs/spec-vs-implementation.md`](docs/spec-vs-implementation.md). None are fixed — the ingest
+  was deliberately verbatim.
+- Lifecycle management is out of scope for the current architecture document. The pipeline
+  terminates at `contract.docx`; there is no model of an executed agreement's own lifecycle.

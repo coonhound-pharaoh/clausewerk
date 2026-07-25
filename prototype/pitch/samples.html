@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Contract Assembly System — Exec Pitch</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --graphite-bg: #FAFAF7;
+    --graphite-ink: #0B0B0C;
+    --graphite-mute: #6B6B66;
+    --graphite-line: #E4E4DC;
+    --graphite-accent: oklch(0.55 0.18 255);
+
+    --ivory-bg: #F5F1E8;
+    --ivory-ink: #1A1714;
+    --ivory-mute: #78706A;
+    --ivory-line: #E2DACA;
+    --ivory-accent: oklch(0.68 0.15 60);
+
+    --mid-bg: #0A0E1A;
+    --mid-ink: #E8E6DF;
+    --mid-mute: #7C8091;
+    --mid-line: #1C2236;
+    --mid-accent: oklch(0.78 0.14 175);
+  }
+  html, body { background: #EFEDE6; }
+  body { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; color: #0B0B0C; }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .font-serif { font-family: 'Instrument Serif', serif; }
+
+  /* Palette helpers */
+  .pg-graphite { background: var(--graphite-bg); color: var(--graphite-ink); }
+  .pg-ivory    { background: var(--ivory-bg);    color: var(--ivory-ink); }
+  .pg-midnight { background: var(--mid-bg);      color: var(--mid-ink); }
+
+  .hairline-g { border-color: var(--graphite-line); }
+  .hairline-i { border-color: var(--ivory-line); }
+  .hairline-m { border-color: var(--mid-line); }
+
+  /* Subtle dotted grid (blueprint) */
+  .bp-grid {
+    background-image: radial-gradient(rgba(10,14,26,0.08) 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+  .bp-grid-dark {
+    background-image: radial-gradient(rgba(232,230,223,0.08) 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+
+  /* Flow-line animated */
+  @keyframes dash {
+    to { stroke-dashoffset: -24; }
+  }
+  .flow-line { stroke-dasharray: 4 6; animation: dash 1.6s linear infinite; }
+
+  @keyframes pulse-dot {
+    0%,100% { opacity: .35; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.2); }
+  }
+  .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+
+  /* Card hover */
+  .sample-card { transition: transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s; }
+  .sample-card:hover { transform: translateY(-2px); }
+
+  /* Tick marks */
+  .tick { background-image: linear-gradient(90deg, currentColor 1px, transparent 1px); background-size: 8px 100%; }
+
+  /* Scroll styling */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #C9C7BF; border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* Small helper: chip */
+  .chip { display: inline-flex; align-items:center; gap:.4rem; padding: .22rem .55rem; border-radius: 999px; font-size: 11px; letter-spacing: .02em; font-weight: 500; }
+
+  /* Subtle top-left corner bracket */
+  .bracket::before { content:""; position:absolute; left:0; top:0; width:14px; height:14px; border-top:1px solid currentColor; border-left:1px solid currentColor; opacity:.35; }
+  .bracket::after  { content:""; position:absolute; right:0; bottom:0; width:14px; height:14px; border-bottom:1px solid currentColor; border-right:1px solid currentColor; opacity:.35; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="./components/shared.jsx"></script>
+<script type="text/babel" src="./components/s01_system_diagram.jsx"></script>
+<script type="text/babel" src="./components/s02_data_flow.jsx"></script>
+<script type="text/babel" src="./components/s03_blueprint.jsx"></script>
+<script type="text/babel" src="./components/s04_before_after.jsx"></script>
+<script type="text/babel" src="./components/s05_risk_taxonomy.jsx"></script>
+<script type="text/babel" src="./components/s06_conflict_matrix.jsx"></script>
+<script type="text/babel" src="./components/s07_audit_trail.jsx"></script>
+<script type="text/babel" src="./components/s08_firewall.jsx"></script>
+<script type="text/babel" src="./components/s09_sequence.jsx"></script>
+<script type="text/babel" src="./components/s10_interactive.jsx"></script>
+<script type="text/babel" src="./components/app.jsx"></script>
+
+</body>
+</html>

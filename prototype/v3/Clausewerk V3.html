@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clausewerk — Contract Assembly</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg: #0B0D10;
+    --surface: #12151B;
+    --surface-2: #181C24;
+    --panel: #12151B;
+    --panel-2: #181C24;
+    --line: #1F2530;
+    --line-2: #2A3140;
+    --ink: #ECEEF1;
+    --mute: #8A93A3;
+    --mute-2: #5B6272;
+    --accent: oklch(0.82 0.13 175);
+    --accent-2: oklch(0.75 0.17 60);
+    --danger: oklch(0.68 0.19 25);
+    --ok: oklch(0.78 0.13 150);
+  }
+  html, body { background: var(--bg); color: var(--ink); height: 100%; }
+  body { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow: hidden; }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .font-serif { font-family: 'Instrument Serif', serif; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+  .panel-2 { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; }
+  .hair { border-color: var(--line); }
+  .hair-2 { border-color: var(--line-2); }
+  .mute { color: var(--mute); }
+  .mute-2 { color: var(--mute-2); }
+
+  .tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line-2); border-radius: 4px; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--ink); background: transparent; transition: background .15s; cursor: pointer; }
+  .btn:hover { background: var(--panel-2); }
+  .btn-primary { background: var(--accent); color: #0B0D10; border-color: var(--accent); font-weight: 600; }
+  .btn-primary:hover { filter: brightness(1.08); background: var(--accent); }
+  .btn-sm { padding: 3px 7px; font-size: 11px; }
+
+  .chip { display: inline-flex; align-items:center; gap: 5px; padding: 2px 7px; border-radius: 2px; font-size: 10px; font-family: 'JetBrains Mono', monospace; letter-spacing: .05em; text-transform: uppercase; border: 1px solid var(--line-2); color: var(--mute); }
+  /* Severity system — neutral classification, not error states */
+  .chip-std  { background: transparent; color: var(--ink); border-color: var(--line-2); }
+  .chip-high { background: color-mix(in oklch, var(--accent), transparent 80%); color: var(--accent); border-color: color-mix(in oklch, var(--accent), transparent 55%); font-weight: 600; }
+  .chip-ok   { background: color-mix(in oklch, var(--ok), transparent 85%); color: var(--ok); border-color: color-mix(in oklch, var(--ok), transparent 60%); }
+  .chip-err  { background: color-mix(in oklch, var(--danger), transparent 82%); color: var(--danger); border-color: color-mix(in oklch, var(--danger), transparent 55%); }
+
+  /* Typography rhythm */
+  .display { font-family: 'Instrument Serif', serif; font-size: 44px; line-height: 1.04; letter-spacing: -0.01em; }
+  .display-sm { font-family: 'Instrument Serif', serif; font-size: 32px; line-height: 1.06; letter-spacing: -0.01em; }
+  .wordmark { font-family: 'Instrument Serif', serif; font-size: 22px; letter-spacing: -0.02em; }
+  .caption { font-size: 11px; color: var(--mute); }
+  .section-label { font-family: 'Inter', system-ui, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+  .small-caps { font-variant: all-small-caps; letter-spacing: .12em; }
+  .tabnum { font-variant-numeric: tabular-nums; }
+
+  /* Monogram */
+  .monogram { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border:1px solid var(--line-2); font-family:'Instrument Serif', serif; font-size:16px; letter-spacing:-.06em; color:var(--ink); }
+
+  /* Tab underline */
+  .tab-btn { position: relative; padding: 10px 4px; font-size: 13px; font-weight: 500; letter-spacing: -0.01em; color: var(--mute); transition: color .15s; }
+  .tab-btn:hover { color: var(--ink); }
+  .tab-btn.active { color: var(--ink); }
+  .tab-btn.active::after { content:''; position:absolute; left:0; right:0; bottom:-1px; height:1.5px; background: var(--accent); }
+
+  /* Strike-through slide-out animation for suppressed clauses */
+  @keyframes strike-out {
+    0% { opacity: 1; transform: translateX(0); }
+    40% { opacity: 1; text-decoration: line-through; transform: translateX(0); }
+    100% { opacity: 0; transform: translateX(-14px); text-decoration: line-through; }
+  }
+  .strike-out { animation: strike-out .9s ease-in forwards; text-decoration: line-through; }
+
+  /* Stamp in animation for winning clause */
+  @keyframes stamp-in {
+    0% { opacity: 0; transform: scale(1.18); filter: drop-shadow(0 0 8px var(--accent)); }
+    60% { opacity: 1; transform: scale(.97); }
+    100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
+  }
+  .stamp-in { animation: stamp-in .55s cubic-bezier(.2,.8,.2,1) forwards; }
+
+  @keyframes beam-drop {
+    0% { opacity: 0; transform: scaleY(0); }
+    40% { opacity: .8; transform: scaleY(1); }
+    100% { opacity: 0; transform: scaleY(1); }
+  }
+  .beam-drop { transform-origin: top; animation: beam-drop .6s ease-out forwards; }
+
+  /* Paper texture for dossier */
+  .paper {
+    background: #F5F1E8;
+    background-image:
+      radial-gradient(rgba(26,23,20,0.02) 1px, transparent 1px),
+      linear-gradient(rgba(26,23,20,0.015), rgba(26,23,20,0.015));
+    background-size: 3px 3px, 100% 100%;
+    box-shadow:
+      0 1px 0 rgba(0,0,0,.5),
+      0 24px 60px -30px rgba(0,0,0,.6),
+      inset 0 0 0 1px rgba(26,23,20,.05);
+  }
+
+  .gutter-rule { border-left: 1px solid rgba(26,23,20,.12); }
+
+  /* Drop cap */
+  .drop-cap::first-letter {
+    font-family: 'Instrument Serif', serif;
+    font-size: 56px;
+    line-height: .9;
+    float: left;
+    padding: 4px 8px 0 0;
+    color: #1A1714;
+  }
+
+  /* Architecture intro scrim */
+  @keyframes scrim-fade { to { opacity: 0; visibility: hidden; } }
+  .scrim { position: fixed; inset: 0; background: var(--bg); z-index: 100; display:flex; align-items:center; justify-content:center; }
+  .scrim.dismissing { animation: scrim-fade .6s ease-out forwards; }
+
+  /* Demo mode caption */
+  .demo-caption {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    background: rgba(11,13,16,.92); border: 1px solid var(--line-2);
+    padding: 10px 18px; font-family: 'Instrument Serif', serif; font-size: 18px;
+    letter-spacing: -.01em; color: var(--ink); z-index: 80; max-width: 680px; text-align: center;
+  }
+
+  /* Zebra for ledger rows */
+  .zebra > *:nth-child(even) { background: rgba(255,255,255,.012); }
+
+  input, textarea, select { background: var(--panel-2); border: 1px solid var(--line-2); color: var(--ink); border-radius: 4px; font-size: 13px; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  @keyframes pulse-dot { 0%,100% { opacity: .4 } 50% { opacity: 1 } }
+  .pulse { animation: pulse-dot 1.4s ease-in-out infinite; }
+
+  @keyframes dash { to { stroke-dashoffset: -20; } }
+  .flow-line { stroke-dasharray: 3 4; animation: dash 1.2s linear infinite; }
+
+  @keyframes flash { 0% { background: color-mix(in oklch, var(--accent), transparent 70%); } 100% { background: transparent; } }
+  .flash { animation: flash 1.2s ease-out; }
+
+  .typing-dot { animation: pulse-dot 1s ease-in-out infinite; }
+  .typing-dot:nth-child(2) { animation-delay: .15s; }
+  .typing-dot:nth-child(3) { animation-delay: .3s; }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 48px 48px;
+    background-position: -1px -1px;
+  }
+</style>
+</head>
+<body>
+<div id="root" style="height:100vh"></div>
+
+<script type="text/babel" src="./app/data.jsx"></script>
+<script type="text/babel" src="./app/baseline.jsx"></script>
+<script type="text/babel" src="./app/v3_metadata.jsx"></script>
+<script type="text/babel" src="./app/docx_codec.jsx"></script>
+<script type="text/babel" src="./app/engine.jsx"></script>
+<script type="text/babel" src="./app/tweaks-panel.jsx"></script>
+<script type="text/babel" src="./app/shell.jsx"></script>
+<script type="text/babel" src="./app/intake.jsx"></script>
+<script type="text/babel" src="./app/manifest.jsx"></script>
+<script type="text/babel" src="./app/ledger.jsx"></script>
+<script type="text/babel" src="./app/forge.jsx"></script>
+<script type="text/babel" src="./app/validate.jsx"></script>
+<script type="text/babel" src="./app/dossier.jsx"></script>
+<script type="text/babel" src="./app/negotiate.jsx"></script>
+<script type="text/babel" src="./app/audit.jsx"></script>
+<script type="text/babel" src="./app/intro.jsx"></script>
+<script type="text/babel" src="./app/demo.jsx"></script>
+<script type="text/babel" src="./app/main.jsx"></script>
+</body>
+</html>

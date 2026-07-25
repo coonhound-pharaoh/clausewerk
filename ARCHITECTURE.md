@@ -1,7 +1,11 @@
 # Clausewerk — System Architecture
 
-Reference specification derived from the V3 prototype (`v3/Clausewerk V3.html` + `v3/app/*.jsx`).
+Reference specification derived from the V3 prototype ([`prototype/v3/Clausewerk V3.html`](prototype/v3/Clausewerk%20V3.html) + [`prototype/v3/app/*.jsx`](prototype/v3/app)).
 Scope: intended functionality, the deterministic/inference split, and back- and front-end requirements.
+
+> Where this document and the prototype disagree, the disagreements are catalogued in
+> [`docs/spec-vs-implementation.md`](docs/spec-vs-implementation.md). This document states the
+> intended design and remains authoritative; the drift list says where the code has not caught up.
 
 ---
 
@@ -322,3 +326,13 @@ The prototype runs entirely client-side. A production deployment needs:
 `similarityThreshold` (0.50–0.95), `strictMode` (active clauses only), `autoApprove` (≥0.90), `showTrace`, `density`. In production these are org-level policy settings under Legal's control, not per-user preferences.
 
 **Accessibility & scale targets:** 44px minimum hit targets, WCAG 2.1 AA contrast (the system issues an accessibility clause; it should satisfy it), keyboard-navigable queue and tab structures, and layouts that hold at 1280px minimum width with ~500-clause libraries (virtualised Ledger and Audit tables).
+
+---
+
+## 7. Prototype fidelity
+
+Real in the prototype: OOXML .docx generation, .docx tracked-change parsing, clause resolution, conflict validation, expiry/kill-switch logic, the full Negotiate → Review → Ledger learning loop, audit logging and CSV export, and live LLM calls for all three inference roles.
+
+Narrative in the prototype: SharePoint/O365 sync, the "python executor" (JS running under a Python-shaped trace), true vector embeddings (additive keyword scoring stands in), multi-user identity and RBAC, server persistence, and e-signature.
+
+Nothing in the narrative set changes the architecture — each is a substitution of transport, not of logic.
