@@ -131,6 +131,24 @@ const READS = {
     sql: `select category_key, label, watcher_count from cw.watcher_coverage`,
     rule: 'cw.watcher_coverage — a zero is a visible gap, not a silence',
   },
+
+  'GET /retention/due': {
+    sql: `select agreement_id, retention_until, under_hold, matters
+          from cw.retention_due order by retention_until`,
+    rule: 'cw.retention_due, granted to administrator — due-ness and identity, '
+        + 'never agreement bodies. Destruction stays legal_admin\'s act',
+  },
+
+  // The auditor's chain explorer. Scoped by cw.audit_event's own policy: an
+  // auditor, reviewer or legal admin sees the whole record; a requester sees
+  // only their own acts; a viewer holds no grant on the table at all. The
+  // filtering the console offers happens over what the policy already returned.
+  'GET /record': {
+    sql: `select seq, ts, actor, actor_role, actor_kind, event_type, subject,
+                 payload
+          from cw.audit_event order by seq desc limit 500`,
+    rule: 'cw.audit_event audit_read_scoped policy',
+  },
 };
 
 // A database refusal reported as what it is. The message comes from the

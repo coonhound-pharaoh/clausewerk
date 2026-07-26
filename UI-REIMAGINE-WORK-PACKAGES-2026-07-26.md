@@ -531,7 +531,21 @@ what dormant means); screenshots into the U05 handoff.
 
 ---
 
-## WP-U09 · Administrator console II: settings, health, watchers — and the auditor's access history
+## WP-U09 · Administrator console II — **CLOSED 2026-07-26**
+
+*Delivered in [`console-rest.jsx`](prototype/v4/app/console-rest.jsx), the retention-nudge
+endpoint, and the guides at [`docs/guides/`](docs/guides). Tests: 13 in `shell.test.mjs`,
+8 mutations.*
+
+**The critical rule, checked the strict way.** An owner decision renders with *no input, select,
+textarea or button at all* — verified in the browser: eight owner-decision rows, zero interactive
+elements inside them, alongside four operational rows with editors. A disabled field would say "you
+could, but not now"; text says "this was never yours".
+
+**The nudge notifies and cannot destroy.** It writes one audit row saying Legal was told. The test
+enumerates the calls the health pane makes rather than grepping for the word "destroy" — the pane's
+own copy explains that it destroys nothing, and a check that cannot tell a warning from the thing
+it warns about punishes writing the warning down.
 
 **Objective.** The remaining three console sections work against real evidence,
 and the Auditor can read the entire access story.

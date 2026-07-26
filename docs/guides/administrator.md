@@ -155,3 +155,72 @@ once by whoever owns the database, and recorded as such.
   one proves, and what to do when one fails
 - [`docs/open-questions.md`](../open-questions.md) — owner decisions `U5`–`U8`
   and the reasoning behind each
+
+---
+
+## Settings
+
+Two panes, and the difference is who they belong to.
+
+**Operational settings are yours.** How long the socialisation window runs, when
+a ticket is flagged overdue, how often digests go out, how long a session lasts.
+Each says what it does. Changing any of them cannot change a contract outcome —
+that is the test for whether something belongs on this side of the line.
+
+**Owner decisions are Legal admin's, and you are reading them.** You see the
+value, who decided it, and the reasoning. There is no field to type in, no
+greyed-out box, nothing that looks like an editor — because it was never yours,
+and a disabled control would say "you could, but not now".
+
+Undecided decisions are **flagged amber, not hidden**. A question the system has
+answered provisionally so that it could ship is exactly the thing somebody needs
+to see.
+
+---
+
+## System health
+
+Six tiles. Each is **verified**, **failed**, or **never run**, and the third is
+its own state on purpose: "we looked and it is fine" and "we have not looked" are
+different answers, and showing the second as the first is how a system reassures
+its operator into an incident.
+
+Three buttons run checks on demand — take a checkpoint, check the anchor, verify
+the chain. Each records **that it ran**, whichever way it comes out. The tiles
+count those records and nothing else, so a tile is green only when a check
+actually happened.
+
+What each check proves, and what to do when one fails, is in
+[`backend/README.md`](../../backend/README.md).
+
+### Retention
+
+You can see what is past its retention date. **You cannot destroy any of it** —
+that is Legal admin's recorded act, and you hold no privilege for it.
+
+The **nudge** button records that Legal was told, on the audit chain, with your
+name and the date. It changes no retention state at all. It could not become a
+delete even if somebody rewired it, because there is no write on that table for
+this role to use.
+
+A record under legal hold shows as **held**, naming the matter. That is
+deliberate: "cannot be destroyed" and "cannot be destroyed while this litigation
+is open" are different sentences, and only the second tells anybody what to do.
+
+---
+
+## Watchers and notices
+
+Who is told when an override is requested. **Never who decides it** — adding
+somebody here gives them sight of a request and no vote in it.
+
+Leave the category blank for an **always-watcher** who sees every category.
+
+**A category with nobody watching it is shown as a gap**, at the top of the pane,
+naming the categories. An override request in one of them would be socialised to
+nobody at all. Closing the gap is a decision about who should be told, which is
+yours; noticing it is the system's job and it does that here.
+
+Removing a watcher is recorded, with your name. That one matters more than it
+looks: somebody quietly dropped off a notification list is silence about who was
+silenced, and nothing visibly happens afterwards to make anybody look.

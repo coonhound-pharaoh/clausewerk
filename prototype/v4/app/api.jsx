@@ -93,6 +93,8 @@ const API = (() => {
     health:           () => call('GET', '/health'),
     watchers:         () => call('GET', '/watchers'),
     watcherCoverage:  () => call('GET', '/watchers/coverage'),
+    retentionDue:     () => call('GET', '/retention/due'),
+    record:           () => call('GET', '/record'),
 
     // ── Writes. Each one act. ───────────────────────────────────────────
     openDeal:      (b) => call('POST', '/deals', b),
@@ -108,6 +110,7 @@ const API = (() => {
     decideSetting: (b) => call('POST', '/settings/decide', b),
     addWatcher:    (b) => call('POST', '/watchers', b),
     removeWatcher: (b) => call('POST', '/watchers/remove', b),
+    nudgeRetention:(b) => call('POST', '/retention/nudge', b),
     takeCheckpoint:() => call('POST', '/checkpoints', {}),
     runCheck:      (which) => call('POST', `/health-checks/${which}`, {}),
   };

@@ -258,6 +258,35 @@ export const MUTATIONS = {
       [required(body, 'watcher_id')]),
   },
 
+  // The nudge. It NOTIFIES and it destroys nothing — that separation is the
+  // whole point of the action existing.
+  //
+  // Retention makes records due; destroying them is Legal admin's act and the
+  // Administrator holds no privilege to do it. Without a nudge the console
+  // would show a growing list of overdue records and offer no way to act at
+  // all, and the pressure to "just add a delete for the admin" would build with
+  // every row. So the nudge is the pressure valve, and it is deliberately
+  // nothing more than a recorded message: an audit row saying Legal was told,
+  // on which date, by whom.
+  //
+  // It writes to the audit chain and to nothing else. There is no retention
+  // column it could touch, because the administrator holds no update on
+  // cw.agreement_retention — so this cannot become a destroy by accident or by
+  // a later edit that "tidies it up".
+  'POST /retention/nudge': {
+    rule: 'insert on cw.audit_event only — the administrator holds no write on '
+        + 'cw.agreement_retention, so a nudge cannot become a destruction',
+    // $2 is cast explicitly. Without it Postgres cannot infer a type for a
+    // parameter whose only use is inside jsonb_build_object, and refuses the
+    // statement with "could not determine data type of parameter $2" — which
+    // reaches the console as a refusal and reads like a permission problem.
+    run: (query, body) => query(
+      `select cw.audit('retention_nudged', $1,
+         jsonb_build_object('note', $2::text,
+                            'reminder', 'destruction is legal_admin''s act'))`,
+      [required(body, 'agreement_id'), body.note ?? null]),
+  },
+
   // ── Stewardship ─────────────────────────────────────────────────────────
   'POST /checkpoints': {
     rule: 'execute on cw.audit_checkpoint_take() — the administrator\'s duty '

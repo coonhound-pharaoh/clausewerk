@@ -185,84 +185,6 @@ function ReviewDesk({ me }) {
   );
 }
 
-// ── Administrator ────────────────────────────────────────────────────────
-// The people pane itself is in console-people.jsx — it is the largest surface
-// in the console and the one with the most rules to keep, so it gets its own
-// file rather than crowding the router.
-
-function SystemHealth() {
-  const pane = usePane(() => API.health());
-  if (pane.status === 'loading') return <Loading />;
-  if (pane.status === 'failed') return <LoadFailed reason={pane.reason} />;
-
-  // never_ran is its own chip, visibly distinct from both pass and fail.
-  // Absence of evidence rendered as evidence is the failure WP-U04 exists to
-  // prevent, and a green tile for a check nobody has run is exactly that.
-  const chipFor = (state) => {
-    if (state === 'pass') return <span className="chip chip-ok">verified</span>;
-    if (state === 'fail') return <span className="chip chip-err">failed</span>;
-    if (state === 'due') return <span className="chip chip-pending">due</span>;
-    if (state === 'none due') return <span className="chip chip-std">none due</span>;
-    return <span className="chip chip-unknown">never run</span>;
-  };
-
-  return (
-    <div>
-      <PanelHead
-        title="System health"
-        sub="Evidence, not decoration. A tile is green only when a check actually ran."
-      />
-      <div className="panel">
-        {pane.rows.map((t) => (
-          <div className="waiting-row" key={t.tile}>
-            <div>
-              <div className="text-[13px]" style={{ color: 'var(--ink)' }}>{t.tile}</div>
-              {t.detail && <div className="caption mt-0.5">{t.detail}</div>}
-            </div>
-            <div className="flex items-center gap-3">
-              {chipFor(t.state)}
-              <span className="waiting-age">{t.as_of ? since(t.as_of) : '—'}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="caption mt-3">
-        Running the checks and the retention monitor land in{' '}
-        <span className="font-mono">WP-U09</span>.
-      </div>
-    </div>
-  );
-}
-
-// ── Auditor ──────────────────────────────────────────────────────────────
-function AccessHistory() {
-  const pane = usePane(() => API.accessHistory());
-  if (pane.status === 'loading') return <Loading />;
-  if (pane.status === 'failed') return <LoadFailed reason={pane.reason} />;
-  return (
-    <div>
-      <PanelHead
-        title="Access history"
-        sub="Every act on somebody's access, in order. Append-only, so this is the whole story."
-      />
-      <WaitingList
-        items={pane.rows.map((g) => ({
-          key: g.grant_id,
-          title: `${g.action} · ${g.person} · ${g.role}`,
-          sub: `by ${g.acted_by}${g.reason ? ` — ${g.reason}` : ''}${g.is_bootstrap ? ' · bootstrap' : ''}`,
-          at: g.acted_at,
-          chips: <span className={`chip ${g.action === 'revoked' ? 'chip-err'
-            : g.action === 'countersigned' ? 'chip-ok' : 'chip-std'}`}>{g.action}</span>,
-        }))}
-        empty={<Empty kicker="access history" line="Nothing has been granted yet." />}
-      />
-      <div className="caption mt-3">
-        Filtering and export land in <span className="font-mono">WP-U09</span>.
-      </div>
-    </div>
-  );
-}
-
 // ── The router ───────────────────────────────────────────────────────────
 // Every entry is either a real pane or an honest note about where it lands.
 // Nothing here renders invented rows.
@@ -290,16 +212,16 @@ const PANES = {
   'the-record':     () => <NotBuiltYet what="The chain explorer is not built." lands="WP-U14" />,
   'quality':        () => <NotBuiltYet what="Review quality is not built." lands="WP-U14" />,
   'origin-mix':     () => <NotBuiltYet what="The origin mix is not built." lands="WP-U14" />,
-  'access-history': () => <AccessHistory />,
+  'access-history': () => <AccessHistoryPane />,
 
   // Viewer
   'reading-room': () => <NotBuiltYet what="The reading room is not built." lands="WP-U14" />,
 
   // Administrator
   'people':   (me) => <PeopleAndAccessConsole me={me} />,
-  'settings': () => <NotBuiltYet what="The settings panes are not built." lands="WP-U09" />,
-  'health':   () => <SystemHealth />,
-  'watchers': () => <NotBuiltYet what="Watchers and notices are not built." lands="WP-U09" />,
+  'settings': (me) => <SettingsPane me={me} />,
+  'health':   () => <HealthPane />,
+  'watchers': () => <WatchersPane />,
 };
 
 // Render a pane ONLY if it belongs to this role's tab set.

@@ -432,6 +432,133 @@ await test('a Legal grant warns before the button, not after the fact', async ()
     + 'sign in');
 });
 
+// ── Settings, health and watchers (WP-U09) ──────────────────────────────
+console.log('\nthe boundary is taught by the screen, not only enforced behind it');
+
+const restSrc = () => read('console-rest.jsx');
+
+await test('an owner decision has NO edit affordance at all', async () => {
+  // The critical rule for this package, and the distinction is the point: a
+  // DISABLED input says "you could, but not now"; read-only text says "this was
+  // never yours". The administrator is not being temporarily prevented from
+  // changing an owner decision — it belongs to somebody else, and the screen
+  // has to say which.
+  //
+  // So the check is not "no enabled input" but "no input element of any kind"
+  // inside the owner-decision row.
+  const row = /function OwnerDecisionRow[\s\S]*?\n\}/.exec(restSrc())[0];
+  for (const tag of ['<input', '<select', '<textarea', '<button']) {
+    assert(!row.includes(tag),
+      `an owner decision row renders ${tag} — even a disabled one teaches the `
+      + 'wrong boundary, and a failing save teaches it later and worse');
+  }
+  assert(/disabled/.test(row) === false,
+    'the owner-decision row has a disabled control, which is the greyed-out '
+    + 'editor this rule exists to forbid');
+});
+
+await test('an owner decision shows its reasoning, not just its value', async () => {
+  const row = /function OwnerDecisionRow[\s\S]*?\n\}/.exec(restSrc())[0];
+  assert(/rationale/.test(row),
+    'the decision is shown without its why — and a value with no reasoning is '
+    + 'a value somebody will "correct" later');
+  assert(/decided_by/.test(row), 'the decision does not name who made it');
+});
+
+await test('undecided owner decisions are flagged, not hidden', async () => {
+  const row = /function OwnerDecisionRow[\s\S]*?\n\}/.exec(restSrc())[0];
+  assert(/undecided/.test(row) && /chip-pending/.test(row),
+    'an undecided owner decision is not flagged amber — a question the system '
+    + 'has answered provisionally must not look settled');
+});
+
+await test('operational settings are editable, and only those', async () => {
+  const op = /function OperationalRow[\s\S]*?\n\}/.exec(restSrc())[0];
+  assert(/<input/.test(op) && /API\.setSetting/.test(op),
+    'operational settings are not editable, so the administrator has nothing to '
+    + 'administer');
+});
+
+await test('never-ran renders as its own thing, not as pass or fail', async () => {
+  const fn = /const chip = \(state\)[\s\S]*?\n  \};/.exec(restSrc())[0];
+  assert(/chip-unknown/.test(fn) && /never run/.test(fn),
+    'the never-ran state has no distinct rendering — absence of evidence shown '
+    + 'as evidence is how a system reassures its operator into an incident');
+  // And it must not fall through to the passing chip.
+  assert(!/return <span className="chip chip-ok">.*<\/span>;\s*\}\s*$/.test(fn),
+    'the default branch is the passing chip');
+});
+
+await test('the nudge notifies and cannot destroy', async () => {
+  const src = restSrc();
+  assert(/nudge Legal/.test(src), 'the nudge action is gone');
+  assert(/API\.nudgeRetention/.test(src), 'the nudge calls something else');
+  // What the pane CALLS, not what it says. Matching on the words "destroy" or
+  // "delete" fails on the pane's own copy explaining that it destroys nothing —
+  // a check that cannot tell a warning from the thing it warns about punishes
+  // writing the warning down. So the assertion enumerates the calls instead.
+  const pane = /function HealthPane[\s\S]*?\n\}/.exec(src)[0];
+  const calls = [...pane.matchAll(/API\.(\w+)/g)].map((m) => m[1]).sort();
+  const allowed = ['health', 'nudgeRetention', 'retentionDue', 'runCheck', 'takeCheckpoint'];
+  eq([...new Set(calls)], allowed.filter((a) => calls.includes(a)),
+    'the health pane calls something outside its list — the administrator holds '
+    + 'no privilege to destroy anything, and this screen must not attempt it');
+  const api = read('api.jsx');
+  assert(!/retentionDestroy|destroyRetention/.test(api),
+    'the API module offers a retention destroy, which the administrator holds '
+    + 'no privilege for and must not be able to attempt');
+});
+
+await test('a held record renders as blocked BECAUSE held, naming the matter', async () => {
+  // The matter has to be on the CHIP, not merely somewhere in the file. The
+  // first version of this check looked for the word "matters" anywhere in the
+  // source and passed against a chip that just said "blocked" — because the
+  // matter was still mentioned in the row's subtitle. "Cannot be destroyed" and
+  // "cannot be destroyed while this litigation is open" are different
+  // sentences, and only the second tells anybody what to do about it.
+  const src = restSrc();
+  assert(/under_hold/.test(src), 'nothing distinguishes a held record');
+  assert(/title=\{r\.matters\}/.test(src),
+    'the held chip does not name the matter holding the record');
+  assert(/>held</.test(src),
+    'the chip does not say the record is HELD, only that something is wrong');
+});
+
+await test('an uncovered category is surfaced as a gap', async () => {
+  const src = restSrc();
+  assert(/watcher_count === 0/.test(src),
+    'nothing computes which categories nobody is watching');
+  assert(/socialised to nobody/.test(src),
+    'the gap is not spelled out — an uncovered category is a hole in the '
+    + 'socialisation, not "nobody to tell"');
+});
+
+await test('the watcher pane says what adding somebody does and does not give them', async () => {
+  const src = restSrc();
+  assert(/no vote/.test(src),
+    'the watchers pane does not say that a watcher sees but does not decide');
+});
+
+await test('access history filters what the policy already returned', async () => {
+  // The distinction between a filter and a leak: this narrows rows the database
+  // chose to return, and never a fetch that was broader than the reader is
+  // entitled to. There is one endpoint and it is scoped by the policy.
+  const src = restSrc();
+  assert(/pane\.rows\.filter/.test(src), 'the access history no longer filters');
+  assert(!/fetch\(/.test(stripComments(src)),
+    'the access history pane opens its own connection');
+});
+
+await test('the auditor can export, and the export is of what is on screen', async () => {
+  const fn = /const csv = \(\)[\s\S]*?\n  \};/.exec(restSrc())[0];
+  assert(/rows\.map/.test(fn),
+    'the export writes something other than the filtered rows the auditor is '
+    + 'looking at');
+  assert(/replace\(\/"\/g/.test(fn),
+    'the export does not escape quotes, so a reason containing one corrupts '
+    + 'every column after it');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) {
   console.log('\nfailures:');

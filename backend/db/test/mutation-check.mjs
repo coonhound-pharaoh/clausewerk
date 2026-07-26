@@ -1243,12 +1243,16 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
 
   // THE NAMED LEAK: a pane fetching for itself, which means it can ask for
   // anything and hide what it should not have had.
+  // REPOINTED at WP-U09: this used to key on SystemHealth in workspaces.jsx,
+  // which moved to console-rest.jsx when the real pane was built. The stale
+  // entry reported SKIP — "pattern not found" — which is the harness catching
+  // its own rot rather than quietly proving nothing.
   { target: 'shell', suite: 'shell.test.mjs',
     name: 'a pane opens its own connection instead of using the endpoint list',
-    find: `function SystemHealth() {
-  const pane = usePane(() => API.health());`,
-    repl: `function SystemHealth() {
-  const pane = usePane(() => fetch('/api/health').then(r => r.json()));`,
+    find: `function MyDeals() {
+  const pane = usePane(() => API.deals());`,
+    repl: `function MyDeals() {
+  const pane = usePane(() => fetch('/api/deals').then(r => r.json()));`,
     expect: "every call goes through the API module's fixed endpoint list" },
 
   // "NOT BUILT" COLLAPSING INTO "NOTHING HERE". Two different facts: one is
@@ -1367,6 +1371,68 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     find: `      {LEGAL_ROLES.has(role) && (`,
     repl: `      {false && (`,
     expect: 'a Legal grant warns before the button, not after the fact' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Settings, health and watchers (WP-U09)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // THE EDIT AFFORDANCE ON AN OWNER DECISION — the critical anti-pattern for
+  // this package, restored in its most plausible form: a disabled input, which
+  // feels responsible and teaches exactly the wrong boundary.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'an owner decision gets a disabled editor',
+    find: `      <div className="flex items-center gap-2 shrink-0 self-start">
+        {s.decided`,
+    repl: `      <div className="flex items-center gap-2 shrink-0 self-start">
+        <input disabled value={s.value} />
+        {s.decided`,
+    expect: 'an owner decision has NO edit affordance at all' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'an owner decision is shown without its reasoning',
+    find: `        <div className="caption mt-1" style={{ lineHeight: 1.6 }}>{s.rationale}</div>`,
+    repl: `        <div className="caption mt-1" />`,
+    expect: 'an owner decision shows its reasoning, not just its value' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'an undecided owner decision looks settled',
+    find: `          : <span className="chip chip-pending">undecided</span>}`,
+    repl: `          : null}`,
+    expect: 'undecided owner decisions are flagged, not hidden' },
+
+  // NEVER-RAN FALLING THROUGH TO GREEN — absence of evidence as evidence, in
+  // the one place an operator looks to decide whether to worry.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a check that never ran renders as verified',
+    find: `    return <span className="chip chip-unknown">never run</span>;`,
+    repl: `    return <span className="chip chip-ok">verified</span>;`,
+    expect: 'never-ran renders as its own thing, not as pass or fail' },
+
+  // THE NUDGE BECOMING A DESTROY, which is the pressure this action exists to
+  // relieve and therefore the thing most likely to happen to it.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the health pane reaches for a destroy',
+    find: `                      const n = await API.nudgeRetention({`,
+    repl: `                      const n = await API.retentionDestroy({`,
+    expect: 'the nudge notifies and cannot destroy' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a held record does not say what is holding it',
+    find: `                    ? <span className="chip chip-err" title={r.matters}>held</span>`,
+    repl: `                    ? <span className="chip chip-err">blocked</span>`,
+    expect: 'a held record renders as blocked BECAUSE held, naming the matter' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'an uncovered category is treated as nobody to tell',
+    find: `  const gaps = (coverage.rows ?? []).filter((c) => c.watcher_count === 0);`,
+    repl: `  const gaps = [];`,
+    expect: 'an uncovered category is surfaced as a gap' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the export does not escape quotes in a reason',
+    find: `      return /[",\\n]/.test(s) ? \`"\${s.replace(/"/g, '""')}"\` : s;`,
+    repl: `      return s;`,
+    expect: 'the auditor can export, and the export is of what is on screen' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();
