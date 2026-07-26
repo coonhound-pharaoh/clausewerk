@@ -3,8 +3,8 @@
 The deterministic core. This is the half of the system that must be provably
 correct and uses no AI at all.
 
-**Status:** clause registry, fallback ladders and the concession record built and
-verified. Resolution engine and document service not yet started.
+**Status:** clause registry, fallback ladders, the concession record and the
+resolution engine built and verified. Document service not yet started.
 
 ## Running it
 
@@ -13,9 +13,10 @@ npm install
 npm run verify
 ```
 
-`verify` runs the test suite and then the mutation check. Both must pass.
+`verify` runs every suite and then both mutation checks. All must pass.
+Requires Node and Python 3.10+ with `pytest`.
 
-There is **no database to install**. Tests run against
+There is **no database to install**. SQL tests run against
 [PGlite](https://pglite.dev) — real PostgreSQL compiled to WebAssembly — so the
 DDL, constraints, triggers, views and row-level security are genuinely executed,
 not mocked. Same SQL will run on Supabase unchanged.
@@ -30,7 +31,16 @@ db/migrations/
 db/test/
   registry.test.mjs         34 tests
   ladder.test.mjs           29 tests
+  loader-sql.test.mjs        8 tests — the engine's SQL against the real schema
   mutation-check.mjs        12 mutations — proves those tests can fail
+engine/
+  model.py                  frozen value types
+  snapshot.py               content-addressed library snapshots
+  resolution.py             the pure function, and ladder descent
+  loader.py                 the only module that knows both layers
+  test_resolution.py        26 tests
+  test_loader.py             8 tests
+  mutation_check.py          7 mutations
 ```
 
 ## The design in one page
@@ -110,6 +120,38 @@ changes with the evidence attached. No model is involved and none writes text.
 what we concede under pressure. Legal and Audit see all of it, a Requester sees
 only their own deals, and a Viewer sees none of it.
 
+## The resolution engine
+
+A pure function. No network, no database, no model — it takes a manifest and a
+snapshot and returns decisions. It never produces contract language: it selects
+an approved clause by reference, or reports that it cannot and says why
+(ADR-0001). A test asserts every selected body is byte-identical to one already
+in the snapshot.
+
+**A snapshot is the frozen library plus the frozen ladders, identified by a hash
+of its own contents.** That makes the reproducibility guarantee in
+`ARCHITECTURE.md` §5 *checkable* rather than merely asserted: given a snapshot id
+and a manifest, you can prove the decisions you get are the decisions someone
+got two years ago.
+
+Ladders are pinned as well as clauses, and that is not optional. Ladders change
+which clauses are *eligible*, so pinning the clause library alone would let the
+same manifest resolve differently next quarter (CLA §9). A mutation guards it.
+
+**The snapshot carries every version, not only the usable ones.** That is what
+lets a decision distinguish "there were three candidates and all had lapsed"
+from "there were none" — different library problems needing different fixes.
+
+**Descent escalates whenever it cannot be certain.** No ladder, a damaged
+ladder, an unknown current position, a lapsed rung, or anything below the floor
+all produce an escalation rather than a guess. The floor is absolute.
+
+`loader.py` is the only module that knows both the database and the engine, and
+it holds the two queries that build a snapshot. Because a renamed column there
+would break resolution in production while both suites stayed green,
+`db/test/loader-sql.test.mjs` extracts those queries from the Python source and
+runs them against the real migrated schema.
+
 ## Why there is a mutation check
 
 A test suite that has never failed proves nothing. `mutation-check.mjs`
@@ -117,7 +159,7 @@ deliberately breaks one guarantee at a time — removes the unique constraint on
 category short codes, makes clause bodies editable, lets expired clauses be
 selected — and asserts the suite catches each one.
 
-It has already earned its place three times:
+It has already earned its place five times:
 
 - Two tests referenced clause versions that did not exist, so they failed on a
   foreign key rather than the rule under test — and would have kept passing if
@@ -127,6 +169,14 @@ It has already earned its place three times:
   cannot read, so the denial named the wrong table. The policy now uses a
   `security definer` ownership function, and the test asserts the denial names
   `concession` specifically.
+- The engine's ordering test passed on `Snapshot.build`'s sorting alone and
+  never exercised the engine's own normalisation. A second test now bypasses
+  `build` and constructs a snapshot directly.
+- **The floor was never actually tested.** The fixture ladder's floor was also
+  its last rung, so deleting the floor check still escalated — via "ladder
+  exhausted". A ladder may legitimately document positions below the floor
+  (asks vendors make that we refuse), and reaching one must escalate. Now
+  covered by a four-rung ladder with the floor at rung 2.
 
 ## Mapping to the specifications
 
@@ -140,13 +190,16 @@ It has already earned its place three times:
 
 ## Next
 
-1. **Resolution engine** — the pure function, in Python, reading
-   `cw.selectable_clause` and descending a ladder when a vendor pushes back.
-   Must pin a library snapshot *and* the ladder configuration per run, or the
-   same manifest resolves differently next quarter and the determinism
-   guarantee is lost (CLA §9).
+1. **Validation engine** — the pairwise conflict rules, gating on High-severity
+   findings only. Per [open question 5](../docs/open-questions.md) these are
+   authored by attorneys, so the rules are *data* with their own version and
+   approver, not code — and every finding must cite the rule version that
+   raised it.
 2. **Document service** — Python, `python-docx`, generation and tracked-change
    parsing.
-3. **Agreement record** — `cw.agreement` is currently the minimal subset needed
+3. **Run store** — persisting a resolution against its snapshot id, which is
+   what turns the reproducibility guarantee from a property of the engine into
+   a property of the system.
+4. **Agreement record** — `cw.agreement` is currently the minimal subset needed
    by concessions. [LCMA](../LIFECYCLE-ARCHITECTURE.md) §5 extends it with the
    snapshot pin, decision set, term and status machine.
