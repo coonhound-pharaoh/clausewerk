@@ -3,8 +3,9 @@
 The deterministic core. This is the half of the system that must be provably
 correct and uses no AI at all.
 
-**Status:** clause registry, fallback ladders, the concession record and the
-resolution engine built and verified. Document service not yet started.
+**Status:** clause registry, fallback ladders, the concession record, the
+resolution engine and the validation engine built and verified. Document service
+not yet started.
 
 ## Running it
 
@@ -28,19 +29,22 @@ db/migrations/
   0001_foundation.sql             roles, append-only hash-chained audit log
   0002_clause_registry.sql        categories, clauses, immutable versions, supersession
   0003_ladders_and_concessions.sql  fallback ladders, concessions, promotion, analytics
+  0004_conflict_rules.sql   clause tags and attorney-authored conflict rules
 db/test/
-  registry.test.mjs         34 tests
+  registry.test.mjs         35 tests
   ladder.test.mjs           29 tests
-  loader-sql.test.mjs        8 tests — the engine's SQL against the real schema
+  loader-sql.test.mjs       16 tests — the engine's SQL against the real schema
   mutation-check.mjs        12 mutations — proves those tests can fail
 engine/
   model.py                  frozen value types
   snapshot.py               content-addressed library snapshots
   resolution.py             the pure function, and ladder descent
+  validation.py             conflict rules as data, and the gate
   loader.py                 the only module that knows both layers
-  test_resolution.py        26 tests
-  test_loader.py             8 tests
-  mutation_check.py          7 mutations
+  test_resolution.py        27 tests
+  test_validation.py        21 tests
+  test_loader.py            14 tests
+  mutation_check.py         14 mutations
 ```
 
 ## The design in one page
@@ -152,6 +156,52 @@ would break resolution in production while both suites stayed green,
 `db/test/loader-sql.test.mjs` extracts those queries from the Python source and
 runs them against the real migrated schema.
 
+## The validation engine
+
+Conflict rules are **data, not code**, because attorneys author them
+([open question 5](../docs/open-questions.md)). A rule cannot be a function,
+because a function needs a developer.
+
+So counsel tags approved wording — `jurisdiction:ny`, `indemnity:uncapped`,
+`data:regulated`, `insurance:cyber` — and a rule is a small declarative
+predicate over those tags. **No rule ever parses contract prose.**
+
+The grammar has exactly three primitives, ANDed:
+
+| Primitive | Fires when |
+|---|---|
+| `all_present` | every listed tag appears in the contract |
+| `none_present` | none of the listed tags appears |
+| `conflicting_values` | one tag namespace holds more than one distinct value |
+
+Between them they express all four rules in `ARCHITECTURE.md` §2.5, including
+the two awkward shapes: governing law versus dispute seat is
+`conflicting_values: jurisdiction`, and regulated data with no cyber cover is
+`all_present` plus `none_present` — a rule that fires on an *absence*.
+
+Anything counsel cannot say with these needs a new primitive, added
+deliberately. That friction is the design. An unbounded grammar would be a
+programming language with no gate in front of it.
+
+**The grammar is enforced in both layers.** A `CHECK` constraint rejects unknown
+keys at write time (using jsonb key subtraction — check constraints cannot
+contain a subquery), and `ConflictRule` raises `RuleGrammarError` at read time.
+If either side drifts, a rule the engine cannot evaluate could be published.
+
+**Rules are versioned and immutable, like clause wording.** Editing a published
+rule would rewrite why past contracts blocked. Every finding cites the rule
+version that raised it, `cw.active_conflict_rule` exposes the newest effective
+version of each, and retiring is the one permitted mutation.
+
+**Only High-severity findings close the gate**, matching the specification —
+unlike the prototype, which blocked on any finding. An override opens the gate
+and is recorded as an override; the findings remain, because an override
+accepts a risk rather than erasing it.
+
+Rule sets are content-addressed like snapshots, so a validation result names
+both the library and the rules that produced it. Tags are pinned into the
+snapshot for the same reason: retagging a clause changes which contracts block.
+
 ## Why there is a mutation check
 
 A test suite that has never failed proves nothing. `mutation-check.mjs`
@@ -190,16 +240,15 @@ It has already earned its place five times:
 
 ## Next
 
-1. **Validation engine** — the pairwise conflict rules, gating on High-severity
-   findings only. Per [open question 5](../docs/open-questions.md) these are
-   authored by attorneys, so the rules are *data* with their own version and
-   approver, not code — and every finding must cite the rule version that
-   raised it.
+1. **Run store** — persisting a resolution and its findings against the snapshot
+   and rule-set ids that produced them. This is what turns reproducibility from
+   a property of the engine into a property of the system.
 2. **Document service** — Python, `python-docx`, generation and tracked-change
    parsing.
-3. **Run store** — persisting a resolution against its snapshot id, which is
-   what turns the reproducibility guarantee from a property of the engine into
-   a property of the system.
-4. **Agreement record** — `cw.agreement` is currently the minimal subset needed
+3. **Agreement record** — `cw.agreement` is currently the minimal subset needed
    by concessions. [LCMA](../LIFECYCLE-ARCHITECTURE.md) §5 extends it with the
    snapshot pin, decision set, term and status machine.
+
+Deferred deliberately: a rule-authoring surface for non-developers. The grammar
+is now small enough to put behind a form, but that is a frontend concern and the
+backend contract it would write to is settled.

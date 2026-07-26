@@ -83,3 +83,54 @@ def test_the_queries_select_the_label_not_the_key():
     returned the key, every risk would resolve to nothing."""
     assert "c.label as category" in __import__("engine.loader", fromlist=["CLAUSE_SQL"]).CLAUSE_SQL
     assert "c.label as category" in __import__("engine.loader", fromlist=["LADDER_SQL"]).LADDER_SQL
+
+
+# ── Rules and tags ─────────────────────────────────────────────────────────
+
+RULE_ROWS = [
+    {"rule_id": "GL-001", "version": 1, "name": "Mixed governing law", "severity": "High",
+     "title": "Different jurisdictions", "detail": "Law and forum disagree.",
+     "predicate": {"conflicting_values": "jurisdiction"}, "approved_by": "R. Vance"},
+]
+
+
+def test_rule_row_maps():
+    from engine.loader import rule_from_row
+    r = rule_from_row(RULE_ROWS[0])
+    assert r.ref == "GL-001@v1"
+    assert r.predicate == {"conflicting_values": "jurisdiction"}
+
+
+def test_predicate_arrives_as_json_string_or_object():
+    """Drivers differ on whether jsonb comes back parsed. Both must work."""
+    from engine.loader import rule_from_row
+    import json as _json
+    as_text = dict(RULE_ROWS[0], predicate=_json.dumps(RULE_ROWS[0]["predicate"]))
+    assert rule_from_row(as_text).predicate == rule_from_row(RULE_ROWS[0]).predicate
+
+
+def test_a_predicate_outside_the_grammar_is_refused_at_the_boundary():
+    """The database constrains the grammar too, so reaching this means the two
+    definitions have drifted apart — fail loudly rather than ignore the key."""
+    from engine.loader import rule_from_row
+    from engine.validation import RuleGrammarError
+    import pytest as _pytest
+    bad = dict(RULE_ROWS[0], predicate={"exec": "rm -rf /"})
+    with _pytest.raises(RuleGrammarError):
+        rule_from_row(bad)
+
+
+def test_tags_reach_the_clause():
+    from engine.loader import clause_from_row
+    row = dict(CLAUSE_ROWS[0], tags=["data:regulated", "jurisdiction:ny"])
+    assert clause_from_row(row).tags == ("data:regulated", "jurisdiction:ny")
+
+
+def test_missing_tags_default_to_empty_not_none():
+    from engine.loader import clause_from_row
+    assert clause_from_row(CLAUSE_ROWS[0]).tags == ()
+
+
+def test_ruleset_from_rows_is_pinned():
+    from engine.loader import build_ruleset
+    assert build_ruleset(RULE_ROWS).ruleset_id

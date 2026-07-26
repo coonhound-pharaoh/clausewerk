@@ -16,11 +16,13 @@ validates against. Getting this backwards would silently resolve nothing.
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from typing import Any, Iterable, Mapping, Optional
 
 from .model import Clause, Ladder
 from .snapshot import Snapshot
+from .validation import ConflictRule, RuleSet
 
 CLAUSE_SQL = """
 select v.clause_id,
@@ -34,11 +36,21 @@ select v.clause_id,
        v.always_include,
        v.expires_on,
        v.provenance_gap,
-       cl.framework_section
+       cl.framework_section,
+       coalesce((select array_agg(t.tag order by t.tag)
+                 from cw.clause_tag t
+                 where t.clause_id = v.clause_id and t.version = v.version),
+                '{}'::text[]) as tags
 from cw.clause_version_state v
 join cw.clause    cl on cl.clause_id = v.clause_id
 join cw.category  c  on c.key = cl.category_key
 order by v.clause_id, v.version
+"""
+
+RULE_SQL = """
+select rule_id, version, name, severity, title, detail, predicate, approved_by
+from cw.active_conflict_rule
+order by rule_id
 """
 
 LADDER_SQL = """
@@ -75,7 +87,31 @@ def clause_from_row(row: Mapping[str, Any]) -> Clause:
         framework_section=row.get("framework_section"),
         expires_on=_as_date(row.get("expires_on")),
         provenance_gap=bool(row.get("provenance_gap", False)),
+        tags=tuple(row.get("tags") or ()),
     )
+
+
+def rule_from_row(row: Mapping[str, Any]) -> ConflictRule:
+    """Map a rule row. Raises RuleGrammarError if the predicate is outside the
+    permitted grammar — the database constrains it too, so a failure here means
+    the two definitions have drifted apart."""
+    predicate = row["predicate"]
+    if isinstance(predicate, str):
+        predicate = json.loads(predicate)
+    return ConflictRule(
+        rule_id=row["rule_id"],
+        version=int(row["version"]),
+        name=row["name"],
+        severity=row["severity"],
+        title=row["title"],
+        detail=row["detail"],
+        predicate=predicate,
+        approved_by=row.get("approved_by", ""),
+    )
+
+
+def build_ruleset(rule_rows: Iterable[Mapping[str, Any]]) -> RuleSet:
+    return RuleSet.build(rule_from_row(r) for r in rule_rows)
 
 
 def ladder_from_row(row: Mapping[str, Any]) -> Ladder:

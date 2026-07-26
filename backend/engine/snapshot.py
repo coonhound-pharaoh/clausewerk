@@ -71,6 +71,10 @@ class Snapshot:
                     "selectable": c.selectable,
                     "always_include": c.always_include,
                     "framework_section": c.framework_section,
+                    # Pinned because conflict rules match on tags: retagging a
+                    # clause changes which contracts are blocked, so a snapshot
+                    # that ignored tags would not reproduce a validation result.
+                    "tags": sorted(c.tags),
                 }
                 for c in cl
             ],

@@ -66,6 +66,59 @@ MUTATIONS = [
         "if False:",
         "test_all_candidates_lapsed_is_a_distinct_diagnosis",
     ),
+    # ── Validation ──
+    (
+        "the gate blocks on any finding, not only High",
+        "validation.py",
+        "blocking = [f for f in findings if f.severity == HIGH]",
+        "blocking = list(findings)",
+        "test_only_high_severity_gates",
+    ),
+    (
+        "none_present is ignored",
+        "validation.py",
+        """    forbidden = rule.predicate.get("none_present") or []
+    for tag in forbidden:
+        if tag in tags:
+            return None""",
+        "    pass",
+        "test_adding_cyber_cover_clears_it",
+    ),
+    (
+        "conflicting_values fires on a single value",
+        "validation.py",
+        "if len(values) < 2:",
+        "if len(values) < 1:",
+        "test_a_single_jurisdiction_does_not_conflict_with_itself",
+    ),
+    (
+        "predicates are not pinned into the ruleset id",
+        "validation.py",
+        '"predicate": {k: r.predicate[k] for k in sorted(r.predicate)},',
+        '"predicate": None,',
+        "test_changing_a_predicate_changes_the_ruleset_id",
+    ),
+    (
+        "findings do not cite their rule version",
+        "validation.py",
+        "rule_version=rule.ref,",
+        'rule_version="",',
+        "test_every_finding_cites_its_rule_version",
+    ),
+    (
+        "the predicate grammar is not enforced",
+        "validation.py",
+        "unknown = set(self.predicate) - set(PRIMITIVES)",
+        "unknown = set()",
+        "test_unknown_predicate_key_is_refused",
+    ),
+    (
+        "tags are not pinned into the snapshot",
+        "snapshot.py",
+        '"tags": sorted(c.tags),',
+        '"tags": [],',
+        "test_retagging_a_clause_changes_the_snapshot_id",
+    ),
 ]
 
 

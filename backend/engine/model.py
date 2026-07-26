@@ -44,6 +44,10 @@ class Clause:
     #: True when the clause has no recorded approval or expiry date. It is not
     #: expired — it is ungoverned, and that must stay visible (finding #8).
     provenance_gap: bool = False
+    #: Attributes counsel attached to this wording ('jurisdiction:ny',
+    #: 'indemnity:uncapped'). Conflict rules match on these, so no rule ever
+    #: has to parse contract prose.
+    tags: tuple[str, ...] = ()
 
     @property
     def ref(self) -> str:

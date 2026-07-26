@@ -201,3 +201,31 @@ caught three faults the normal tests missed.
 
 **Decision.** Keep doing it, and treat "the test passed" as a weaker claim than
 "the test failed when we broke the thing it guards."
+
+---
+
+## 2026-07-25 · Contradiction rules are written by lawyers, so they are data
+
+**Decision.** Following the decision that attorneys own the contradiction rules,
+the rules are now stored as data rather than written as software.
+
+**How it works in plain terms.** Lawyers label approved wording with short tags —
+"this clause is governed by New York law", "this indemnity is uncapped", "this
+covers regulated data". A rule is then a simple statement about those labels:
+*"warn if two clauses name different jurisdictions"*, or *"warn if we handle
+regulated data and carry no cyber insurance"*.
+
+**Why this matters.** No rule ever reads contract wording and interprets it. It
+only checks labels a lawyer applied deliberately. That keeps the same discipline
+as everything else: judgement is recorded by a person, and the software only
+counts.
+
+**The deliberate limitation.** The rule language has exactly three building
+blocks and nothing else — no calculations, no conditions, no logic. All four
+rules in our specification are expressible with them. If counsel needs something
+these cannot say, we add a fourth building block on purpose. An open-ended rule
+language would just be programming with no approval step in front of it.
+
+**Also decided.** Rules are versioned and cannot be edited once published, and
+every warning names the exact rule version that raised it. Editing a live rule
+would rewrite the record of why past contracts were blocked.
