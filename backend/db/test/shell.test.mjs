@@ -673,6 +673,119 @@ await test('the reviewer is not offered acts that are not theirs', async () => {
   }
 });
 
+// ── The requester's workspace (WP-U12) ──────────────────────────────────
+console.log('\nasking is the only path past a blocking finding');
+
+const reqSrc = () => read('requester.jsx');
+
+await test('no acknowledge, override, or proceed-anyway affordance survives', async () => {
+  // The critical anti-pattern for this package. The v3 button opened the gate
+  // on one click with no record of who else should have known, and this is the
+  // screen where undoing its retirement is most tempting — "just for the demo
+  // flow" is exactly how it would come back.
+  // Checked against what is CLICKABLE, not against the prose. The screen
+  // explains what was retired by naming it, and the first version of this test
+  // failed on that explanation — the fourth time a check has punished writing
+  // the warning down. What matters is that no button, and no test hook, offers
+  // the act.
+  const src = stripComments(reqSrc());
+  const clickable = [
+    ...[...src.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((m) => m[1]),
+    ...[...src.matchAll(/data-testid="([^"]+)"/g)].map((m) => m[1]),
+  ].join(' | ').toLowerCase();
+
+  for (const gone of ['acknowledge', 'proceed anyway', 'override anyway',
+                      'skip validation', 'force']) {
+    assert(!clickable.includes(gone),
+      `the requester's workspace offers a control labelled "${gone}" — the `
+      + 'blanket override button is retired by ADR-0008 and this screen is '
+      + 'where it would return');
+  }
+  // And the only override-shaped button asks; it does not decide.
+  assert(/request an override/.test(clickable),
+    'there is no way to ask for an override at all');
+  // And the only override call it makes is the REQUEST, never a gate opening.
+  const calls = [...src.matchAll(/API\.(\w+)/g)].map((m) => m[1]);
+  assert(!calls.includes('openOverrideGate'),
+    'the requester opens the gate themselves, which is the whole thing this '
+    + 'workflow exists to prevent');
+  assert(calls.includes('requestOverride'), 'the request path is gone');
+});
+
+await test('the screen says asking is not being allowed', async () => {
+  const src = reqSrc();
+  assert(/opens no gate/i.test(src),
+    'nothing tells the requester that asking does not open the gate');
+  assert(/Until a finding is approved, it still blocks/i.test(src),
+    'the screen does not say that an undecided finding still blocks');
+});
+
+await test('a rejected finding is shown as still blocking', async () => {
+  // "Decided" is not "allowed". A rejected finding rendered as merely decided
+  // would let somebody believe the deal can proceed.
+  // The REJECTED branch specifically. A window of characters after the test
+  // swept up the undecided branch too, which also says "still blocks" — so the
+  // check passed against a rejected chip reading merely "decided".
+  const src = reqSrc();
+  const branch = /f\.decision === 'rejected'\s*\?\s*(<span[\s\S]*?<\/span>)/.exec(src);
+  assert(branch, 'the rejected branch has changed shape; re-check this test');
+  assert(/still blocks/.test(branch[1]),
+    'a rejected finding does not say it still blocks — "decided" is not '
+    + '"allowed", and somebody will read it as one');
+});
+
+await test('the request pane is reachable, not dead code', async () => {
+  // It was dead on the first attempt: rendered only when `asking` was true, and
+  // nothing ever set it. A pane nobody can reach is a pane nobody reviews, and
+  // claiming the request path is built while it cannot be opened would be the
+  // failure this whole effort is paying down.
+  const src = reqSrc();
+  assert(/setAsking\(true\)/.test(src),
+    'nothing opens the override request pane, so it is unreachable');
+  assert(/data-testid="ask-for-override"/.test(src),
+    'the button that opens it is not addressable, so no test can press it');
+});
+
+await test('the justification floor is shown before the refusal, not after', async () => {
+  const src = reqSrc();
+  assert(/length >= 20/.test(src),
+    'the screen does not know the schema refuses a boilerplate justification');
+  assert(/more characters/.test(src),
+    'the requester is told nothing until the database refuses them');
+});
+
+await test('commercial pressure is recorded separately from the reason', async () => {
+  // "They threatened to walk" and "we accept this risk because X" are different
+  // claims; one collapsed into the other lets pressure stand in for reasoning.
+  const src = reqSrc();
+  assert(/commercial_pressure/.test(src), 'commercial pressure is not captured');
+  assert(/different things/.test(src),
+    'the screen does not say why the two are separate fields');
+});
+
+await test('the deal is opened in the session person\'s name, with no field for it', async () => {
+  const src = reqSrc();
+  const form = /API\.openDeal\(\{[\s\S]{0,200}\}\)/.exec(src)[0];
+  assert(!/requester/.test(form),
+    'the open-deal form sends a requester, which the service would ignore and '
+    + 'which implies somebody can open a deal for somebody else');
+});
+
+await test('nothing invents findings or runs to make the form look finished', async () => {
+  const src = stripComments(reqSrc());
+  assert(!/\[\s*\{[^}]*finding_ref:\s*['"]/.test(src.replace(/finding_ref: ''/g, '')),
+    'the request form ships with example findings');
+  assert(/not built yet/.test(reqSrc()),
+    'the screen does not say which parts do not exist');
+});
+
+await test('my record says the scoping happens in the database', async () => {
+  const fn = /function MyRecordPane[\s\S]*?\n\}/.exec(reqSrc())[0];
+  assert(/never arrives/.test(fn),
+    'the record pane does not say that other people\'s acts are not filtered '
+    + 'out here — they are never sent');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) {
   console.log('\nfailures:');

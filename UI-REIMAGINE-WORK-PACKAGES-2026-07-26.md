@@ -1,6 +1,10 @@
 # Work Package Package — Role-Based UI & the Administrator
 
-*2026-07-26. Status: PROPOSED. Decomposes
+*2026-07-26. **Status: thirteen of sixteen packages CLOSED** — `WP-U00` through
+`WP-U12`. Remaining: `WP-U13` (the Legal admin's workspace), `WP-U14` (Auditor
+and Viewer), `WP-U15` (acceptance sweep and documentation trueing). Each closed
+package carries a note under its heading saying what shipped, what it cost, and
+what it taught. Decomposes*
 [`UI-REIMAGINE-PLAN-2026-07-26.md`](UI-REIMAGINE-PLAN-2026-07-26.md) into sixteen
 work packages, concatenated in dependency sequence. Design authority:
 [`UI-AND-ADMINISTRATION-ARCHITECTURE.md`](UI-AND-ADMINISTRATION-ARCHITECTURE.md).
@@ -699,7 +703,18 @@ their definitions.
 
 ---
 
-## WP-U12 · The Requester's workspace
+## WP-U12 · The Requester's workspace — **CLOSED 2026-07-26**
+
+*Delivered in requester.jsx and the guide at docs/guides/requester.md — 9 tests, 6 mutations.*
+
+**The request pane was dead code on the first attempt** — rendered only when a flag was true, and
+nothing ever set it. Claiming the request path was built while it could not be opened would have
+been the exact failure this effort is paying down. It is now reachable, addressable, and its
+mutation makes it unreachable again.
+
+**Findings and runs are typed, not picked**, because the validate stage and the forge are not
+built. A list of invented findings would be a screen claiming a capability. When those land, they
+get picked instead and nothing else changes.
 
 **Objective.** My deals: the requester's own engagements with pipeline-per-deal,
 the negotiate inbox, and the override *request* path — and nothing of anyone

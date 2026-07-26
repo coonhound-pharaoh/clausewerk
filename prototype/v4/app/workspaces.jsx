@@ -44,93 +44,15 @@ function PipelineRail({ deal }) {
   );
 }
 
-// ── Requester ────────────────────────────────────────────────────────────
-function MyDeals() {
-  const pane = usePane(() => API.deals());
-  const [open, setOpen] = useState(null);
-
-  if (pane.status === 'loading') return <Loading />;
-  if (pane.status === 'failed') return <LoadFailed reason={pane.reason} />;
-
-  const deals = pane.rows;
-
-  if (open) {
-    const deal = deals.find((d) => d.agreement_id === open);
-    if (!deal) return <LoadFailed reason="that deal is no longer in your list" />;
-    return (
-      <div>
-        <button className="btn btn-sm mb-4" onClick={() => setOpen(null)}>← my deals</button>
-        <div className="panel p-4">
-          <div className="flex items-baseline justify-between">
-            <div>
-              <div className="display-sm">{deal.counterparty}</div>
-              <div className="font-mono caption mt-1">{deal.agreement_id}</div>
-            </div>
-            <span className="chip chip-std">{deal.status}</span>
-          </div>
-          {/* The rail belongs to THIS deal and no other. */}
-          <div className="mt-4 pt-4 border-t hair"><PipelineRail deal={deal} /></div>
-        </div>
-        <div className="mt-6">
-          <NotBuiltYet
-            what="The stages of this deal are not built."
-            lands="WP-U12"
-          />
-        </div>
-      </div>
-    );
-  }
-
-  const mine = deals.filter((d) => d.status !== 'executed');
-  return (
-    <div>
-      <TileStrip tiles={[
-        { label: 'deals open', n: mine.length },
-        { label: 'awaiting me', n: null },
-        { label: 'awaiting others', n: null },
-      ]} />
-      {/* The two nulls are deliberate and render as an em dash. "Awaiting me"
-          needs a read model that does not exist yet, and showing 0 would be a
-          claim that nothing is waiting on this person — which is a different
-          statement from "we have not worked this out yet". */}
-      <div className="caption mt-2">
-        Awaiting-me and awaiting-others are not computed yet — they need a read
-        model on the backend, and a nought here would say nothing is waiting on
-        you, which is not the same as not knowing.
-      </div>
-
-      <div className="mt-6">
-        <PanelHead title="My deals" sub="Every engagement you opened, and nobody else's." />
-        <WaitingList
-          items={deals.map((d) => ({
-            key: d.agreement_id,
-            title: d.counterparty,
-            sub: d.agreement_id,
-            at: null,
-            chips: <span className="chip chip-std">{d.status}</span>,
-          }))}
-          onOpen={(it) => setOpen(it.key)}
-          empty={<Empty
-            kicker="my deals"
-            line="You have no deals open."
-            sub="A deal appears here when you open one. Nothing is shown from anyone else's list — the database scopes this to you, so another buyer's engagements never reach this browser at all."
-          />}
-        />
-      </div>
-    </div>
-  );
-}
-
-
 // ── The router ───────────────────────────────────────────────────────────
 // Every entry is either a real pane or an honest note about where it lands.
 // Nothing here renders invented rows.
 const PANES = {
   // Requester
-  'my-deals':  () => <MyDeals />,
-  'intake':    () => <NotBuiltYet what="The intake interview is not built." lands="WP-U12" />,
-  'negotiate': () => <NotBuiltYet what="The negotiate inbox is not built." lands="WP-U12" />,
-  'my-record': () => <NotBuiltYet what="Your own slice of the record is not built." lands="WP-U12" />,
+  'my-deals':  (me) => <MyDealsPane me={me} />,
+  'intake':    () => <NotBuiltYet what="The intake interview is not built." lands="a later package" />,
+  'negotiate': () => <NotBuiltYet what="The negotiate inbox is not built." lands="a later package" />,
+  'my-record': (me) => <MyRecordPane me={me} />,
 
   // Legal reviewer
   'review-desk':  (me) => <ReviewDeskPane me={me} />,

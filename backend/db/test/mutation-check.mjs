@@ -1233,10 +1233,13 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
   // THE CRITICAL ANTI-PATTERN: the mockup's invented rows carried into the
   // product "so it demos well". The 2026-07-25 review was eighteen findings of
   // exactly this.
+  // REPOINTED at WP-U12: the deals pane moved from workspaces.jsx to
+  // requester.jsx and gained a name, so both of these stopped matching and
+  // reported SKIP.
   { target: 'shell', suite: 'shell.test.mjs',
     name: 'canned example rows are carried into a pane',
-    find: `  const pane = usePane(() => API.deals());`,
-    repl: `  const pane = usePane(() => API.deals());
+    find: `  const deals = usePane(() => API.deals());`,
+    repl: `  const deals = usePane(() => API.deals());
   const examples = [{ agreement_id: 'AG-001', counterparty: 'Northwind' },
                     { agreement_id: 'AG-002', counterparty: 'Contoso' }];`,
     expect: 'no pane holds an array of example rows' },
@@ -1249,10 +1252,10 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
   // its own rot rather than quietly proving nothing.
   { target: 'shell', suite: 'shell.test.mjs',
     name: 'a pane opens its own connection instead of using the endpoint list',
-    find: `function MyDeals() {
-  const pane = usePane(() => API.deals());`,
-    repl: `function MyDeals() {
-  const pane = usePane(() => fetch('/api/deals').then(r => r.json()));`,
+    find: `function MyDealsPane({ me }) {
+  const deals = usePane(() => API.deals());`,
+    repl: `function MyDealsPane({ me }) {
+  const deals = usePane(() => fetch('/api/deals').then(r => r.json()));`,
     expect: "every call goes through the API module's fixed endpoint list" },
 
   // "NOT BUILT" COLLAPSING INTO "NOTHING HERE". Two different facts: one is
@@ -1587,6 +1590,56 @@ grant insert on cw.override_socialisation, cw.override_notified to cw_requester;
       <div className="caption mt-4">
         Releasing a hold is somebody's act — so there is`,
     expect: 'the reviewer is not offered acts that are not theirs' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The requester's workspace (WP-U12)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // THE V3 BUTTON RETURNING. "Just for the demo flow" is exactly how it comes
+  // back, and this is the screen it comes back on.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'an acknowledge button returns to the requester\'s screen',
+    find: `                request an override…`,
+    repl: `                acknowledge · override`,
+    expect: 'no acknowledge, override, or proceed-anyway affordance survives' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the requester opens the gate themselves',
+    find: `            const s = await API.socialiseOverride({`,
+    repl: `            await API.openOverrideGate({ request_id: r.rows[0].request_id });
+            const s = await API.socialiseOverride({`,
+    expect: 'no acknowledge, override, or proceed-anyway affordance survives' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'nothing says that asking is not being allowed',
+    find: `          This <strong>opens no gate</strong>. It records that you asked, tells`,
+    repl: `          This starts the override. It records that you asked, tells`,
+    expect: 'the screen says asking is not being allowed' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a rejected finding no longer says it blocks',
+    find: `                        ? <span className="chip chip-err" title={f.note}>still blocks</span>`,
+    repl: `                        ? <span className="chip chip-err" title={f.note}>decided</span>`,
+    expect: 'a rejected finding is shown as still blocking' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the override request pane becomes unreachable again',
+    find: `                      onClick={() => setAsking(true)}>`,
+    repl: `                      onClick={() => {}}>`,
+    expect: 'the request pane is reachable, not dead code' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a deal can be opened in somebody else\'s name from the form',
+    find: `                    const r = await API.openDeal({
+                      agreement_id: newDeal.id.trim(),
+                      counterparty: newDeal.counterparty.trim(),
+                    });`,
+    repl: `                    const r = await API.openDeal({
+                      agreement_id: newDeal.id.trim(),
+                      counterparty: newDeal.counterparty.trim(),
+                      requester: me.person,
+                    });`,
+    expect: 'the deal is opened in the session person\'s name, with no field for it' },
 
   { suite: 'override.test.mjs',
     name: 'a viewer sees every override request, told about it or not',
