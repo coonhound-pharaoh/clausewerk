@@ -293,3 +293,33 @@ resolved by trusting our own reconstruction.
 **Proven, not assumed.** Tests confirm that replacing and retiring the very
 clauses a contract used leave that contract byte-identical, and that no role —
 including the most privileged — can edit or delete a signed document.
+
+---
+
+## 2026-07-25 · We do not use the standard Word library, and the reason is in a test
+
+**Decision.** The document part of the system is built directly on Python's
+built-in tools rather than the usual `python-docx` library that our architecture
+named.
+
+**Why.** That library cannot read tracked changes. When a vendor sends back a
+marked-up contract, the library silently drops both what they added and what
+they struck out — precisely the text being negotiated. Reading redlines through
+it would mean reading everything except the part that matters.
+
+We keep the library installed for testing only, used the other way round: it
+opens the contracts we produce and confirms they are genuinely valid Word files.
+Our own reader checking our own output only proves we agree with ourselves.
+
+**The claim is now counted, not asserted.** Every contract we produce is checked
+character by character: anything that is neither approved clause wording nor a
+short list of declared structural text (the title, the date, section headings)
+is flagged. That count must be zero. A second test deliberately removes items
+from the allowed list to prove the counter is actually looking.
+
+This turns "no wording is machine-written" from a statement in a footer into a
+property the build refuses to ship without.
+
+**Also.** A contract assembled twice from identical inputs now produces a
+byte-identical file. Without that, the fingerprint we store against the signed
+contract would change every minute and mean nothing.

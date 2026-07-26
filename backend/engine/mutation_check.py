@@ -151,6 +151,49 @@ MUTATIONS = [
         '"is_floor": False,',
         "test_snapshot_rows_pin_the_ladder_with_its_floor",
     ),
+    # ── Document service ──
+    (
+        "clause text is reformatted on the way into the document",
+        "docx.py",
+        "body.append(_para(d.selected.body))",
+        "body.append(_para(' '.join(d.selected.body.split())[:200] + '…'))",
+        "test_clause_text_appears_verbatim",
+    ),
+    (
+        "an unresolved risk gets a placeholder section",
+        "docx.py",
+        "            continue          # an unresolved risk is not silently papered over",
+        "            body.append(_para('To be agreed between the parties.'))\n            continue",
+        "test_the_document_contains_zero_authored_characters",
+    ),
+    (
+        "document assembly is not reproducible",
+        "docx.py",
+        "info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))",
+        "import time as _t; info = zipfile.ZipInfo(name, date_time=_t.localtime()[:6])",
+        "test_the_archive_embeds_no_wall_clock",
+    ),
+    (
+        "deleted text is treated as document content",
+        "docx.py",
+        'tag = f"{{{W}}}delText" if kind == "del" else f"{{{W}}}t"',
+        'tag = f"{{{W}}}t"',
+        "test_original_text_is_keep_plus_del",
+    ),
+    (
+        "every paragraph is treated as a redline",
+        "docx.py",
+        '        if not any(s.kind in ("ins", "del") for s in segments):\n            continue',
+        "        pass",
+        "test_one_redline_per_changed_paragraph",
+    ),
+    (
+        "a corrupt upload raises something unusable",
+        "docx.py",
+        'raise NotADocx("not a .docx file — a Word document is a zip archive") from exc',
+        "raise",
+        "test_a_non_zip_upload_fails_with_a_usable_message",
+    ),
 ]
 
 

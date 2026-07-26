@@ -15,7 +15,8 @@ npm run verify
 ```
 
 `verify` runs every suite and then both mutation checks. All must pass.
-Requires Node and Python 3.10+ with `pytest`.
+Requires Node and Python 3.10+ with `pytest`. `python-docx` is optional and
+test-only — it independently validates our output; three tests skip without it.
 
 There is **no database to install**. SQL tests run against
 [PGlite](https://pglite.dev) — real PostgreSQL compiled to WebAssembly — so the
@@ -45,12 +46,14 @@ engine/
   resolution.py             the pure function, and ladder descent
   validation.py             conflict rules as data, and the gate
   run.py                    recording a run, and rebuilding one
+  docx.py                   emit a contract, read a vendor's redline
   loader.py                 the only module that knows both layers
   test_resolution.py        27 tests
   test_validation.py        21 tests
-  test_run.py               16 tests
+  test_run.py               19 tests
+  test_docx.py              25 tests
   test_loader.py            14 tests
-  mutation_check.py         18 mutations
+  mutation_check.py         24 mutations
 ```
 
 ## The design in one page
@@ -277,6 +280,49 @@ reports how far the library has moved from what a contract carries — input to 
 renewal conversation, and nothing more. Tests assert that superseding and
 retiring the very clauses a contract used leave it byte-identical.
 
+## The document service
+
+Emits the contract, and reads vendor redlines back.
+
+**Deviation from `ARCHITECTURE.md` §5, deliberately.** The specification names
+`python-docx`. This uses the standard library, because python-docx *cannot read
+tracked changes* — it exposes only runs that are direct children of a paragraph,
+so `w:ins` and `w:del` content is invisible to it. A test demonstrates this: read
+through python-docx, a vendor's redline loses **both** the insertion and the
+deletion, which is exactly the text under negotiation. Since the redline half
+must walk the XML regardless, a second dependency would buy only inconsistency.
+
+python-docx is kept as a **test-only** dependency, used the other way round: an
+independent OOXML reader opens our generated file and confirms the clauses and
+styles are really there. Our own parser reading our own output proves only that
+we are self-consistent.
+
+**`authored_characters()` makes the headline claim checkable.** It counts
+characters in the emitted document that are neither approved clause text nor one
+of a small, explicitly declared set of structural strings. The suite asserts the
+count is zero — and a control test asserts the counter returns non-zero when the
+allowlist is incomplete, so it cannot pass by always returning 0. If that
+allowlist ever needs a new entry, that is the moment to ask what just got
+written.
+
+**An unresolved risk is omitted, never filled in.** A mutation that inserts
+"To be agreed between the parties." for a missing clause is caught by the
+authored-characters test — which is the invariant doing real work rather than
+decorating a footer.
+
+**Assembly is byte-reproducible.** Zip entries carry a fixed timestamp, because
+a stored SHA-256 is worthless if the same contract hashes differently every
+minute. Asserted directly against the archive, not inferred from building twice.
+
+**Redlines: one per changed paragraph** (ADR-0007), with segments in document
+order so a reviewer sees what changed where. `accepted_text` is keep + insert
+with deletions dropped — what a Review ticket pre-loads. Unchanged paragraphs
+are context, not redlines.
+
+**A vendor upload is the one place untrusted bytes enter the system**, so a file
+that is not a zip, not a Word document, or malformed inside raises `NotADocx`
+with a message a buyer can act on.
+
 ## Why there is a mutation check
 
 A test suite that has never failed proves nothing. `mutation-check.mjs`
@@ -284,7 +330,7 @@ deliberately breaks one guarantee at a time — removes the unique constraint on
 category short codes, makes clause bodies editable, lets expired clauses be
 selected — and asserts the suite catches each one.
 
-It has already earned its place seven times:
+It has already earned its place nine times:
 
 - Two tests referenced clause versions that did not exist, so they failed on a
   foreign key rather than the rule under test — and would have kept passing if
@@ -308,6 +354,12 @@ It has already earned its place seven times:
   when the snapshot was taken.
 - A test asserting the ladder floor survives storage passed while the floor was
   being written as `false` for every rung.
+- The document-reproducibility test built two files in the same second, so it
+  would have passed with a live timestamp — by luck. Replaced with a direct
+  assertion that the archive embeds no wall clock.
+- The redline fixture wrote only `word/document.xml`. Enough for our lenient
+  parser, but not a real vendor file, and it hid the fact that an independent
+  reader could not open it at all.
 
 ## Mapping to the specifications
 
@@ -321,10 +373,7 @@ It has already earned its place seven times:
 
 ## Next
 
-1. **Document service** — Python, `python-docx`, generation and tracked-change
-   parsing. The last piece of the assembly path, and the one that finally emits
-   a contract. It also computes the SHA-256 that `cw.executed_document` stores.
-2. **Obligation templates** — [LCMA](../LIFECYCLE-ARCHITECTURE.md) §5, declared
+1. **Obligation templates** — [LCMA](../LIFECYCLE-ARCHITECTURE.md) §5, declared
    on the clause so registration is a lookup rather than an interpretation.
 
 Deferred deliberately: a rule-authoring surface for non-developers. The grammar
