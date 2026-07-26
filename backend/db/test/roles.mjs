@@ -19,12 +19,16 @@
 // test must perform the protected action as the role the policy names, on the
 // write path. Anything else measures the owner's privileges, not the system's.
 
+// Six now. The administrator arrived with 0013 (WP-U01) and is listed here for
+// the same reason as the other five: a suite that cannot `become()` a role
+// cannot test that role's policies, and an untestable role is an untested one.
 const ROLE_TO_DB_ROLE = {
   viewer:         'cw_viewer',
   requester:      'cw_requester',
   legal_reviewer: 'cw_legal_reviewer',
   legal_admin:    'cw_legal_admin',
   auditor:        'cw_auditor',
+  administrator:  'cw_administrator',
 };
 
 export function roleHelpers(db) {

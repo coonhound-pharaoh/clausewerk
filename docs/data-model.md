@@ -6,7 +6,7 @@ Rebuilt 2026-07-26. The previous version predated three of the four architecture
 described only the prototype's in-browser records, so it had quietly become a map of a smaller
 system than the one that exists.
 
-**How to read it.** The backend schema is the authoritative record shape, defined in twelve
+**How to read it.** The backend schema is the authoritative record shape, defined in thirteen
 migrations under [`backend/db/migrations/`](../backend/db/migrations). This document gives the
 *shape and the reasoning* — what each table is for, why it exists, and which architecture document
 governs it. It deliberately does **not** copy column lists: duplicating DDL is what made the
@@ -70,16 +70,53 @@ table over.
 
 ### Roles `[db]`
 
-Five, matching [ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md):
-`cw_viewer`, `cw_requester`, `cw_legal_reviewer`, `cw_legal_admin`, `cw_auditor`.
+Six. Five from [ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md) —
+`cw_viewer`, `cw_requester`, `cw_legal_reviewer`, `cw_legal_admin`, `cw_auditor` — and
+`cw_administrator` from [ADR-0011](decisions/ADR-0011-the-administrator-is-a-steward.md), added in
+`0013`.
 
 **Identity comes from the connection, not from a claim.** `cw.app_role()` derives the acting role
 from the database role the session actually holds. It previously read a session variable any
 connected client could set — so every policy in the schema trusted a value the client wrote.
 
-> **Residual, stated plainly:** the *person's* name is still self-asserted, because the five roles
-> are shared service accounts. And the scheme assumes one connection means one person — it is
-> **incompatible with transaction-mode connection pooling**. See `ARCHITECTURE.md` §5.
+> **Residual, stated plainly:** the *person's* name is still self-asserted, because the six roles
+> are shared service roles. `cw.account` (below) narrows this — the name can now be checked against
+> somebody the system knows — but does not close it. And the scheme assumes one connection means one
+> person: it is **incompatible with transaction-mode connection pooling**. See `ARCHITECTURE.md` §5.
+
+---
+
+## 2a. People and access — `0013`
+
+Governed by [`UI-AND-ADMINISTRATION-ARCHITECTURE.md`](../UI-AND-ADMINISTRATION-ARCHITECTURE.md) §4
+and [ADR-0011](decisions/ADR-0011-the-administrator-is-a-steward.md); owner decisions `U5`–`U7`.
+
+| Record | Purpose |
+|---|---|
+| `cw.account` `[db]` | One row per named person: who they are, their unit, the **one** role they hold, active or revoked, who created them and when |
+| `cw.bootstrap()` `[db]` | The run-once ceremony that creates the first Administrator and first Legal admin |
+
+**One person, one role — deliberately not a join table.** A second role is a revoke and a grant,
+both recorded and both visible in the access history. A many-roles model would let one person hold
+`legal_reviewer` and `administrator` at once, which is precisely the combination the countersign
+rule exists to prevent.
+
+**An account is revoked, never deleted**, and a revocation is never undone — bringing somebody back
+is a new grant, recorded. Two layers hold this: no `delete` grant for any role, and a trigger that
+refuses even for the owner. The person, and who created them when, are immutable; unit, display name
+and role are living administrative facts and may change, each change audited
+(`account_role_moved`, `account_revoked`).
+
+**What the Administrator may touch.** Insert and update on `cw.account`, insert on `cw.audit_event`,
+and — from `0013` parts 3 and 4 — the operational settings, the watcher lists and the checkpoint
+function. `select` on the content tables and **no** insert, update or delete on any of them
+(decision `U5`). The test suite sweeps every table in schema `cw` against an allowlist of the two it
+may write, so a content table added by a future migration is covered the moment it exists.
+
+**Audit events added:** `account_created`, `account_revoked`, `account_role_moved`,
+`bootstrap_performed`. The two bootstrap accounts are recorded with `actor_kind = 'system'` and a
+null `actor_role`: at that moment there is no application role on the connection, and recording them
+as human acts under a role nobody held would be a lie in the permanent record.
 
 ---
 

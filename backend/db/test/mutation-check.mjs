@@ -124,6 +124,17 @@ language plpgsql stable as`,
   // as every policy in the schema is concerned. The named test performs a
   // governed write the reviewer genuinely holds the grant for, so no privilege
   // error can stand in for the protection.
+  // REPOINTED at 0013 (WP-U01). This entry used to key on the five-way CASE in
+  // 0001, and it silently stopped working the moment 0013 redefined
+  // cw.app_role() to add the administrator: the harness broke 0001's copy,
+  // 0013's correct copy then replaced it, and the mutation cancelled itself out
+  // — reported as MISS, "nothing guards this", for a protection that was
+  // actually intact.
+  //
+  // The lesson is worth keeping, because it will happen again: a mutation must
+  // key on the definition that is LIVE after all migrations run, not on the
+  // first one a grep finds. The `find` below carries the administrator line
+  // precisely so it matches 0013 and nothing else.
   { suite: 'roles.test.mjs',
     name: 'identity is claimed in a session variable again (finding D3 regression)',
     find: `  select case current_user
@@ -132,9 +143,19 @@ language plpgsql stable as`,
     when 'cw_legal_reviewer' then 'legal_reviewer'
     when 'cw_legal_admin'    then 'legal_admin'
     when 'cw_auditor'        then 'auditor'
+    when 'cw_administrator'  then 'administrator'
   end`,
     repl: `  select nullif(current_setting('cw.role', true), '')`,
     expect: 'a legal reviewer cannot become legal_admin by setting cw.role' },
+
+  // And the sixth answer itself. Without it every policy sees the administrator
+  // as null and the role can do nothing at all — including the account-keeping
+  // that is its whole purpose.
+  { suite: 'administrator.test.mjs',
+    name: 'the role accessor never learned the sixth answer',
+    find: `    when 'cw_administrator'  then 'administrator'`,
+    repl: `    when 'cw_administrator'  then null`,
+    expect: 'cw.app_role() answers administrator for a cw_administrator connection' },
 
   // The read half of D3, narrowed to one role so it cannot be confused with the
   // write-path entry above. Table privileges never covered this: a requester
@@ -685,6 +706,74 @@ grant usage, select on sequence cw.supersession_id_seq to cw_legal_reviewer;`,
     find: `  engine_version text not null check (btrim(engine_version) <> ''),`,
     repl: `  engine_version text,`,
     expect: 'a run cannot omit which engine produced it' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The Administrator (WP-U01, migration 0013 part 1)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // Owner decision U5 gave this role content READ and no content write. The
+  // read half and the write half therefore need separate mutations: reverting
+  // either one is a real fault, and they are caught by different tests.
+
+  // The write half. Note what makes this one interesting: a table GRANT alone
+  // is not enough to actually write a clause version, because the update policy
+  // still names legal_admin — so none of the "administrator cannot edit clause
+  // text" write-path tests would notice. Only the privilege sweep does, which is
+  // the entire reason the sweep exists alongside the write attempts. Two layers
+  // means two mutations, or one of the layers is unproven.
+  { suite: 'administrator.test.mjs',
+    name: 'the administrator is granted a content write "just for the dashboard"',
+    find: 'grant insert, update on cw.account to cw_administrator;',
+    repl: `grant insert, update on cw.account to cw_administrator;
+grant insert, update on cw.clause_version to cw_administrator;`,
+    expect: 'no table in schema cw grants the administrator insert, update or delete except the two it is supposed to' },
+
+  // The read half, reverted to the original content-blind design. This must fail
+  // loudly rather than quietly: U5 is a decision the owner made, and a silent
+  // reversion would leave the console blind with no test objecting.
+  { suite: 'administrator.test.mjs',
+    name: 'decision U5 reverted — the administrator loses sight of the deals',
+    find: `create policy administrator_reads on cw.agreement for select
+  using (cw.app_role() = 'administrator');`,
+    repl: 'select 1;',
+    expect: 'administrator can read the deals themselves' },
+
+  // Without this the administrator holds INSERT on the audit log and is still
+  // refused by row-level security, so every audited administrative act fails
+  // and the whole console is dead on arrival.
+  { suite: 'administrator.test.mjs',
+    name: 'the administrator is left out of the audit append policy',
+    find: `create policy audit_append_administrator on cw.audit_event for insert
+  with check (cw.app_role() = 'administrator');`,
+    repl: 'select 1;',
+    expect: 'an administrator creates an account, and it lands on the chain' },
+
+  // The bootstrap backdoor, in both of its shapes.
+  { suite: 'administrator.test.mjs',
+    name: 'the bootstrap ceremony stays callable after first run',
+    find: '  if existing > 0 then',
+    repl: '  if false then',
+    expect: 'it refuses to run a second time — the accounts table is the precondition' },
+
+  { suite: 'administrator.test.mjs',
+    name: 'the bootstrap ceremony stops checking who is calling it',
+    find: '  if cw.app_role() is not null then',
+    repl: '  if false then',
+    expect: 'the in-function role guard refuses an administrator, if ever reached' },
+
+  { suite: 'administrator.test.mjs',
+    name: 'accounts become deletable, taking the access history with them',
+    find: `create trigger account_no_delete
+  before delete on cw.account
+  for each row execute function cw.account_no_delete();`,
+    repl: 'select 1;',
+    expect: 'an account is not deleted, by anyone, ever' },
+
+  { suite: 'administrator.test.mjs',
+    name: 'a revocation can be erased by un-revoking the account',
+    find: "  if old.state = 'revoked' and new.state <> 'revoked' then",
+    repl: '  if false then',
+    expect: 'revoking an account is recorded, and it cannot be un-revoked' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();

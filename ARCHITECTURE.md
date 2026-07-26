@@ -306,7 +306,7 @@ The prototype runs entirely client-side. A production deployment needs:
 **Integrations**
 
 - SharePoint / O365 — clause library sync, contract outbox, audit workbook
-- Identity (SSO + RBAC): **five roles** — Viewer / Requester / Legal reviewer / Legal admin / Auditor, defined in [ADR-0008](docs/decisions/ADR-0008-governance-roles-and-recorded-overrides.md). Only Legal admin can activate clauses; only Auditor-and-above can read the full log. All five exist as real database roles (`cw_viewer`, `cw_requester`, `cw_legal_reviewer`, `cw_legal_admin`, `cw_auditor`), so a role without a privilege cannot act even if a policy is written wrongly. *(Not to be confused with the four **actors** in §1 — Requester, Legal, Controller, Executor — which describe who or what does the work, not who is permitted to do it.)*
+- Identity (SSO + RBAC): **six roles** — Viewer / Requester / Legal reviewer / Legal admin / Auditor, defined in [ADR-0008](docs/decisions/ADR-0008-governance-roles-and-recorded-overrides.md), plus **Administrator**, added by [ADR-0011](docs/decisions/ADR-0011-the-administrator-is-a-steward.md). Only Legal admin can activate clauses; only Auditor-and-above can read the full log. The Administrator runs the machine — accounts, role grants, operational settings, watcher lists, checkpoints — and **reads contract content without being able to change any of it or decide anything in any workflow** (content-visible, content-powerless; owner decision `U5`). Grants of the two Legal roles take effect only when a Legal admin countersigns (`U6`). All six exist as real database roles (`cw_viewer`, `cw_requester`, `cw_legal_reviewer`, `cw_legal_admin`, `cw_auditor`, `cw_administrator`), so a role without a privilege cannot act even if a policy is written wrongly. *(Not to be confused with the four **actors** in §1 — Requester, Legal, Controller, Executor — which describe who or what does the work, not who is permitted to do it.)*
 
 **How the database decides who you are — and what that assumes**
 
@@ -325,12 +325,18 @@ Three consequences a deployment has to plan around:
   carries session state across them — under that mode, one user's identity leaks into another
   user's work. Use session-mode pooling, a connection per authenticated user, or move the identity
   into a signed per-request token before pooling that way.
-- **The name is still self-asserted.** The database knows the *role* for certain; it takes the
-  *person's name* from the application, because the five roles are shared service accounts and no
-  individual has their own database login. So the audit log cannot be made to name an authority
-  someone does not hold, but a caller with direct database access could still sign someone else's
-  name to their own act. Closing that needs either a database login per person or a signed
-  sign-on token, and it is not closed today.
+- **The name is still self-asserted — but the system now knows who its people are.** The database
+  knows the *role* for certain; it takes the *person's name* from the application, because the six
+  roles are shared service roles and no individual has their own database login. So the audit log
+  cannot be made to name an authority someone does not hold, but a caller with direct database
+  access could still sign someone else's name to their own act. Closing that needs either a
+  database login per person or a signed sign-on token, and **it is not closed today.**
+
+  What `0013` adds is the other half of the answer: `cw.account` holds one row per named person and
+  the single role they hold, so the name on an audit row can be checked against somebody the system
+  actually knows, and the service layer binds a session to the role recorded for that person rather
+  than to whatever the client claims. That narrows the residual from "any name at all" to "any name,
+  by a caller with direct database access" — it does not eliminate it, and the sentence above stands.
 - **The owner is nobody.** The database owner — the account that installs and upgrades the schema —
   holds no application role at all and is refused by every rule that requires one. That is
   deliberate: administration is not a business role, and any governed act performed during

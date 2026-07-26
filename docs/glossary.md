@@ -26,8 +26,9 @@ result, renders the .docx. Never calls a model.
 ## Permission roles
 
 Distinct from the actors above. **Actors** say who or what does the work; **roles** say who is
-permitted to. There are **five**, defined in
-[ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md) and created as real
+permitted to. There are **six**, defined in
+[ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md) and
+[ADR-0011](decisions/ADR-0011-the-administrator-is-a-steward.md), and created as real
 database roles so that a missing privilege stops an act even if a permission rule is written
 wrongly.
 
@@ -38,6 +39,27 @@ wrongly.
 | **Legal reviewer** | `cw_legal_reviewer` | Adjudicate the Review queue, approve overrides, verify clause promotions |
 | **Legal admin** | `cw_legal_admin` | Everything a reviewer may do, plus activate, retire and supersede clauses, and promote a concession into the library |
 | **Auditor** | `cw_auditor` | Read everything, including the full audit log. Mutate nothing |
+| **Administrator** | `cw_administrator` | Keep the accounts, grant and revoke roles, keep the operational settings and watcher lists, take checkpoints. **Reads** contract content and changes none of it. Decides nothing in any workflow |
+
+**Content-visible, content-powerless** — the accurate description of the Administrator, and the
+phrase to use. Owner decision `U5` gave the role `select` on the content tables so that whoever
+supports the system can see what is being complained about; it gave the role no `insert`, `update`
+or `delete` anywhere, and no say in any workflow. The role is **not** content-blind, and calling it
+that is a document promising a control the code does not enforce.
+
+**Countersign** — a grant of either Legal role takes effect only when a Legal admin accepts it
+(owner decision `U6`, [ADR-0011](decisions/ADR-0011-the-administrator-is-a-steward.md)). Until then
+the grant confers nothing, and the refusal comes from the database rather than the screen. Viewer,
+requester and auditor the Administrator grants alone.
+
+**Bootstrap** — the one-time ceremony in which the database owner creates the first Administrator
+and the first Legal admin, because only an Administrator may create an account and on a new
+installation there is none. Refused once any account exists; both acts recorded on the chain as
+`system` acts, marked as bootstrap.
+
+**Account** — one row per named person in `cw.account`, holding exactly one role. Replaces the
+self-asserted actor name: the actor on an audit row should be somebody the system knows. A second
+role is a revoke and a grant, never a second row.
 
 ---
 

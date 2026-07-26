@@ -87,7 +87,13 @@ same way the four settled decisions were.
 
 ---
 
-## WP-U01 · The Administrator role and named accounts
+## WP-U01 · The Administrator role and named accounts — **CLOSED 2026-07-26**
+
+*Delivered in [`0013_administrator.sql`](backend/db/migrations/0013_administrator.sql) part 1,
+[`db/bootstrap.mjs`](backend/db/bootstrap.mjs), and
+[`administrator.test.mjs`](backend/db/test/administrator.test.mjs) — 44 tests, 8 mutations, all
+caught by the test that names them. Documented in
+[ADR-0011](docs/decisions/ADR-0011-the-administrator-is-a-steward.md).*
 
 **Objective.** A sixth database role exists — `cw_administrator` — recognised by
 the role accessor, holding no content power; and the system knows its people by

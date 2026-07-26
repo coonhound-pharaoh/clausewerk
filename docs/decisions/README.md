@@ -7,12 +7,13 @@ recorded here from [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and the ingested v
 document reasoning that already shaped the system rather than proposing anything new, and the
 prototype implements them.
 
-**0008, 0009 and 0010 are forward-looking.** They were decided after the prototype and are *not*
-implemented in it — 0008's five roles and recorded overrides and 0009's separation of concession
-from supersession exist in the backend schema, and 0010's AI-drafted candidates are specified but
-not yet built. Status is `Accepted` throughout because the decisions are settled, not because the
-code exists everywhere. Where a record has been narrowed by a later one, it carries an amendment
-note at the top: **0001 and 0002 are both amended by 0010.**
+**0008–0011 are forward-looking.** They were decided after the prototype and are *not*
+implemented in it — 0008's roles and recorded overrides, 0009's separation of concession
+from supersession, and 0011's Administrator exist in the backend schema, and 0010's AI-drafted
+candidates are specified but not yet built. Status is `Accepted` throughout because the decisions
+are settled, not because the code exists everywhere. Where a record has been narrowed by a later
+one, it carries an amendment note at the top: **0001 and 0002 are both amended by 0010, and 0008's
+five roles become six under 0011.**
 
 Most "why can't I just…" questions are answered by the **Consequences** section of one of these.
 That is the section to read.
@@ -29,6 +30,7 @@ That is the section to read.
 | [0008](ADR-0008-governance-roles-and-recorded-overrides.md) | Five roles; override is a socialised request; auto-approval is recorded | Latency on exactly the deals already under deadline pressure |
 | [0009](ADR-0009-concession-is-not-supersession.md) | Concession, promotion, and supersession are three separate acts | Three concepts where operators saw one; promotion has no natural trigger |
 | [0010](ADR-0010-ai-drafted-clause-candidates.md) | AI may draft candidate clauses; only a human publishes them | The simplest form of the headline claim is gone; review quality becomes the binding control |
+| [0011](ADR-0011-the-administrator-is-a-steward.md) *(amends 0008)* | A sixth role runs the machine: reads content, changes none of it, and grants Legal roles only with a countersign | One more role to administer; the Administrator can read every deal, and reads are not recorded |
 
 ## Format
 
