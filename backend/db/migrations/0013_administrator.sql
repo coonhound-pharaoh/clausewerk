@@ -3,8 +3,8 @@
 -- Owner decisions U5–U8, settled 2026-07-26 (docs/open-questions.md, memory.md).
 -- This file lands in parts as the work packages close:
 --
---   part 1  WP-U01 · the cw_administrator role and cw.account   ← this commit
---   part 2  WP-U02 · cw.role_grant and the countersign rule
+--   part 1  WP-U01 · the cw_administrator role and cw.account
+--   part 2  WP-U02 · cw.role_grant and the countersign rule    ← this commit
 --   part 3  WP-U03 · the settings split and the watcher lists
 --   part 4  WP-U04 · checkpoint duty moves, and health evidence
 --
@@ -377,11 +377,373 @@ grant execute on function cw.agreement_under_hold(text) to cw_administrator;
 -- 'system' and the owner's stated name as the actor: at that moment there is no
 -- application role on the connection, and recording the acts as human ones
 -- under a role nobody held would be a lie in the permanent record.
+-- The function itself is defined in PART 2 of this file, after cw.role_grant
+-- exists, because the ceremony writes two role grants as well as two accounts.
+--
+-- It was defined here in WP-U01 and MOVED in WP-U02 rather than being redefined
+-- a second time further down. 0007 states the rule: a fix that replaces existing
+-- logic is edited in place, because leaving the superseded version sitting above
+-- it is a trap for the next reader.
+--
+-- It was a trap for the mutation harness too, which is how this was caught. Two
+-- definitions of cw.bootstrap() in one file meant every mutation aimed at the
+-- ceremony hit the dead copy, the live copy replaced it, and two real guarantees
+-- were reported as unguarded. Same shape as the D3 entry repointed in the same
+-- work: a mutation must key on the definition that survives all migrations.
+
+-- WHAT IS DELIBERATELY NOT GRANTED, and would each be a critical fault:
+--
+--   cw.audit_checkpoint_take()   — arrives in part 4, when decision U7 moves
+--                                  the duty here and revokes it from legal_admin.
+--   cw.retention_destroy()       — destruction stays legal_admin's recorded act.
+--                                  The administrator sees what is due and nudges.
+--   update on cw.governance_setting — owner decisions are legal_admin's. Part 3
+--                                  adds the operational rows and splits the
+--                                  write policy by kind.
+--   anything on the review queue, negotiations, concessions or overrides beyond
+--   select — deciding is judgement, and this role holds none.
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- PART 2 · GRANTS, AND THE COUNTERSIGN RULE (WP-U02)
+-- ════════════════════════════════════════════════════════════════════════════
+-- Owner decision U6: a grant of either LEGAL role — legal_reviewer or
+-- legal_admin — takes effect only when a Legal admin countersigns it. The
+-- Administrator proposes; Legal accepts. Access to Legal judgement is itself a
+-- Legal judgement, and this is ADR-0008's own role-sprawl warning given teeth:
+-- it is the check that stops an Administrator assembling a voice in content by
+-- granting an ally legal_reviewer and having them approve the Administrator's
+-- own requests.
+--
+-- Viewer, requester and auditor the Administrator grants alone, recorded. None
+-- of them can change a contract or decide anything, so a second signature would
+-- buy control nobody needs at the price of slowing down every ordinary joiner.
+--
+-- WHERE THE RULE LIVES. Here, in the database. A countersign rule enforced only
+-- by the console is one API bug from gone, and the bug would be invisible: the
+-- screen would still show the amber "pending" badge while the person it names
+-- was already working.
+
+-- ── cw.role_grant · what happened to somebody's access, in order ───────────
+-- APPEND-ONLY, and that shapes the table. The obvious design puts
+-- countersigned_by and revoked_by as nullable columns on the grant row and
+-- fills them in later — but filling them in is an UPDATE, and a table that
+-- takes updates is not append-only, it is a table with a convention. Under that
+-- design "who countersigned this" is a value somebody can quietly change, which
+-- is the one fact the whole rule rests on.
+--
+-- So every act is its own row. A grant is a row. Countersigning it is a second
+-- row naming the first. Revoking it is a third. Nothing is ever updated, there
+-- is no update or delete grant for any role, and triggers refuse both even for
+-- the owner. Corrections are new rows, exactly as with every other record in
+-- this schema.
+--
+-- The cost, stated: "what can this person do right now" is no longer a column
+-- lookup. It is cw.effective_role, below, which is the single source the
+-- service layer consults.
+create table cw.role_grant (
+  grant_id   bigserial primary key,
+  -- Which act this row is. Deliberately not a status column that moves:
+  -- a status moves by UPDATE, and nothing here moves.
+  action     text not null check (action in ('granted','countersigned','revoked')),
+  person     text not null references cw.account(person),
+  -- The role in question. Carried on countersign and revoke rows too,
+  -- denormalised on purpose: an access history that needs a join to say WHAT
+  -- was granted is an access history nobody reads.
+  role       text not null check (role in
+               ('viewer','requester','legal_reviewer','legal_admin',
+                'auditor','administrator')),
+  -- For 'countersigned' and 'revoked': the grant row being acted on. Null for a
+  -- 'granted' row, which is the thing acted upon.
+  grant_ref  bigint references cw.role_grant(grant_id),
+  acted_by   text not null,
+  acted_at   timestamptz not null default now(),
+  reason     text,
+  -- The two accounts the bootstrap ceremony creates hold their roles without a
+  -- countersign, because at that instant there is no Legal admin to give one.
+  -- See the honest note on cw.effective_role below — this is a real hole in the
+  -- countersign rule and it is marked rather than hidden.
+  is_bootstrap boolean not null default false,
+  constraint an_act_names_its_subject check (
+    (action = 'granted' and grant_ref is null)
+    or (action in ('countersigned','revoked') and grant_ref is not null)),
+  constraint an_actor_is_not_blank check (length(btrim(acted_by)) > 0)
+);
+
+create index role_grant_by_person on cw.role_grant (person, grant_id);
+create index role_grant_by_ref    on cw.role_grant (grant_ref)
+  where grant_ref is not null;
+
+comment on table cw.role_grant is
+  'Append-only. Every act on somebody''s access is a row: granted, '
+  'countersigned, revoked. Nothing is ever updated — a correction is a new row. '
+  'cw.effective_role derives what a person may actually do right now.';
+
+-- ── The rules, enforced before the row lands ───────────────────────────────
+create or replace function cw.role_grant_rules() returns trigger
+language plpgsql as $$
+declare g cw.role_grant%rowtype; acct cw.account%rowtype;
+begin
+  -- The actor is the connection's person, never a value the caller supplies.
+  -- Without this, an administrator writes acted_by = 'somebody.else' and the
+  -- access history names the wrong person for the act that mattered most.
+  --
+  -- This is only as strong as cw.app_actor(), which is self-asserted — the
+  -- residual ARCHITECTURE.md §5 states. What it closes is the gap between the
+  -- name on the connection and the name on the row; what it cannot close is
+  -- whether the name on the connection is really that person. Bootstrap rows
+  -- are exempt because the owner performs them holding no application identity.
+  if not new.is_bootstrap then
+    new.acted_by := cw.app_actor();
+  end if;
+
+  select * into acct from cw.account where person = new.person;
+
+  if new.action = 'granted' then
+    -- Self-grant. The single most valuable act anybody inside this role could
+    -- perform, so it is refused here rather than left to the console.
+    if new.acted_by = new.person and not new.is_bootstrap then
+      raise exception 'nobody grants themselves a role — % tried to grant '
+        'themselves %', new.acted_by, new.role
+        using errcode = 'insufficient_privilege';
+    end if;
+    if acct.state = 'revoked' then
+      raise exception 'the account for % is revoked; create an account before '
+        'granting a role', new.person
+        using errcode = 'check_violation';
+    end if;
+
+  elsif new.action = 'countersigned' then
+    select * into g from cw.role_grant where grant_id = new.grant_ref;
+    -- Said plainly, and early. Without this the row falls through to
+    -- `new.person := g.person`, g is an all-null record, and the caller is told
+    -- "null value in column person violates not-null constraint" — which is
+    -- true, useless, and points at the wrong thing entirely. The check
+    -- constraint on the table cannot catch it either, because this trigger has
+    -- already overwritten person by the time constraints are evaluated.
+    if g.grant_id is null then
+      raise exception 'a countersign names the grant it accepts, and grant % does '
+        'not exist', coalesce(new.grant_ref::text, '(none given)')
+        using errcode = 'foreign_key_violation';
+    end if;
+    if g.action <> 'granted' then
+      raise exception 'a countersign names a grant; row % is a %', g.grant_id, g.action
+        using errcode = 'check_violation';
+    end if;
+    if g.role not in ('legal_reviewer','legal_admin') then
+      raise exception 'only grants of the two Legal roles are countersigned; % '
+        'takes effect when it is granted', g.role
+        using errcode = 'check_violation';
+    end if;
+    -- Self-countersign. An administrator who could countersign their own
+    -- proposal has the countersign rule in name only. Checked against BOTH the
+    -- subject of the grant and the person who proposed it: countersigning a
+    -- grant you yourself proposed is one signature wearing two hats.
+    if new.acted_by = g.person then
+      raise exception 'nobody countersigns their own role — % is the subject of '
+        'grant %', new.acted_by, g.grant_id
+        using errcode = 'insufficient_privilege';
+    end if;
+    if new.acted_by = g.acted_by then
+      raise exception 'the countersign is a second person''s judgement — % '
+        'proposed grant % and cannot also accept it', new.acted_by, g.grant_id
+        using errcode = 'insufficient_privilege';
+    end if;
+    if exists (select 1 from cw.role_grant c
+               where c.action = 'countersigned' and c.grant_ref = new.grant_ref) then
+      raise exception 'grant % is already countersigned', new.grant_ref
+        using errcode = 'unique_violation';
+    end if;
+    new.person := g.person;
+    new.role   := g.role;
+
+  elsif new.action = 'revoked' then
+    select * into g from cw.role_grant where grant_id = new.grant_ref;
+    if g.grant_id is null then
+      raise exception 'a revocation names the grant it withdraws, and grant % does '
+        'not exist', coalesce(new.grant_ref::text, '(none given)')
+        using errcode = 'foreign_key_violation';
+    end if;
+    if g.action <> 'granted' then
+      raise exception 'a revocation names a grant; row % is a %', g.grant_id, g.action
+        using errcode = 'check_violation';
+    end if;
+    if exists (select 1 from cw.role_grant r
+               where r.action = 'revoked' and r.grant_ref = new.grant_ref) then
+      raise exception 'grant % is already revoked', new.grant_ref
+        using errcode = 'unique_violation';
+    end if;
+    new.person := g.person;
+    new.role   := g.role;
+  end if;
+
+  return new;
+end $$;
+
+create trigger role_grant_rules
+  before insert on cw.role_grant
+  for each row execute function cw.role_grant_rules();
+
+-- Append-only, both directions, for everyone including the owner. The grant
+-- table is the access history; a system that can edit its own access history
+-- has no access history.
+create or replace function cw.role_grant_append_only() returns trigger
+language plpgsql as $$
+begin
+  raise exception 'cw.role_grant is append-only — a correction is a new row, so '
+    'that the correction is on the record too';
+end $$;
+
+create trigger role_grant_no_update
+  before update on cw.role_grant
+  for each row execute function cw.role_grant_append_only();
+create trigger role_grant_no_delete
+  before delete on cw.role_grant
+  for each row execute function cw.role_grant_append_only();
+
+-- ── Audit ──────────────────────────────────────────────────────────────────
+create or replace function cw.audit_role_grant() returns trigger
+language plpgsql as $$
+begin
+  perform cw.audit(
+    case new.action
+      when 'granted'       then 'role_granted'
+      when 'countersigned' then 'role_countersigned'
+      when 'revoked'       then 'role_revoked'
+    end,
+    new.person,
+    jsonb_build_object('role', new.role, 'grant_id', new.grant_id,
+                       'grant_ref', new.grant_ref, 'by', new.acted_by,
+                       'reason', new.reason, 'bootstrap', new.is_bootstrap),
+    case when new.is_bootstrap then 'system' else 'human' end);
+  return new;
+end $$;
+
+create trigger audit_role_grant
+  after insert on cw.role_grant
+  for each row execute function cw.audit_role_grant();
+
+-- ── cw.effective_role · what this person may actually do, right now ────────
+-- The single source the service layer (WP-U05) consults. Everything else about
+-- roles is history; this is the present tense.
+--
+-- FOUR CONDITIONS, and each one is a rule somebody could otherwise forget:
+--
+--   1. There is a grant.                    No grant, no role.
+--   2. It has not been revoked.             A revoked grant confers nothing.
+--   3. If it is a Legal role, it is         Decision U6. The uncountersigned
+--      countersigned.                       grant confers NOTHING — not a
+--                                           lesser role, nothing.
+--   4. The account is active.               A revoked person holds nothing,
+--                                           however many live grants they have.
+--
+-- Where a person somehow holds several live grants the most recent wins, and
+-- one-person-one-role means that should not arise — cw.account's primary key
+-- makes a second account impossible and the console grants one role at a time.
+-- Taking the newest is the fail-safe answer if it ever does: the most recently
+-- recorded decision is the one a human most recently made.
+create or replace view cw.effective_role as
+with live as (
+  select g.grant_id, g.person, g.role, g.acted_at, g.acted_by, g.is_bootstrap,
+         (select c.acted_by from cw.role_grant c
+           where c.action = 'countersigned' and c.grant_ref = g.grant_id)
+           as countersigned_by,
+         (select c.acted_at from cw.role_grant c
+           where c.action = 'countersigned' and c.grant_ref = g.grant_id)
+           as countersigned_at
+  from cw.role_grant g
+  where g.action = 'granted'
+    and not exists (select 1 from cw.role_grant r
+                    where r.action = 'revoked' and r.grant_ref = g.grant_id)
+)
+select distinct on (l.person)
+       l.person, a.display_name, a.unit, l.role, l.grant_id,
+       l.acted_by as granted_by, l.acted_at as granted_at,
+       l.countersigned_by, l.countersigned_at
+from live l
+join cw.account a on a.person = l.person
+where a.state = 'active'
+  and (l.role not in ('legal_reviewer','legal_admin')
+       or l.countersigned_by is not null
+       -- THE ONE HOLE IN THE COUNTERSIGN RULE, marked rather than hidden.
+       -- The first Legal admin is created before any Legal admin exists to
+       -- countersign them, so the ceremony's own grant is effective without
+       -- one. It is a single row, it is flagged is_bootstrap, it names the
+       -- owner, and it is on the chain as a system act — so "which Legal role
+       -- was never countersigned" is one query, not an investigation.
+       or l.is_bootstrap)
+order by l.person, l.acted_at desc, l.grant_id desc;
+
+comment on view cw.effective_role is
+  'What each person may actually do right now. A grant that is revoked, or an '
+  'uncountersigned grant of a Legal role, confers NOTHING — not a lesser role. '
+  'The service layer binds a session to this and to nothing else.';
+
+-- The pending queue: proposed Legal grants waiting on a Legal admin. This is
+-- the countersign queue, and WP-U08 puts it in Legal's OWN workspace as well as
+-- the admin console — a queue living only where the people who must clear it
+-- never look is a queue that does not get cleared.
+create or replace view cw.countersign_pending as
+select g.grant_id, g.person, a.display_name, a.unit, g.role,
+       g.acted_by as proposed_by, g.acted_at as proposed_at, g.reason
+from cw.role_grant g
+join cw.account a on a.person = g.person
+where g.action = 'granted'
+  and g.role in ('legal_reviewer','legal_admin')
+  and not g.is_bootstrap
+  and not exists (select 1 from cw.role_grant c
+                  where c.action = 'countersigned' and c.grant_ref = g.grant_id)
+  and not exists (select 1 from cw.role_grant r
+                  where r.action = 'revoked' and r.grant_ref = g.grant_id)
+order by g.acted_at;
+
+comment on view cw.countersign_pending is
+  'Proposed grants of the two Legal roles that no Legal admin has accepted yet. '
+  'These confer nothing while they sit here.';
+
+-- ── Who may write which act ────────────────────────────────────────────────
+alter table cw.role_grant enable row level security;
+
+-- Access is not a secret, for the same reason cw.account is not: it carries no
+-- contract content, and hiding it would make the access story unauditable by
+-- anyone but the administrator.
+create policy read_all on cw.role_grant for select
+  using (cw.app_role() is not null);
+
+-- The administrator proposes and revokes.
+create policy administrator_grants on cw.role_grant for insert
+  with check (cw.app_role() = 'administrator'
+              and action in ('granted','revoked'));
+
+-- A Legal admin — and nobody else, including the administrator — countersigns.
+-- A separate policy rather than one with an OR, so that each reads as the
+-- single rule it is.
+create policy legal_admin_countersigns on cw.role_grant for insert
+  with check (cw.app_role() = 'legal_admin' and action = 'countersigned');
+
+revoke all on cw.role_grant from public;
+grant select on cw.role_grant to
+  cw_viewer, cw_requester, cw_legal_reviewer, cw_legal_admin, cw_auditor,
+  cw_administrator;
+grant insert on cw.role_grant to cw_administrator, cw_legal_admin;
+grant usage, select on sequence cw.role_grant_grant_id_seq to
+  cw_administrator, cw_legal_admin;
+-- No update, no delete, for anybody. Two layers, with the triggers above.
+
+grant select on cw.effective_role, cw.countersign_pending to
+  cw_viewer, cw_requester, cw_legal_reviewer, cw_legal_admin, cw_auditor,
+  cw_administrator;
+
+-- ── The bootstrap ceremony grants the two roles it creates ─────────────────
+-- Rewritten rather than patched: part 1's version created accounts and stopped,
+-- which under part 2 would leave the first Administrator holding an account and
+-- no effective role — unable to perform the very next act the ceremony exists
+-- to enable. The two grants are part of the ceremony, not a follow-up somebody
+-- has to remember.
 create or replace function cw.bootstrap(
-  p_by                 text,   -- the human running the ceremony, for the record
-  p_administrator      text,   -- the first Administrator's identifier
+  p_by                 text,
+  p_administrator      text,
   p_administrator_name text,
-  p_legal_admin        text,   -- the first Legal admin's identifier
+  p_legal_admin        text,
   p_legal_admin_name   text,
   p_unit               text default null
 ) returns void
@@ -393,16 +755,12 @@ begin
       using errcode = 'null_value_not_allowed';
   end if;
 
-  -- Property 2, checked first and deliberately: on a fresh install the
-  -- accounts-empty check below would pass for an administrator too, so testing
-  -- emptiness alone would leave the caller unchecked exactly when it matters.
   if cw.app_role() is not null then
     raise exception 'the bootstrap ceremony is the owner''s one act; a connection '
       'holding the % role cannot perform it', cw.app_role()
       using errcode = 'insufficient_privilege';
   end if;
 
-  -- Property 1. The ceremony is over the moment it has happened once.
   select count(*) into existing from cw.account;
   if existing > 0 then
     raise exception 'the bootstrap ceremony has already been performed — % account(s) '
@@ -419,36 +777,26 @@ begin
       using errcode = 'check_violation';
   end if;
 
-  -- Name the actor for the audit trigger. There is no application role to
-  -- report, so cw.app_role() records null — the truthful answer under U3.
   perform set_config('cw.actor', p_by, true);
 
   insert into cw.account (person, display_name, unit, role, created_by, is_bootstrap)
   values (p_administrator, p_administrator_name, p_unit, 'administrator', p_by, true),
          (p_legal_admin,   p_legal_admin_name,   p_unit, 'legal_admin',   p_by, true);
 
+  -- Effective from the start, and flagged. The Legal admin's grant is the one
+  -- exception to decision U6 in the system's whole life, because there is
+  -- nobody yet to countersign it. cw.effective_role names the exception in its
+  -- own WHERE clause so that nobody has to remember it.
+  insert into cw.role_grant (action, person, role, acted_by, reason, is_bootstrap)
+  values ('granted', p_administrator, 'administrator', p_by,
+          'bootstrap: the first Administrator', true),
+         ('granted', p_legal_admin, 'legal_admin', p_by,
+          'bootstrap: the first Legal admin, uncountersigned because there is '
+          'no Legal admin yet to countersign', true);
+
   perform cw.audit('bootstrap_performed', p_by,
     jsonb_build_object('administrator', p_administrator,
                        'legal_admin', p_legal_admin), 'system');
 end $$;
 
-comment on function cw.bootstrap(text,text,text,text,text,text) is
-  'Run once, by the owner, to create the first Administrator and first Legal '
-  'admin. Refuses if any account exists, and refuses any caller holding an '
-  'application role. Both acts are recorded on the chain as bootstrap acts.';
-
--- Granted to nobody. The revoke is the point: no application role can reach
--- this function, so it is not a path anyone can walk after installation.
 revoke all on function cw.bootstrap(text,text,text,text,text,text) from public;
-
--- WHAT IS DELIBERATELY NOT GRANTED, and would each be a critical fault:
---
---   cw.audit_checkpoint_take()   — arrives in part 4, when decision U7 moves
---                                  the duty here and revokes it from legal_admin.
---   cw.retention_destroy()       — destruction stays legal_admin's recorded act.
---                                  The administrator sees what is due and nudges.
---   update on cw.governance_setting — owner decisions are legal_admin's. Part 3
---                                  adds the operational rows and splits the
---                                  write policy by kind.
---   anything on the review queue, negotiations, concessions or overrides beyond
---   select — deciding is judgement, and this role holds none.

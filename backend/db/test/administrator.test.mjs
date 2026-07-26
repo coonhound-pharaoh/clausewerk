@@ -143,12 +143,20 @@ await test('the read really is content, not a redacted shadow of it', async () =
 // ── Guarantee 1b · the write half, over every table in the schema ─────────
 // The allowlist. Everything else in schema cw must be unwritable by the
 // administrator, and this is the entire justification for each exception.
+// Adding an entry here is meant to be a deliberate act with a reason attached.
+// It has already done its job once: WP-U02's cw.role_grant failed this sweep on
+// its first run, which is the sweep noticing a new writable table rather than
+// assuming it was fine.
 const ADMIN_MAY_WRITE = {
   // The administrator's own record of people. Its whole point.
   'account':     ['INSERT','UPDATE'],
   // Appending to the audit log, like every other acting role. Never update or
   // delete: nobody edits history, and that has never had an exception.
   'audit_event': ['INSERT'],
+  // Granting and revoking roles. INSERT only — cw.role_grant is append-only for
+  // everybody including the owner, so a countersign is a new row naming the
+  // grant rather than an update filling in a column. See 0013 part 2.
+  'role_grant':  ['INSERT'],
 };
 
 console.log('\ndecision U5: contract content is WRITABLE by the administrator NOWHERE');

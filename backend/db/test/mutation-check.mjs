@@ -774,6 +774,90 @@ grant insert, update on cw.clause_version to cw_administrator;`,
     find: "  if old.state = 'revoked' and new.state <> 'revoked' then",
     repl: '  if false then',
     expect: 'revoking an account is recorded, and it cannot be un-revoked' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Grants and the countersign rule (WP-U02, migration 0013 part 2)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // The countersign gate itself. This is the one that matters most: without the
+  // clause, an uncountersigned grant of a Legal role becomes effective the
+  // moment it is proposed, and the console would carry on showing the amber
+  // pending badge for somebody who was already working.
+  { suite: 'role-grant.test.mjs',
+    name: 'the countersign gate opens on the proposal (decision U6 defeated)',
+    find: `  and (l.role not in ('legal_reviewer','legal_admin')
+       or l.countersigned_by is not null`,
+    repl: `  and (true
+       or l.countersigned_by is not null`,
+    expect: 'a proposed legal reviewer confers NOTHING before countersign' },
+
+  // The bootstrap exemption widened to everybody. A subtle and very plausible
+  // regression: the flag exists for one row, and a change that let it apply
+  // generally would look like tidying.
+  { suite: 'role-grant.test.mjs',
+    name: 'every Legal grant is treated as a bootstrap grant',
+    find: '       or l.is_bootstrap)',
+    repl: '       or true)',
+    expect: 'a proposed legal reviewer confers NOTHING before countersign' },
+
+  { suite: 'role-grant.test.mjs',
+    name: 'an administrator can grant themselves any role',
+    find: "    if new.acted_by = new.person and not new.is_bootstrap then",
+    repl: '    if false then',
+    expect: 'an administrator cannot grant themselves a role' },
+
+  { suite: 'role-grant.test.mjs',
+    name: 'the subject of a Legal grant can accept it themselves',
+    find: '    if new.acted_by = g.person then',
+    repl: '    if false then',
+    expect: 'the subject of a grant cannot accept it, whatever connection they use' },
+
+  { suite: 'role-grant.test.mjs',
+    name: 'the proposer of a grant can also be its acceptor',
+    find: '    if new.acted_by = g.acted_by then',
+    repl: '    if false then',
+    expect: 'the proposer cannot also be the acceptor, even holding both roles' },
+
+  // The actor binding. Without it acted_by is whatever the caller typed, and
+  // the access history — the one record that says who let whom in — names
+  // whoever the writer preferred.
+  { suite: 'role-grant.test.mjs',
+    name: 'the actor on a grant is whatever the caller claims',
+    find: `  if not new.is_bootstrap then
+    new.acted_by := cw.app_actor();
+  end if;`,
+    repl: '  if false then end if;',
+    expect: 'the actor on a grant is the connection\'s person, not a claim' },
+
+  { suite: 'role-grant.test.mjs',
+    name: 'the administrator can countersign as well as propose',
+    find: `create policy administrator_grants on cw.role_grant for insert
+  with check (cw.app_role() = 'administrator'
+              and action in ('granted','revoked'));`,
+    repl: `create policy administrator_grants on cw.role_grant for insert
+  with check (cw.app_role() = 'administrator');`,
+    expect: 'an administrator cannot countersign — not even somebody else\'s grant' },
+
+  { suite: 'role-grant.test.mjs',
+    name: 'the access history becomes editable',
+    find: `create trigger role_grant_no_update
+  before update on cw.role_grant
+  for each row execute function cw.role_grant_append_only();`,
+    repl: 'select 1;',
+    expect: 'and the owner cannot edit it either — the trigger is the second layer' },
+
+  { suite: 'role-grant.test.mjs',
+    name: 'a revoked grant still confers its role',
+    find: `    and not exists (select 1 from cw.role_grant r
+                    where r.action = 'revoked' and r.grant_ref = g.grant_id)`,
+    repl: '    and true',
+    expect: 'revoking a grant takes the role away' },
+
+  { suite: 'role-grant.test.mjs',
+    name: 'a revoked account still confers its role',
+    find: "where a.state = 'active'",
+    repl: 'where true',
+    expect: 'a revoked ACCOUNT confers nothing, however live its grants' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();

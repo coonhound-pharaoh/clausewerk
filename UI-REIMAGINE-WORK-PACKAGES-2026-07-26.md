@@ -150,7 +150,19 @@ words; `ARCHITECTURE.md` role list becomes six; `docs/glossary.md` entry;
 
 ---
 
-## WP-U02 · Role grants and the countersign rule
+## WP-U02 · Role grants and the countersign rule — **CLOSED 2026-07-26**
+
+*Delivered in [`0013_administrator.sql`](backend/db/migrations/0013_administrator.sql) part 2 and
+[`role-grant.test.mjs`](backend/db/test/role-grant.test.mjs) — 35 tests, 10 mutations. The
+countersign gate, the self-grant refusal, the self-countersign refusal and the proposer-is-not-the-
+acceptor refusal each have their own mutation, caught by the test that names it.*
+
+**One design note against the brief.** The package listed `countersigned by/on` and `revoked by/on`
+as columns on the grant row *and* required the table to be append-only. Those cannot both hold —
+filling a column in later is an `UPDATE`. Built as an event log instead: a grant is a row,
+countersigning it is a second row naming the first, revoking it is a third. Nothing is ever updated
+by anyone, including the owner. The derived view `cw.effective_role` answers "what may this person
+do right now", which is what the service layer consults.
 
 **Objective.** Access is granted and revoked as recorded acts; grants of the two
 Legal roles take effect only when a Legal admin countersigns.

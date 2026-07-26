@@ -94,7 +94,30 @@ and [ADR-0011](decisions/ADR-0011-the-administrator-is-a-steward.md); owner deci
 | Record | Purpose |
 |---|---|
 | `cw.account` `[db]` | One row per named person: who they are, their unit, the **one** role they hold, active or revoked, who created them and when |
-| `cw.bootstrap()` `[db]` | The run-once ceremony that creates the first Administrator and first Legal admin |
+| `cw.role_grant` `[db]` | Append-only. Every act on somebody's access is a row: `granted`, `countersigned`, `revoked` |
+| `cw.effective_role` `[db]` | Derived. What each person may actually do **right now** — the single source the service layer consults |
+| `cw.countersign_pending` `[db]` | Derived. Proposed Legal grants no Legal admin has accepted yet |
+| `cw.bootstrap()` `[db]` | The run-once ceremony that creates the first Administrator and first Legal admin, and grants their two roles |
+
+**Why `cw.role_grant` is an event log and not a grant row with nullable columns.**
+The obvious design puts `countersigned_by` and `revoked_by` on the grant row and fills them in
+later — but filling them in is an `UPDATE`, and a table that takes updates is not append-only, it is
+a table with a convention. Under that design "who countersigned this" becomes a value somebody can
+quietly change, and it is the one fact the whole rule rests on. So a grant is a row, countersigning
+it is a second row naming the first, and revoking it is a third. The cost: "what can this person do
+right now" is no longer a column lookup, it is `cw.effective_role`.
+
+**`cw.effective_role` applies four conditions**, and each is a rule somebody could otherwise forget:
+there is a grant; it has not been revoked; if it is a Legal role it has been countersigned (decision
+`U6` — an uncountersigned Legal grant confers **nothing**, not a lesser role); and the account is
+active. `cw.account.role` is the *declared* role and administrative record; this view is the
+authority, and the gap between them is exactly the pending state the console renders amber.
+
+> **The one hole in the countersign rule, marked rather than hidden.** The first Legal admin is
+> created before any Legal admin exists to countersign them, so the bootstrap ceremony's own grant
+> is effective without one. It is a single row, flagged `is_bootstrap`, naming the owner, recorded
+> on the chain as a `system` act — so "which Legal role was never countersigned" is one query rather
+> than an investigation, and a test asserts it returns exactly that one person.
 
 **One person, one role — deliberately not a join table.** A second role is a revoke and a grant,
 both recorded and both visible in the access history. A many-roles model would let one person hold
@@ -114,9 +137,22 @@ function. `select` on the content tables and **no** insert, update or delete on 
 may write, so a content table added by a future migration is covered the moment it exists.
 
 **Audit events added:** `account_created`, `account_revoked`, `account_role_moved`,
-`bootstrap_performed`. The two bootstrap accounts are recorded with `actor_kind = 'system'` and a
-null `actor_role`: at that moment there is no application role on the connection, and recording them
-as human acts under a role nobody held would be a lie in the permanent record.
+`bootstrap_performed`, `role_granted`, `role_countersigned`, `role_revoked`. The bootstrap acts are
+recorded with `actor_kind = 'system'` and a null `actor_role`: at that moment there is no
+application role on the connection, and recording them as human acts under a role nobody held would
+be a lie in the permanent record.
+
+**Who writes what.** The administrator proposes (`granted`) and withdraws (`revoked`); a Legal admin
+— and nobody else, including the administrator — writes `countersigned`. `acted_by` is overwritten
+from the connection by a trigger, so a caller cannot name somebody else as the granter, and cannot
+use that to dodge the self-grant check. Three refusals are enforced in the database: nobody grants
+themselves a role, nobody countersigns a grant they are the subject of, and the person who proposed
+a grant cannot also accept it — one signature wearing two hats is the rule not existing.
+
+> **What revocation does not yet promise.** `cw.effective_role` stops answering the moment a grant
+> or an account is revoked, so anything that consults it is current. Whether a person's *live
+> session* ends is WP-U05's problem: the promise there is revocation honoured at next request, not
+> next sign-in, and the console's copy must not promise more than that.
 
 ---
 
