@@ -98,6 +98,13 @@ Which of those goes on the document, and how the product is positioned, is the o
 not decided here. The engineering position is only that **both must be computable**, and that
 quietly keeping the old footer while the second number is non-zero would be misleading.
 
+> **Decided 2026-07-25 (owner):** neither count is printed on the contract document. The footer
+> claim has been removed from generated documents; both counts are computed and recorded in the
+> system (run record and dossier), where Legal and auditors read them. The zero-authored property
+> is still asserted by test on every build. Relatedly decided the same day: **Legal owns the
+> unedited-approval rate** (threshold to be set with counsel later), and **AI-drafted origin is
+> not disclosed to counterparties** absent a legal requirement. See `memory.md`.
+
 ## Consequences
 
 **What it buys**

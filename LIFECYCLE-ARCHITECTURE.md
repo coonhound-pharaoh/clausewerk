@@ -72,12 +72,12 @@ mid-flight*:
   round and a blocking condition at signature (implemented — see §7 below).
 - **At execution**, the library snapshot is pinned into the agreement record. From that moment the
   clause clock is advisory only.
-- **At renewal or amendment**, the pin is released: the work re-enters assembly and resolves
-  against the *current* library, which is exactly where stale language should be caught.
+- **At renewal or amendment**, the pin is released: the work re-enters assembly, and stale language
+  is caught by the drift report. **Which positions the renewal opens from — the current library, or
+  the agreement as executed — is owner decision `U1`, set out in §3.4 and not settled here.**
 
-Renewal never alters the signed agreement. It produces a **new** agreement, assembled from current
-approved language, which the parties sign separately. The old one stays exactly as executed for as
-long as it is retained.
+Renewal never alters the signed agreement. It produces a **new** agreement, which the parties sign
+separately. The old one stays exactly as executed for as long as it is retained.
 
 > **A signed contract is not a living document.** Nothing in this system edits, refreshes,
 > re-resolves or otherwise touches an executed agreement. Later library changes reach new
@@ -133,8 +133,7 @@ So execution records:
   Immutable. This is the authoritative artefact.
 - The **assembly provenance**: the run, and through it the pinned library snapshot, rule set and
   decision set. This *explains* the contract; it does not constitute it.
-- Counterparty, effective date, term, signatories, and signature evidence (e-signature envelope
-  reference).
+- Counterparty, effective date, term, **signatories** and **signature evidence** — see below.
 - The **final expiry gate**: any clause that has lapsed since Forge blocks signature until
   re-resolved or overridden under
   [ADR-0008](docs/decisions/ADR-0008-governance-roles-and-recorded-overrides.md). This is the last
@@ -144,6 +143,35 @@ So execution records:
 > **If the stored file and a regeneration ever disagree, the file wins and the discrepancy is an
 > incident.** The system must be able to detect that disagreement — hence the stored hash — but it
 > must never resolve it by preferring its own reconstruction.
+
+#### Signature evidence — what is already kept, and the two things missing
+
+This is a place where the specification had fallen **behind** the working system rather than ahead
+of it, so it is worth being exact about which is which.
+
+**Already built.** Every executed document is a first-class record with its **bytes, byte size,
+SHA-256 and storage location** — and that includes `counterpart` and `exhibit` documents, not just
+the agreement itself. Wet-ink counterparts, signature pages returned separately, and schedules
+attached during negotiation are all captured as hashed byte sets today. The earlier reading that
+signature capture was "one field" was wrong about the schema.
+
+**The two genuine gaps**, both narrow:
+
+1. **The completion certificate is not kept.** The e-signature provider issues a certificate saying
+   *who signed, when, from where, and how they were authenticated*. Today the system stores only a
+   free-text envelope reference pointing at it. The counterpart bytes prove **what was signed**; the
+   completion certificate proves **who signed it**. Those are different evidentiary claims, and only
+   one of them survives the provider going out of business or purging its account. It must be stored
+   like any other document: provider, envelope id, completion timestamp, **the certificate bytes and
+   their SHA-256**.
+2. **Signatories are two text fields, not records.** "Our signatory" and "their signatory" are plain
+   names. There is nowhere to record a **third** signatory, nowhere to say whether a signature was
+   **electronic or wet ink**, and nowhere to put the date an individual actually signed — which, on
+   a counterpart execution, is not the same date for everyone. Each signatory needs its own record:
+   name, party, method, date signed.
+
+> **Specified, not yet enforced.** Both gaps are built in **WP-18c**. Everything described as
+> already built above is built today.
 
 Amendments never edit any of this. An amendment is a new signed document appended to the chain, and
 the effective terms are the ordered composition of the original plus its amendments (§3.4).
@@ -193,12 +221,53 @@ Every agreement reaches one of three exits, and all three route back through mac
 exists.
 
 **Renew.** The notice window opens; the system proposes renew / renegotiate / lapse. Renewal
-re-enters **Assembly** with the original manifest as the starting point, re-resolved against the
-current library. A drift report shows exactly which clauses would change and why — this is where
-retired and **superseded** language is caught and replaced. The report walks the agreement's pinned
-clause versions against current ones; see
-[CLA §5](CLAUSE-LIBRARY-ARCHITECTURE.md) and
+re-enters **Assembly** with the original manifest as the starting point. A drift report shows
+exactly which clauses would change and why — this is where retired and **superseded** language is
+caught and replaced. The report walks the agreement's pinned clause versions against current ones;
+see [CLA §5](CLAUSE-LIBRARY-ARCHITECTURE.md) and
 [ADR-0009](docs/decisions/ADR-0009-concession-is-not-supersession.md).
+
+#### `U1` — which positions a renewal opens from · **settled by the owner, 2026-07-26: Option A** ✅
+
+> **Settled.** A renewal opens from **the agreement as executed** — the positions actually in force,
+> concessions included — with the drift report alongside. Option B (opening from current library
+> standard) remains fully built and reachable as an explicit, recorded choice; it was not removed.
+> The analysis below is kept as written, because the reasoning is the decision.
+>
+> **The accepted cost:** a concession made once can become permanent unless somebody reads the drift
+> report. That report is therefore the control, and it belongs in front of whoever opens the
+> renewal — not in a menu.
+
+Both options build the same machinery. Both compute the current library position **and** the
+executed position for every category. Both show the **carried-concessions list** — every point the
+counterparty won last time, with its category, rung and approver. Both make the non-default an
+explicit, recorded, approved act, going through the same approval path as the original concession.
+
+**The only difference is which button is pre-selected.** That is worth saying first, because the
+question has attracted more argument than the delta deserves.
+
+| | **Option A — open from the executed agreement** *(the proposal's recommendation)* | **Option B — open from the current library** *(today's written spec)* |
+|---|---|---|
+| Renewal opens with | The positions actually in force, concessions included | Current approved standard positions |
+| The recorded act is | **Reverting** a carried concession back to standard | **Carrying** a concession forward |
+| Commercial effect | Matches how counterparties behave — they open their copy of what they signed. Nothing silently reappears that was settled years ago | Every concession is re-fought each term. Reads to the counterparty as a regression and costs negotiation rounds |
+| Drift exposure | Stale and superseded language is the starting point; the drift report is what pulls it forward, so that report should be **blocking**, not advisory | Current language is the starting point; stale language cannot survive by default |
+| Cost | One approval round-trip per concession **reverted** | One approval round-trip per concession **carried** |
+
+**Recommended default: Option A**, as the proposal recommends, with the drift report made blocking
+rather than advisory to compensate. **Option B must remain reachable as a recorded choice**, not
+removed.
+
+**One claim to retire, because it was made and it is wrong.** It was argued that Option A violates
+[ADR-0009](docs/decisions/ADR-0009-concession-is-not-supersession.md). It does not. ADR-0009 forbids
+**library drift** — one deal's compromise silently becoming *every future deal's* starting position.
+A renewal baseline is scoped to **one agreement with one counterparty**; the library is untouched
+either way. The tension with the CLA's rule that a concession "changes nothing for the next deal" is
+real and worth weighing, but "the next deal" plainly means a *different* deal, not the same
+agreement renewed. This decision is commercial posture, not a rule violation.
+
+**Whichever is chosen, renewal never alters the signed agreement.** It produces a new agreement,
+signed separately.
 
 **Amend.** An amendment is a **new assembly run scoped to the changed categories**, producing an
 amending instrument that references the original. The original executed record is never edited.
@@ -220,6 +289,107 @@ Termination is not the end, and treating it as one is the classic CLM failure.
   an unmet data-deletion duty is *not* closed, however long ago it terminated.
 - The **retention clock** then runs independently to the horizon the system's own Records Retention
   clause imposes — 7 years, matching the audit retention already required in `ARCHITECTURE.md` §5.
+
+#### Legal hold — the clock stops when a dispute starts
+
+The retention clock is a clock. Clocks run out, and when they do, records are destroyed. In a system
+whose entire selling point is **what survives a dispute**, there must be a way to stop the clock for
+a dispute — and today there is none. That is the gap this section closes.
+
+**A legal hold suspends destruction for a named matter.** While a hold is open on an agreement,
+nothing about that agreement may be destroyed, however far past its retention date it is. This is
+not a preference the retention job consults if convenient; it is a precondition it must check before
+deleting anything.
+
+The rules, and they are deliberately few:
+
+- A hold names its **matter** — a litigation, an investigation, an audit. A hold with no matter is
+  not a hold, it is an indefinite delay nobody owns.
+- A hold is **opened and released by named people**, and both acts are audited. Releasing a hold is
+  the consequential act, because it is what lets destruction resume.
+- A hold is **open or released**, nothing else. An agreement is under hold if any hold on it is
+  open.
+- **Retention pauses; it does not restart.** When the last hold is released, the clock resumes from
+  where it was.
+- An agreement may be under **several holds at once**, from unrelated matters. All must be released
+  before it is destructible.
+
+The cheap moment to build this is now, while defensible deletion is specified but not yet
+implemented. Once deletion runs, the cost of not having had it is unbounded — deleted is deleted.
+
+> **Specified, not yet enforced.** Legal hold is built in **WP-18b**. Nothing suspends retention
+> today; equally, nothing deletes anything today, so no record is currently at risk.
+
+---
+
+### 3.6 Masters and statements of work
+
+Most real procurement is not one contract. It is a **master agreement** setting the terms of the
+relationship, with **statements of work** hanging off it for individual pieces of work. Today the
+system models a flat list of agreements with no way to say that one sits under another — so the
+dominant structure in the field cannot be represented at all.
+
+**The model is two facts on the agreement record, not a new hierarchy:**
+
+- **What kind of instrument it is** — `standalone`, `master`, or `sow`.
+- **Which master it belongs to**, for a SOW. A SOW must name a parent, and that parent must itself
+  be a master. A standalone or a master has no parent.
+
+**Composition reuses machinery that already exists.** A SOW carries its own resolution run and its
+own decision set. The effective terms of the work are the ordered composition of the SOW over its
+master — which is exactly what the **Order of Precedence** baseline clause already governs for an
+agreement and its amendments (§3.4). No new resolution rule, no new concept in the engine.
+
+**Termination is reported, never silent.** Terminating a master while a SOW under it is still live
+is a condition the system must surface at the moment of termination, not discover later. The named
+deal owner sees it and decides; the system's job is to make it impossible to do by accident.
+
+#### `U2` — may a SOW contradict its master? · **settled by the owner, 2026-07-26** ✅
+
+A SOW plainly *adds* to its master — scope, dates, price. Whether it may **contradict** it, taking a
+different position on a category the master already settles, is a legal convention rather than an
+engineering choice. Three readings were on the table:
+
+- **Stricter (what shipped as the interim default):** a SOW may add, and may not contradict. A
+  different position on a settled category is surfaced as a conflict for a person to resolve.
+- **Looser:** the SOW simply wins for the categories it addresses, per the ordinary commercial
+  reading of an Order of Precedence clause.
+- **Settled:** **a SOW may contradict its master, with the same approval a concession requires.**
+
+**The reasoning.** Departing from the master binds the company to something other than its standard
+position — which is precisely what conceding a position to a supplier does. It therefore earns the
+same signatures: the **Requester**, the **assigned attorney**, and every **Required Approver**
+configured for that deal (owner decision, 2026-07-25). Anything less would make the master the
+stricter instrument only by accident of which document a term happened to land in.
+
+**Granted per category, never per SOW.** "This work order departs from the master on liability" is a
+decision somebody can weigh. "This work order may depart on anything" is a blank cheque — signed
+once, then inherited by every later amendment without anyone looking again.
+
+**An authorised departure is still reported.** `cw.sow_conflict` continues to list it. Approving a
+departure removes the block, not the visibility.
+
+**Fails closed.** A deal with no attorney assigned cannot authorise a departure at all, rather than
+quietly needing one fewer approval than it should.
+
+**The cost, stated:** the master agreement is no longer a complete statement of what the company is
+committed to — you have to read the work orders too. The per-category grant and the continued
+reporting are what keep that readable rather than merely true.
+
+Implemented in `0012_sow_override.sql`: `cw.sow_override` (the proposal), `cw.sow_override_approval`
+(append-only signatures), `cw.sow_override_settlement` (the gated act), and
+`cw.sow_override_in_force` (what actually authorises anything). A machine may propose a departure;
+it may never approve one.
+
+**What this honestly delivers, and what it does not.** This models the *structure* — the system can
+say that a SOW belongs to a master and compose their terms. It does **not** deliver multi-agreement
+**obligation** composition, because obligations are not built at all yet (§7). Obligations
+registering per instrument and inheriting the master's where a SOW is silent is the same composition
+rule applied to a thing that does not exist. Modelling the structure now is what makes that possible
+later; claiming coverage today would be false.
+
+> **Specified, not yet enforced.** MSA/SOW structure is built in **WP-18d**. Obligations, and
+> therefore obligation composition, are not in this phase at all.
 
 ---
 
@@ -291,10 +461,25 @@ Authored by Legal, approved through the Review queue like everything else on a c
 | `library_snapshot_id` | **The pin.** Makes resolution reproducible forever |
 | `decisions[]` | The executed decision set, frozen |
 | `parties`, `effective`, `term`, `renewal` | Commercial spine |
-| `signature_evidence` | E-signature envelope reference |
+| `agreement_kind` | `standalone` \| `master` \| `sow` (§3.6) |
+| `parent_agreement_id` | The master, for a SOW. Required for a `sow`, absent otherwise, and must point at a `master` |
+| `signature_evidence` | A **record**, not a reference: provider, envelope id, completion timestamp, and the completion certificate's **bytes and SHA-256** (§3.1) |
+| `signatories[]` | One row each: name, party, method (`electronic` \| `wet_ink`), date signed. Replaces the two `our_signatory` / `their_signatory` text fields |
 | `amendments[]` | Ordered; composition governed by Order of Precedence |
-| `status` | `executing → active → terminating → wound_down → closed` |
-| `retention_until` | Independent of `status` |
+| `status` | `negotiating → executed → terminated`. Corrected to match what the database enforces. The five-step wind-down this row used to describe (`executing → active → terminating → wound_down → closed`) had no state for a deal *before* signature — where every agreement starts and most of them live — and its finer post-signature steps describe obligation wind-down that is not built. Four of the five states could never have been reached. The status moves only as a consequence of filing the signed contract or ending it; there is no way back, and every move is audited. Wind-down states get added when the machinery that moves them does. |
+| `retention_until` | Independent of `status`. **Suspended entirely while any legal hold is open** (§3.5) |
+
+### Legal hold
+
+| Field | Notes |
+|---|---|
+| `agreement_id` | What is held |
+| `matter_ref` | **Required.** The litigation, investigation or audit this hold exists for |
+| `opened_by`, `opened_on` | Named human, audited |
+| `released_by`, `released_on` | Both set or both empty — a hold is open or released, nothing between. Audited |
+
+An agreement is under hold while any hold on it is unreleased. The retention path must consult this
+before destroying anything.
 
 ### Obligation instance
 
@@ -338,7 +523,16 @@ during the bug-fix pass:
 - The clause clock is live — see
   [`docs/spec-vs-implementation.md` §6](docs/spec-vs-implementation.md).
 
-Everything else in this document is specification.
+Since then, part of §3.1 has also been built in the backend database:
+
+- The **executed agreement record** exists, and the signed file is stored by its bytes, size and
+  SHA-256, along with counterparts and exhibits.
+- The **agreement status machine** exists and moves only as a consequence of filing the signed
+  contract or ending the deal, with every move audited (see the `status` row in §5).
+
+Everything else in this document is specification. In particular, **obligations do not exist in any
+form**, and neither do legal hold (§3.5), the signature-evidence record (§3.1) or the MSA/SOW
+structure (§3.6) — each of those carries its own note saying which work package builds it.
 
 ---
 
@@ -353,7 +547,7 @@ Extends `ARCHITECTURE.md` §5.
 | Scheduler | Date arithmetic, alert dispatch, notice-window detection. Must be idempotent and replayable — a missed run cannot mean a missed obligation |
 | Evidence store | Documents and attestations, immutably linked to obligation instances |
 | Disposition service | Renewal drift reports, amendment scoping, termination orchestration |
-| Retention service | Close eligibility, retention expiry, defensible deletion |
+| Retention service | Close eligibility, retention expiry, defensible deletion — **and legal hold**, which suspends deletion entirely for a named matter (§3.5). Deletion must check for an open hold before it destroys anything |
 
 **Non-functional**
 
@@ -399,7 +593,11 @@ Genuinely unsettled, and better flagged than guessed:
    status field.
 3. **Entitlement valuation.** Service credits and indexed price adjustments need computation against
    commercial data the system does not hold. Integration boundary is undefined.
-4. **Multi-agreement obligations.** MSA-plus-SOW structures mean obligations that live on the master
-   but attach to work under the children. The composition rule is not specified here.
+4. **Multi-agreement obligations.** The **structure** is now specified — see §3.6, which models
+   masters and statements of work and composes their terms through the existing Order of Precedence
+   clause. What remains open is **obligation** composition: obligations that live on the master but
+   attach to work under a child. That cannot be settled while obligations themselves do not exist
+   (§7). Whether a SOW may contradict its master was owner decision **`U2`**, settled 2026-07-26:
+   it may, with the same approval a concession requires, granted one category at a time (§3.6).
 5. **Third-party paper**, per §4 — deliberately excluded, and the pressure to include it will be
    real.

@@ -71,6 +71,16 @@ class Snapshot:
         #
         # `provenance_gap` IS included: it drives the warning on a decision, and
         # it derives from dates on an immutable version, so it cannot drift.
+        #
+        # `origin` is deliberately absent too (WP-17, settled decision S0-4).
+        # Same test as `state`: on a pinned (clause_id, version) the origin
+        # cannot change the body, cannot change `selectable`, and is read by
+        # nothing in resolution — so it cannot change an outcome. Hashing it
+        # would break every stored run the first time a provenance backfill ran,
+        # and would buy nothing. It is reported from cw.clause_version, which is
+        # immutable and never deleted, so the figure is recoverable for any
+        # stored run without being inside the fingerprint. `test_run.py` asserts
+        # a fixed snapshot id, so this exclusion cannot be undone by accident.
         payload = {
             "clauses": [
                 {

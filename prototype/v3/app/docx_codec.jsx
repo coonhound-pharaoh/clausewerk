@@ -67,7 +67,8 @@ async function buildDocx(manifest, decisions) {
   });
 
   // Footer / metadata block
-  body.push(paraXml(runXml('— Assembled by Clausewerk · ' + selected.length + ' clauses · 0 LLM-authored characters', { italic:true, color:'888888' }),
+  // Provenance counts stay in the system record, not on the contract (owner decision 2026-07-25).
+  body.push(paraXml(runXml('— Assembled by Clausewerk · ' + selected.length + ' clauses', { italic:true, color:'888888' }),
                     { align:'center', spacingAfter:0 }));
   body.push(paraXml(runXml(`Run ID: run_${Math.random().toString(36).slice(2,10)}`, { italic:true, color:'888888' }),
                     { align:'center' }));

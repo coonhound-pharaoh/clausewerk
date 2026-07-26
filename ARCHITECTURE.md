@@ -29,7 +29,9 @@ The organising principle: **the language model never authors contract language.*
 > nothing — but the Clause Library Builder may draft candidates for Legal to approve, so approved
 > wording may be `ai_drafted` in origin. The `0 LLM-authored characters` count remains true of the
 > assembly path and is still asserted by test; a second figure reports characters originating from
-> AI-drafted clauses. **Which is published is an owner decision.**
+> AI-drafted clauses. **Decided 2026-07-25:** neither figure is printed on the contract document —
+> both are recorded in the system (run record and dossier). The contract carries no provenance
+> footer.
 
 Three consequences follow, and the whole architecture exists to serve them:
 
@@ -304,7 +306,35 @@ The prototype runs entirely client-side. A production deployment needs:
 **Integrations**
 
 - SharePoint / O365 — clause library sync, contract outbox, audit workbook
-- Identity (SSO + RBAC): Requester / Legal reviewer / Legal admin / Auditor. Only Legal admin can activate clauses; only Auditor-and-above can read the full log.
+- Identity (SSO + RBAC): **five roles** — Viewer / Requester / Legal reviewer / Legal admin / Auditor, defined in [ADR-0008](docs/decisions/ADR-0008-governance-roles-and-recorded-overrides.md). Only Legal admin can activate clauses; only Auditor-and-above can read the full log. All five exist as real database roles (`cw_viewer`, `cw_requester`, `cw_legal_reviewer`, `cw_legal_admin`, `cw_auditor`), so a role without a privilege cannot act even if a policy is written wrongly. *(Not to be confused with the four **actors** in §1 — Requester, Legal, Controller, Executor — which describe who or what does the work, not who is permitted to do it.)*
+
+**How the database decides who you are — and what that assumes**
+
+Every access rule in the database asks one question: what role is acting? The answer used to be
+whatever the connecting client said it was — a setting the client wrote for itself. That meant a
+Legal reviewer could describe themselves as a Legal admin and be believed, and the audit log would
+record the authority they claimed rather than the one they held. It is now taken from the database
+role the connection is actually authenticated as, which a client cannot award itself. The
+production shape is the same idea with a signed sign-on token in place of the connection role.
+
+Three consequences a deployment has to plan around:
+
+- **One connection, one person.** The scheme assumes a connection carries a single authenticated
+  identity for as long as it is in use. **It is incompatible with transaction-mode connection
+  pooling**, which hands the same physical connection to different users between statements and
+  carries session state across them — under that mode, one user's identity leaks into another
+  user's work. Use session-mode pooling, a connection per authenticated user, or move the identity
+  into a signed per-request token before pooling that way.
+- **The name is still self-asserted.** The database knows the *role* for certain; it takes the
+  *person's name* from the application, because the five roles are shared service accounts and no
+  individual has their own database login. So the audit log cannot be made to name an authority
+  someone does not hold, but a caller with direct database access could still sign someone else's
+  name to their own act. Closing that needs either a database login per person or a signed
+  sign-on token, and it is not closed today.
+- **The owner is nobody.** The database owner — the account that installs and upgrades the schema —
+  holds no application role at all and is refused by every rule that requires one. That is
+  deliberate: administration is not a business role, and any governed act performed during
+  installation or support has to be done as a named role so the record says who did it.
 - E-signature handoff
 - LLM provider with per-call logging: prompt version, model version, tokens, latency, raw response retained for audit
 

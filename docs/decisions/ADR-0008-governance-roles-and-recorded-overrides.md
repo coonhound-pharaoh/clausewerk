@@ -1,7 +1,19 @@
 # ADR-0008 — Governance: roles, socialised overrides, and auditable auto-approval
 
-**Status:** Accepted · partially implemented (audit records land in the v3 prototype; the
-override-request workflow and role model are specified here for the production build)
+**Status:** Accepted · partially implemented.
+
+- **The five-role model is built** in the backend (`0001_foundation.sql`) as real database roles,
+  with row-level security and table privileges as two independent lines of defence. Since
+  2026-07-26 the acting role is derived from the **authenticated connection**, not from a value the
+  client can set — so a Legal reviewer cannot claim to be a Legal admin. Tests exercise each
+  protection **as the real role on the write path**, because running them as the database owner
+  bypasses every policy and proves nothing.
+- **Every act carries an actor and a role** in the hash-chained audit log, and the role is part of
+  the hash — rewriting who held the authority is detectable.
+- **The override-request workflow is still specified, not built.** So is the socialisation step.
+- **Known residual:** the *person's* name is still self-asserted, because the five roles are shared
+  service accounts. The scheme assumes one connection means one person and is incompatible with
+  transaction-mode connection pooling. See `ARCHITECTURE.md` §5.
 
 Supersedes the unanswered questions at
 [`open-questions.md` §1 and §2](../open-questions.md).

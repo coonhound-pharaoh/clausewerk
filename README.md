@@ -13,10 +13,16 @@ trail explaining why each clause is present.
 > origin of every clause is recorded on it permanently.
 
 At assembly the model generates nothing at all: a deterministic executor fetches immutable text by
-ID and assembles the document, and every emitted artifact carries the count
-`0 LLM-authored characters`, asserted by test. AI may *draft candidate* clauses for the library, but
-only a named lawyer turns a draft into approved language — see
+ID and assembles the document. Every build is counted character by character against approved
+wording plus a declared list of structural strings, and the count of anything else must be **zero** —
+a control test proves the counter actually looks. AI may *draft candidate* clauses for the library,
+but only a named lawyer turns a draft into approved language — see
 [ADR-0010](docs/decisions/ADR-0010-ai-drafted-clause-candidates.md).
+
+**The count is not printed on the contract.** Both provenance figures — characters from the assembly
+path, and characters originating from AI-drafted clauses — are computed and kept in the system
+record. The document itself carries no provenance footer. That was decided by the owner on
+2026-07-25.
 
 Three consequences follow, and the whole architecture exists to serve them:
 
@@ -65,14 +71,49 @@ in a browser — React, Babel, Tailwind, and JSZip load from CDNs, so it needs n
 
 ## Status
 
-**Prototype built; production system not started.** `ARCHITECTURE.md` is the reference
-specification derived from the v3 prototype, which is ingested here and runs.
+**Prototype built. Backend deterministic core built and tested. No service layer, no user
+interface on the backend, nothing deployed.**
+
+What exists and is tested:
+
+- **The database** — twelve migrations covering the clause library, ladders and concessions,
+  conflict rules, the run store, executed agreements, the audit chain, the Review queue, clause
+  origin, governance, the negotiation record, and departures from a master. Eleven test suites.
+- **The Python engine** — resolution, validation, snapshot fingerprinting, run storage and rebuild,
+  document assembly, and redline parsing. 161 tests.
+- **Mutation testing on both stacks.** Every protection is deliberately broken in turn and must be
+  caught **by the test that names it** — a break caught by some other test is reported as a failure,
+  not a pass, because it means the named test was never exercised.
+
+What does not exist: any service or API layer, backend user interface, identity integration,
+e-signature integration, SharePoint sync, vector index, or deployment of any kind. Obligations —
+the heart of lifecycle management — are architected but not built.
 
 Two things to know before building on it:
 
-- Eight discrepancies between the spec and the v3 code were found and **all are now fixed**, with
-  the fixes verified against the running prototype. See
-  [`docs/spec-vs-implementation.md`](docs/spec-vs-implementation.md).
-- Lifecycle management is **architected but not built** — see
-  [`LIFECYCLE-ARCHITECTURE.md`](LIFECYCLE-ARCHITECTURE.md). The expiry-warning machinery it
-  specifies is live in the prototype; everything past signature is specification.
+- Eight discrepancies between the spec and the v3 prototype code were found and **all are fixed**.
+  See [`docs/spec-vs-implementation.md`](docs/spec-vs-implementation.md).
+- A full review on 2026-07-25 ([`docs/REVIEW-2026-07-25.md`](docs/REVIEW-2026-07-25.md)) found
+  eighteen findings, mostly guarantees the documents stated absolutely that the code did not
+  actually enforce. Phases 0–3 of the resulting plan
+  ([`IMPROVEMENT-PROPOSAL-2026-07-25.md`](IMPROVEMENT-PROPOSAL-2026-07-25.md)) have been carried
+  out, and the **four owner decisions it surfaced have been settled** — recorded in
+  [`docs/open-questions.md`](docs/open-questions.md) and held as rows in the schema, with the
+  reasoning and the accepted cost of each attached.
+
+### Running the tests
+
+```bash
+cd backend && npm run verify
+```
+
+That runs everything: eleven database suites, 161 engine tests, and both mutation harnesses — 121
+deliberate breakages, each of which must be caught by the test that names it. It takes about five
+minutes, because every mutation applies a broken copy of the schema and re-runs a whole suite
+against it. The mutations run in parallel; they were sequential once and took over ten.
+
+For a fast loop while working, skip the mutation harnesses:
+
+```bash
+cd backend && npm test && python -m pytest engine -q
+```

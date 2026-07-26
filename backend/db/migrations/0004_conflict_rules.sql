@@ -71,6 +71,37 @@ create table cw.conflict_rule (
     and (not predicate ? 'none_present' or jsonb_typeof(predicate->'none_present') = 'array')
     and (not predicate ? 'conflicting_values'
          or jsonb_typeof(predicate->'conflicting_values') = 'string')
+    -- ══════════════════════════════════════════════════════════════════════
+    -- A RULE MUST ACTUALLY ASK SOMETHING (WP-23b · handed over by WP-20)
+    -- ══════════════════════════════════════════════════════════════════════
+    -- The `?|` conjunct above requires a predicate to USE one of the three
+    -- primitives. It never required the primitive to SAY anything, and the
+    -- three empty forms each defeat it by a different route:
+    --
+    --   · {"all_present": []}          the engine's loop over the tag list
+    --                                  runs zero times and finds no violation
+    --   · {"none_present": []}         the same, from the other side
+    --   · {"conflicting_values": ""}   an empty namespace is falsy, so the
+    --                                  primitive is skipped entirely
+    --
+    -- In every case cw's engine returns an empty tuple rather than None
+    -- (validation.py `_evaluate`), and an empty tuple COUNTS AS THE RULE
+    -- FIRING. A rule that asks nothing therefore raises a finding on every
+    -- contract in the system — which is exactly the outcome the "at least one
+    -- primitive" clause exists to prevent, arriving through a different door.
+    --
+    -- NOT YET MATCHED IN THE ENGINE. CLA §4A.4 says the grammar is enforced in
+    -- both layers on purpose, and `validation.py.__post_init__` still checks
+    -- only that the predicate dictionary is non-empty, never that its values
+    -- are. Anything READ FROM THIS TABLE is now safe; a predicate built in
+    -- Python from a fixture is not. Recorded rather than fixed here because
+    -- validation.py belongs to another package.
+    and (not predicate ? 'all_present'
+         or jsonb_array_length(predicate->'all_present') > 0)
+    and (not predicate ? 'none_present'
+         or jsonb_array_length(predicate->'none_present') > 0)
+    and (not predicate ? 'conflicting_values'
+         or btrim(predicate->>'conflicting_values') <> '')
   )
 );
 
@@ -80,15 +111,35 @@ comment on column cw.conflict_rule.predicate is
    which is the point.';
 
 -- Rules are immutable once written; retiring is the one permitted mutation.
+--
+-- WP-05 closed two holes here, both of which rewrote HISTORY rather than data.
+--
+--   · `effective_on` was unprotected. It decides which rules were in force on
+--     any given day, and cw.active_conflict_rule reads it. Moving it backwards
+--     changes the answer to "was this contract checked against the right rules
+--     when we signed it?" — after the fact, invisibly. Every conflict finding
+--     cites a rule version precisely so that question has a fixed answer, and
+--     a movable date makes the citation worthless.
+--
+--   · Un-retiring was unguarded, exactly as on clause versions. Bringing a
+--     withdrawn rule back into force is a publication decision, not an edit,
+--     and it goes through the same gate as any other: a new version.
 create or replace function cw.conflict_rule_immutable() returns trigger
 language plpgsql as $$
 begin
+  if old.retired and not new.retired then
+    raise exception
+      'conflict_rule %@v% is retired; bringing it back into force is a new '
+      'publication — publish a new version instead',
+      old.rule_id, old.version using errcode = 'restrict_violation';
+  end if;
   if new.rule_id is distinct from old.rule_id
      or new.version is distinct from old.version
      or new.predicate is distinct from old.predicate
      or new.severity is distinct from old.severity
      or new.title is distinct from old.title
      or new.detail is distinct from old.detail
+     or new.effective_on is distinct from old.effective_on
      or new.approved_by is distinct from old.approved_by then
     raise exception 'conflict_rule %@v% is immutable; publish a new version instead',
       old.rule_id, old.version using errcode = 'restrict_violation';
@@ -100,8 +151,28 @@ create trigger conflict_rule_no_edit
   before update on cw.conflict_rule
   for each row execute function cw.conflict_rule_immutable();
 
-create rule conflict_rule_no_delete as
-  on delete to cw.conflict_rule do instead nothing;
+-- DELETE RAISES (WP-25c · settled decision S0-3). Was `do instead nothing`,
+-- which returned success to a caller who had just failed to delete a published
+-- rule. Every conflict finding cites the rule version that raised it, so a rule
+-- version has to stay resolvable forever; refusing loudly says so, and a silent
+-- no-op leaves an application bug looking exactly like a working system.
+create or replace function cw.conflict_rule_no_delete() returns trigger
+language plpgsql as $$
+begin
+  raise exception
+    'conflict_rule %@v% cannot be deleted: past findings cite it and must stay '
+    'resolvable. Retire it instead.',
+    old.rule_id, old.version
+    using errcode = 'restrict_violation';
+end $$;
+
+create trigger conflict_rule_no_delete
+  before delete on cw.conflict_rule
+  for each row execute function cw.conflict_rule_no_delete();
+
+create trigger conflict_rule_no_truncate
+  before truncate on cw.conflict_rule
+  for each statement execute function cw.no_truncate();
 
 -- The rules in force today: latest effective version of each rule, not retired.
 create or replace view cw.active_conflict_rule as
@@ -120,8 +191,15 @@ begin
     perform cw.audit('conflict_rule_published', new.rule_id || '@v' || new.version,
       jsonb_build_object('severity', new.severity, 'approved_by', new.approved_by,
                          'predicate', new.predicate));
-  elsif new.retired and not old.retired then
-    perform cw.audit('conflict_rule_retired', new.rule_id || '@v' || new.version,
+  -- Both directions, for the reason given on cw.audit_clause_version(): a rule
+  -- coming back into force used to leave no trace whatsoever. The un-retire
+  -- branch is unreachable while the immutability guard above stands, and is
+  -- kept as the second line for the same reason.
+  elsif new.retired is distinct from old.retired then
+    perform cw.audit(
+      case when new.retired then 'conflict_rule_retired'
+           else 'conflict_rule_unretired' end,
+      new.rule_id || '@v' || new.version,
       jsonb_build_object('reason', new.retired_reason));
   end if;
   return new;

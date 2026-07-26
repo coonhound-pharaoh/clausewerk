@@ -19,7 +19,6 @@ from .model import (
     STANDARD,
     Clause,
     Decision,
-    Ladder,
     Manifest,
     Resolution,
     Risk,
@@ -28,13 +27,28 @@ from .snapshot import Snapshot, content_hash
 
 
 def _order(clauses) -> tuple[Clause, ...]:
-    """Deterministic candidate order.
+    """Deterministic candidate order: newest selectable version of a clause first.
 
     The prototype relied on the order rows happened to arrive in, which made
     selection depend on the database's whim. Sorting explicitly is what lets
     two runs of the same inputs agree.
+
+    The version key is DESCENDING on purpose (E3a). When two versions of the
+    same clause are both selectable — the usual case while a superseded version
+    runs off alongside its replacement — picking the older one is deterministic
+    but is the wrong contract position: Legal approved the newer wording. This
+    does not weaken reproducibility, which is defined against a pinned snapshot:
+    a rebuilt snapshot carries both versions with their frozen `selectable`
+    flags, so newest-wins re-selects exactly what it selected on the day.
     """
-    return tuple(sorted(clauses, key=lambda c: (c.clause_id, c.version)))
+    return tuple(sorted(clauses, key=lambda c: (c.clause_id, -c.version)))
+
+
+# DEFERRED, not forgotten (E3b): resolution does not consult ladders for a
+# preferred opening rung. It was split out of this package deliberately — a
+# ladder's rung 0 disagreeing with the severity match is a CONTENT question for
+# Legal, not a system question, and adopting it would create a second silent
+# selection authority. It needs an owner decision before it is built.
 
 
 def resolve(manifest: Manifest, snapshot: Snapshot) -> Resolution:
@@ -43,18 +57,7 @@ def resolve(manifest: Manifest, snapshot: Snapshot) -> Resolution:
     # ── Baseline pass ──────────────────────────────────────────────────────
     # Cross-cutting boilerplate lands in every contract regardless of what
     # Intake found. Emitted first so the framework sections lead the document.
-    baseline = _order(c for c in snapshot.clauses if c.always_include and c.selectable)
-    for clause in sorted(baseline, key=lambda c: (c.framework_section or "", c.clause_id)):
-        decisions.append(
-            Decision(
-                risk=Risk(category=clause.category, severity=BASELINE,
-                          justification="Always included"),
-                selected=clause,
-                reason=f"Always-include · Baseline Framework §{clause.framework_section or '—'}",
-                baseline=True,
-                warning=_provenance_warning(clause),
-            )
-        )
+    decisions.extend(_baseline_pass(snapshot))
 
     # ── Manifest pass ──────────────────────────────────────────────────────
     for risk in manifest.risks:
@@ -78,6 +81,69 @@ def resolve(manifest: Manifest, snapshot: Snapshot) -> Resolution:
             ]
         ),
     )
+
+
+def _baseline_pass(snapshot: Snapshot) -> tuple[Decision, ...]:
+    """Place the always-include framework sections, and gate on any that lapsed.
+
+    A baseline clause that has expired used to simply disappear: the contract
+    came out one section shorter and nothing said so. That is the worst possible
+    failure for a framework section — Definitions and Order of Precedence are
+    what the rest of the document leans on.
+
+    The risk pass already tells "we had one and it lapsed" apart from "we never
+    had one" (`expired_only`). The baseline pass now uses the same vocabulary,
+    and the lapsed case is emitted as an UNRESOLVED decision with a warning —
+    so it lands in `Resolution.unresolved`, in `Resolution.warnings`, and in the
+    stored run record, instead of leaving a hole nobody can see.
+
+    Where the gap gets fixed is not our business: the system's job ends at
+    making it visible and giving Legal a place to act.
+    """
+    versions: dict[str, list[Clause]] = {}
+    for c in snapshot.clauses:
+        if c.always_include:
+            versions.setdefault(c.clause_id, []).append(c)
+
+    rows = []
+    for clause_id, group in versions.items():
+        live = _order(c for c in group if c.selectable)
+        selected = live[0] if live else None
+        # Even with nothing selectable we still know the section this clause
+        # was meant to occupy, so the gap can be reported in document order.
+        anchor = selected or _order(group)[0]
+        rows.append((anchor.framework_section or "", clause_id, anchor, selected, len(group)))
+
+    out: list[Decision] = []
+    for section, clause_id, anchor, selected, lapsed in sorted(rows, key=lambda r: (r[0], r[1])):
+        risk = Risk(category=anchor.category, severity=BASELINE,
+                    justification="Always included")
+        if selected is not None:
+            out.append(Decision(
+                risk=risk,
+                selected=selected,
+                reason=f"Always-include · Baseline Framework §{section or '—'}",
+                baseline=True,
+                warning=_provenance_warning(selected),
+            ))
+            continue
+        out.append(Decision(
+            risk=risk,
+            selected=None,
+            reason=(
+                f"Always-include · Baseline Framework §{section or '—'} · "
+                f"No active clause available in Ledger · "
+                f"{lapsed} candidate(s) retired or expired"
+            ),
+            baseline=True,
+            expired_only=True,
+            warning=(
+                f"{clause_id} is an always-include Baseline Framework section and "
+                f"every version has lapsed — the contract cannot be assembled "
+                f"until an approved current version exists"
+            ),
+        ))
+    return tuple(out)
 
 
 def _provenance_warning(clause: Clause) -> Optional[str]:
@@ -143,9 +209,14 @@ class Descent:
     escalate: bool
     reason: str
 
-    @property
-    def at_floor(self) -> bool:
-        return self.accepted is not None and self.rung is not None
+    # `at_floor` used to live here and was removed (WP-24, finding E8). It read
+    # `accepted is not None and rung is not None`, which is not "at the floor"
+    # at all — it is "a rung was accepted", true of every successful descent.
+    # Nothing called it. A misnamed property that answers a different question
+    # from the one its name asks is worse than no property, because the first
+    # caller to reach for it would have been told the wrong thing. Whether a
+    # descent landed on the floor is already stated in `reason`, and is
+    # derivable from `rung` against the ladder.
 
 
 def descend(

@@ -1,6 +1,18 @@
 # ADR-0002 — The manifest is the sole inference→determinism crossing
 
-**Status:** Accepted · implemented in `engine.jsx`
+**Status:** Accepted · **amended by [ADR-0010](ADR-0010-ai-drafted-clause-candidates.md)** ·
+implemented in `engine.jsx`
+
+> **Amendment (2026-07-25).** The word **sole** in this record's title is no longer accurate. When
+> this was written the manifest was the only place model output crossed into the deterministic
+> side. ADR-0010 opened others: Clause Library Builder drafts, supplier-paper atomisation, and the
+> review queue's AI-candidate path. Model prose can now reach the deterministic side through any of
+> them.
+>
+> What has **not** changed is the part that matters: every one of those crossings terminates at a
+> named human's approval before any wording can reach an agreement, and the manifest remains the
+> sole crossing on the *assembly* path. The correct reading of this record today is "the manifest is
+> the trust boundary for assembly", not "for the system".
 
 ## Context
 
@@ -37,6 +49,12 @@ carried across as *evidence shown to reviewers* and never reaches a contract doc
   ceases to exist.
 - The attack surface is one function. Auditing "can model output reach a document?" means reading
   one filter, not the whole system.
+
+  > **No longer true as written (amended by ADR-0010).** There are now several crossings, not one,
+  > so this audit costs more than reading a single filter. The question that *can* still be
+  > answered in one place is the narrower one: "can model output reach a document **without a named
+  > human approving it?**" — and the answer remains no. Auditing that means checking the approval
+  > gate rather than the manifest filter.
 - The manifest is human-editable before Forge, so the correction point sits exactly where a human
   can still act.
 - Downstream code needs no defensive handling of model weirdness, which is why `resolveClauses` can

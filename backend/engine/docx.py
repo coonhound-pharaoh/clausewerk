@@ -99,9 +99,11 @@ def build_docx(manifest, resolution, *, today: Optional[date] = None) -> bytes:
         # The only contract text in the document, inserted verbatim.
         body.append(_para(d.selected.body))
 
+    # The provenance counts are recorded in the run record, never printed on
+    # the contract (owner decision, 2026-07-25 — memory.md). The zero-authored
+    # property itself is still asserted by test on every build.
     body.append(_para(
-        f"Clauses: {section} · Library snapshot: {resolution.snapshot_id[:12]} · "
-        f"LLM-authored characters: 0"))
+        f"Clauses: {section} · Library snapshot: {resolution.snapshot_id[:12]}"))
 
     document = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -139,35 +141,158 @@ class NotADocx(ValueError):
     """The uploaded file is not a readable Word document."""
 
 
+# ── Limits on an untrusted upload ──────────────────────────────────────────
+# A vendor upload is the one place bytes we did not produce enter the system.
+# Each of these bounds a specific, reproduced attack; none of them is close to
+# what a real contract needs.
+MAX_PART_BYTES = 16 * 1024 * 1024        # one part of the archive, decompressed
+MAX_ARCHIVE_BYTES = 64 * 1024 * 1024     # the whole archive, decompressed
+MAX_ELEMENT_DEPTH = 256                  # nested elements in document.xml
+
+
+class _BoundedDepthBuilder(ET.TreeBuilder):
+    """Abandon a document that nests deeper than a contract ever needs.
+
+    Reproduced: 33.6 MB of deeply nested elements, with **no DOCTYPE at all**,
+    took 18.7 s and peaked at 1.3 GB — comfortably under any plausible byte cap.
+    Size is the wrong dimension for that attack; depth is the right one. The
+    check runs as the parse runs, so the file is abandoned at the first
+    over-deep element instead of after the tree has been built.
+    """
+
+    def __init__(self, limit: int = MAX_ELEMENT_DEPTH):
+        super().__init__()
+        self._limit = limit
+        self._depth = 0
+
+    def start(self, tag, attrs):
+        self._depth += 1
+        if self._depth > self._limit:
+            raise NotADocx(
+                f"word/document.xml nests more than {self._limit} elements deep "
+                f"— refused"
+            )
+        return super().start(tag, attrs)
+
+    def end(self, tag):
+        self._depth -= 1
+        return super().end(tag)
+
+
+def _read_member(z: zipfile.ZipFile, name: str) -> bytes:
+    """Read one archive member with a hard ceiling on what comes out.
+
+    Never `z.read(name)`. The uncompressed size recorded in a zip header is a
+    claim made by whoever built the file, and an unbounded read believes it:
+    a 102 KB archive expanding to 344 MB was reproduced against the previous
+    version of this function. Asking for one byte more than the cap and
+    rejecting on overrun bounds the damage to the cap whatever the header says.
+    """
+    with z.open(name) as f:
+        raw = f.read(MAX_PART_BYTES + 1)
+    if len(raw) > MAX_PART_BYTES:
+        raise NotADocx(
+            f"{name} expands past {MAX_PART_BYTES // (1024 * 1024)} MB — refused as a "
+            f"decompression bomb"
+        )
+    return raw
+
+
 def _document_xml(data: bytes) -> ET.Element:
-    # A vendor upload is the one place untrusted bytes enter the system, so
-    # failures here get a message a buyer can act on rather than a stack trace.
+    # Failures here get a message a buyer can act on rather than a stack trace.
     try:
         with zipfile.ZipFile(BytesIO(data)) as z:
-            raw = z.read("word/document.xml")
+            declared = sum(i.file_size for i in z.infolist())
+            if declared > MAX_ARCHIVE_BYTES:
+                # Second line: a bomb split across many members, each of them
+                # individually under the per-part cap.
+                raise NotADocx(
+                    f"the archive declares {declared // (1024 * 1024)} MB of content, past "
+                    f"the {MAX_ARCHIVE_BYTES // (1024 * 1024)} MB limit — refused"
+                )
+            raw = _read_member(z, "word/document.xml")
     except zipfile.BadZipFile as exc:
         raise NotADocx("not a .docx file — a Word document is a zip archive") from exc
     except KeyError as exc:
         raise NotADocx("missing word/document.xml — the file is not a Word document") from exc
+
+    # Defence in depth, not the load-bearing defence. expat 2.5.0 already blocks
+    # classic entity expansion — billion-laughs measured at 0.26 s and quadratic
+    # blowup at 0.02 s, both refused (Observed). Refusing a DOCTYPE outright
+    # costs nothing, so it stays. The premise "legitimate OOXML never carries a
+    # DOCTYPE" is `Inferred` from the ECMA-376 part definitions and from the
+    # samples to hand — it is NOT `Observed` against a corpus of real Word
+    # output, and should not be cited as though it were.
+    if b"<!DOCTYPE" in raw:
+        raise NotADocx("word/document.xml declares a DOCTYPE — refused")
+
     try:
-        return ET.fromstring(raw)
+        return ET.fromstring(raw, ET.XMLParser(target=_BoundedDepthBuilder()))
     except ET.ParseError as exc:
         raise NotADocx(f"word/document.xml is malformed: {exc}") from exc
 
 
+# The containers real Word output wraps runs in. None of them is contract
+# structure — they are links, content controls and smart tags — so text inside
+# them is ordinary paragraph text and must be walked through, not past. Before
+# this, everything inside one of them was invisible to redline parsing.
+P = f"{{{W}}}p"
+R = f"{{{W}}}r"
+T = f"{{{W}}}t"
+DEL_TEXT = f"{{{W}}}delText"
+INS = f"{{{W}}}ins"
+DEL = f"{{{W}}}del"
+# A tracked MOVE is recorded as delete + insert. That is a semantic choice, not
+# a detail: Word models a move as one operation, but a Review ticket adjudicates
+# text, and the text left one place and arrived in another. Representing it as a
+# move would require the reviewer to reason about both ends at once; representing
+# it as a deletion here and an insertion there lets each end be accepted or
+# refused on its own, which is how ADR-0007 says a negotiation point works.
+MOVE_FROM = f"{{{W}}}moveFrom"
+MOVE_TO = f"{{{W}}}moveTo"
+TRANSPARENT = (
+    f"{{{W}}}hyperlink",     # text of a cross-reference or an external link
+    f"{{{W}}}sdt",           # a content control…
+    f"{{{W}}}sdtContent",    # …and the part of it that holds the text
+    f"{{{W}}}smartTag",      # legacy Word entity recognition
+)
+
+
+def _visible_text(p: ET.Element) -> str:
+    """The readable text of ONE paragraph.
+
+    Two things this has to get right that a flat `p.iter()` did not:
+
+    * A nested `w:p` — inside a table cell or a content control — is its own
+      paragraph and is reported separately. Including its text here as well
+      counted it twice.
+    * Deleted and moved-from text is a proposal to remove, not content, so the
+      whole subtree is skipped rather than one tag being filtered out of it.
+    """
+    parts: list[str] = []
+
+    def walk(node: ET.Element) -> None:
+        for child in node:
+            tag = child.tag
+            if tag == P:
+                continue          # its own paragraph, counted once, over there
+            if tag in (DEL, MOVE_FROM):
+                continue          # struck out: not text of the document
+            if tag == T:
+                if child.text:
+                    parts.append(child.text)
+            elif tag == DEL_TEXT:
+                continue          # deleted text reached directly, same rule
+            else:
+                walk(child)
+
+    walk(p)
+    return "".join(parts)
+
+
 def paragraphs(data: bytes) -> list[str]:
     """Visible text, one string per paragraph, deletions excluded."""
-    out = []
-    for p in _document_xml(data).iter(f"{{{W}}}p"):
-        parts = []
-        for node in p.iter():
-            if node.tag == f"{{{W}}}t" and node.text:
-                # Skip text inside a deletion: it is not in the document.
-                parts.append(node.text)
-            elif node.tag == f"{{{W}}}delText":
-                continue
-        out.append("".join(parts))
-    return out
+    return [_visible_text(p) for p in _document_xml(data).iter(P)]
 
 
 def document_text(data: bytes) -> str:
@@ -190,6 +315,54 @@ def authored_characters(data: bytes, bodies: Iterable[str], structural: Iterable
             continue
         stray += len(text)
     return stray
+
+
+# ── The second count (ADR-0010, WP-17) ─────────────────────────────────────
+# Two numbers, both computed, NEITHER printed on the document (owner decision,
+# 2026-07-25). They answer different questions and the first does not weaken:
+#
+#   authored_characters()      — characters this system wrote. Still zero, still
+#                                asserted by test on every build. The assembly
+#                                path generates nothing, and ADR-0010 does not
+#                                touch that.
+#   ai_originated_characters() — characters that came from clause bodies whose
+#                                ORIGIN is an AI draft. Every one of them was
+#                                read and approved by a named lawyer, so they
+#                                are not authored by the system; but "a lawyer
+#                                approved it" and "a lawyer composed it" are
+#                                different claims, and only the honest one
+#                                survives an auditor.
+#
+# Counted from the emitted bytes rather than from the resolution, for the same
+# reason authored_characters() is: what matters is what is IN the document.
+
+
+def ai_originated_characters(data: bytes, clauses: Iterable) -> int:
+    """Characters in the document that came from AI-originated clause bodies.
+
+    `clauses` are the selected clauses, each carrying its `origin`. A body that
+    is not in the document — an unresolved risk, a suppressed candidate — is not
+    counted, because it is not in the contract.
+    """
+    ai_bodies = {c.body.strip() for c in clauses if getattr(c, "origin", "") == "ai_drafted"}
+    if not ai_bodies:
+        return 0
+    return sum(len(p.strip()) for p in paragraphs(data) if p.strip() in ai_bodies)
+
+
+def provenance_counts(data: bytes, resolution, structural: Iterable[str]) -> dict:
+    """Both figures for one emitted contract, ready for the run record.
+
+    This is the shape `cw.run.authored_chars` / `cw.run.ai_origin_chars` expect.
+    It lives here rather than in `run.py` because both numbers are properties of
+    the produced bytes, and only this module reads those.
+    """
+    selected = [d.selected for d in resolution.decisions if d.selected]
+    bodies = [c.body for c in selected]
+    return {
+        "authored_chars": authored_characters(data, bodies, structural),
+        "ai_origin_chars": ai_originated_characters(data, selected),
+    }
 
 
 # ── Redline parsing (ADR-0007) ─────────────────────────────────────────────
@@ -249,32 +422,50 @@ def parse_redlines(data: bytes, *, context_chars: int = 160) -> tuple[Redline, .
     redlines.
     """
     root = _document_xml(data)
-    paras = list(root.iter(f"{{{W}}}p"))
+    paras = list(root.iter(P))
 
-    plain: list[str] = []
-    for p in paras:
-        parts = [t.text or "" for t in p.iter(f"{{{W}}}t")]
-        plain.append("".join(parts))
+    plain = [_visible_text(p) for p in paras]
 
     found: list[Redline] = []
     for i, p in enumerate(paras):
         segments: list[Segment] = []
-        author = changed_on = None
-        # Walk the paragraph's direct children in document order, so kept text
-        # and changes interleave the way they appear on the page.
-        for child in list(p):
-            if child.tag == f"{{{W}}}r":
-                for t in child.iter(f"{{{W}}}t"):
-                    if t.text:
-                        segments.append(Segment("keep", t.text))
-            elif child.tag == f"{{{W}}}ins":
-                segments.extend(_runs_of(child, "ins"))
-                author = author or child.get(f"{{{W}}}author")
-                changed_on = changed_on or child.get(f"{{{W}}}date")
-            elif child.tag == f"{{{W}}}del":
-                segments.extend(_runs_of(child, "del"))
-                author = author or child.get(f"{{{W}}}author")
-                changed_on = changed_on or child.get(f"{{{W}}}date")
+        attribution: dict[str, Optional[str]] = {"author": None, "date": None}
+
+        def walk(node: ET.Element) -> None:
+            """Walk one paragraph in document order, so kept text and changes
+            interleave the way they appear on the page.
+
+            Real Word output does not put every run directly under `w:p`. A
+            cross-reference sits in `w:hyperlink`, a fill-in field sits in
+            `w:sdt`/`w:sdtContent`, and older documents still carry
+            `w:smartTag`. Only direct children were read before, so a change
+            inside any of those was silently missing from what a Review ticket
+            showed Legal.
+            """
+            for child in node:
+                tag = child.tag
+                if tag == P:
+                    continue                       # its own paragraph
+                if tag == R:
+                    for t in child.iter(T):
+                        if t.text:
+                            segments.append(Segment("keep", t.text))
+                elif tag in (INS, MOVE_TO):
+                    # A move-to is an arrival: for adjudication it is an insertion.
+                    segments.extend(_runs_of(child, "ins"))
+                    attribution["author"] = attribution["author"] or child.get(f"{{{W}}}author")
+                    attribution["date"] = attribution["date"] or child.get(f"{{{W}}}date")
+                elif tag in (DEL, MOVE_FROM):
+                    # A move-from is a departure: for adjudication it is a deletion.
+                    segments.extend(_runs_of(child, "del"))
+                    attribution["author"] = attribution["author"] or child.get(f"{{{W}}}author")
+                    attribution["date"] = attribution["date"] or child.get(f"{{{W}}}date")
+                elif tag in TRANSPARENT:
+                    walk(child)
+
+        walk(p)
+        author = attribution["author"]
+        changed_on = attribution["date"]
 
         if not any(s.kind in ("ins", "del") for s in segments):
             continue

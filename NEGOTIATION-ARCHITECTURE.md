@@ -179,7 +179,7 @@ Never from a blank prompt. A draft is grounded in stated inputs, all of which ar
 |---|---|
 | **Clause draft** | Review queue → named approver → clause with `origin: ai_drafted` |
 | **Ladder move** | A proposed new rung, positioned relative to the floor |
-| **Rule draft** | A conflict-rule predicate in the three-primitive grammar (§4 of the CLA) |
+| **Rule draft** | A conflict-rule predicate in the three-primitive grammar ([CLA §4A](CLAUSE-LIBRARY-ARCHITECTURE.md)) |
 | **Gap report** | Deterministic, no model — where the library is thin |
 
 Each draft carries its **prompt, model, model version, rule inputs and source records**, so the
@@ -260,8 +260,9 @@ Stated plainly, because the tension in
 
 - **The simplest claim is gone.** `0 LLM-authored characters` remains true of the assembly path and
   is still asserted by test. It is no longer true of the *library* once AI-drafted clauses are
-  approved into it. Both numbers will be computed per contract; which one is published is an owner
-  decision, and quietly keeping the old footer while the second is non-zero would mislead.
+  approved into it. Both numbers are computed per contract. **Decided 2026-07-25:** neither is
+  printed on the contract document — the footer claim is removed and both counts live in the
+  system record, where Legal and auditors read them.
 - **Review quality becomes the binding control.** A fluent draft is approved faster than a blank
   page is filled. The unedited-approval rate is instrumented for exactly this, and someone has to
   watch it.
@@ -275,14 +276,17 @@ Stated plainly, because the tension in
 
 ## 9. Open questions
 
-1. **Who owns the unedited-approval rate?** Instrumenting it is easy; acting on it needs an owner
-   and a threshold nobody has set.
+1. ~~**Who owns the unedited-approval rate?**~~ **Decided 2026-07-25: Legal owns it.** The
+   threshold will be set in consultation with counsel later; until then the rate is measured and
+   visible with no alarm wired to it.
 2. **Atomisation disagreement.** When a reviewer says the split is wrong, is that a correction to
    this agreement only, or training signal? The system has no concept of the latter and should not
    acquire one accidentally.
 3. **Cross-round trades.** Vendors concede one point to win another. Positions are tracked
    individually, so a trade is invisible — the same blind spot as ADR-0007, now one level up and
    more consequential.
-4. **Draft attribution in executed contracts.** If wording that began as an AI draft ends up in a
-   signed agreement, does the counterparty have any interest in knowing? A legal question, not an
-   engineering one, and worth asking counsel before the first one ships.
+4. ~~**Draft attribution in executed contracts.**~~ **Decided 2026-07-25: no disclosure to
+   counterparties**, absent a legal requirement — none is known in US or EU law for
+   lawyer-approved B2B contract language as of this date. To be confirmed when counsel is next
+   engaged, and revisited if any operating jurisdiction adopts such a rule. Internal origin
+   tracking is unchanged.

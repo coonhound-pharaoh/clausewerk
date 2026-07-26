@@ -23,6 +23,23 @@ SUPERSEDED = "superseded"
 RETIRED = "retired"
 EXPIRED = "expired"
 
+# Who composed the words (ADR-0010), mirroring cw.clause_version.origin. This is
+# a different question from `provenance`, which says which door the wording came
+# through — the Review queue, a concession promotion, or the original seed.
+LEGAL_AUTHORED = "legal_authored"
+AI_DRAFTED = "ai_drafted"
+VENDOR_DERIVED = "vendor_derived"
+EXTERNAL = "external"
+ORIGINS = (LEGAL_AUTHORED, AI_DRAFTED, VENDOR_DERIVED, EXTERNAL)
+
+# ── Which engine produced a result (WP-32) ─────────────────────────────────
+# Bumped whenever anything that feeds `Resolution.result_hash` changes: the
+# resolution order, the decision fields that are hashed, or the snapshot
+# fingerprint. Recorded on every run row, because a stored hash that no longer
+# reproduces is indistinguishable from a tampered one unless the record says
+# which code computed it.
+ENGINE_VERSION = "clausewerk-engine/3"
+
 
 @dataclass(frozen=True)
 class Clause:
@@ -44,6 +61,11 @@ class Clause:
     #: True when the clause has no recorded approval or expiry date. It is not
     #: expired — it is ungoverned, and that must stay visible (finding #8).
     provenance_gap: bool = False
+    #: Who composed the words (ADR-0010). Permanent, and deliberately NOT part
+    #: of the snapshot fingerprint: on a pinned ``(clause_id, version)`` the
+    #: origin cannot change what the clause says or whether it was selectable,
+    #: so it cannot change an outcome — see ``snapshot.py``.
+    origin: str = LEGAL_AUTHORED
     #: Attributes counsel attached to this wording ('jurisdiction:ny',
     #: 'indemnity:uncapped'). Conflict rules match on these, so no rule ever
     #: has to parse contract prose.
@@ -89,6 +111,12 @@ class Manifest:
     value: Optional[str] = None
     source: str = "llm"
     risks: tuple[Risk, ...] = ()
+    #: Risks the trust boundary refused because their category is not in the
+    #: registry's enum (`engine.manifest.check_manifest`). Kept, not discarded:
+    #: "the model invented a category" is a different fact from "we have no
+    #: clause for that category", and only one of them is a library gap. These
+    #: never reach resolution, so they can never be reported as coverage.
+    dropped: tuple[Risk, ...] = ()
 
 
 @dataclass(frozen=True)

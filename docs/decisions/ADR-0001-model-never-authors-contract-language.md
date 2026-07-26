@@ -1,6 +1,21 @@
 # ADR-0001 — The model never authors contract language
 
-**Status:** Accepted · implemented throughout the v3 prototype
+**Status:** Accepted · **amended by [ADR-0010](ADR-0010-ai-drafted-clause-candidates.md)** ·
+implemented throughout the v3 prototype
+
+> **Amendment (2026-07-25).** ADR-0010 narrows this record. The model still never authors language
+> that reaches a contract, and assembly still generates nothing — the zero-authored-characters
+> property is asserted by test on every build. What changed is the *library*: the Clause Library
+> Builder may draft a candidate clause for a named lawyer to approve, so approved wording may be
+> `ai_drafted` in origin. The invariant now reads: **no contract language reaches an agreement
+> without a named human's approval, and the origin of every clause is recorded on it permanently.**
+>
+> Read the Consequences below with that in mind. In particular, the economic argument in Context —
+> that adversarially reviewing generated language costs more than drafting it — is the reason
+> ADR-0010's payoff depends entirely on review being genuinely lighter than that. The instrument
+> for watching this is the unedited-approval rate. **Legal owns that number; the threshold is set
+> in consultation with counsel and is deliberately unset until then.** The system measures it and
+> makes it visible; it does not choose it.
 
 ## Context
 

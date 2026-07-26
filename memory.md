@@ -7,6 +7,90 @@ running log of *what we decided and why*, readable without opening the code.
 
 ---
 
+## 2026-07-25 · We are responsible for the system, not the contract text
+
+**The principle, from Mike.** Clausewerk is a system. It records, gates, checks, and proves
+provenance. Responsibility for the contract language that ends up in it — what a clause says,
+whether a supplier's paper covers what it should, what was conceded — belongs to the people
+using the system: Legal, the requester, and the approvers. Not to the software, and not to us.
+
+**Why this needed saying.** Reviews and plans kept framing content gaps (for example, "supplier-
+paper deals have no obligation coverage") as problems the product must solve. They are not. The
+product's whole job there is to be honest about what it does and does not cover — badge it,
+record it, and hand it to the responsible person. Solving it is their work.
+
+**How to apply.** When a gap is about *content*, the system's obligation ends at making the gap
+visible and giving the responsible person a place to act. Never design the software to quietly
+take on judgement that belongs to people.
+
+---
+
+## 2026-07-25 · Concessions need the requester, the attorney, and every required approver
+
+**Decision.** Settling a negotiation point at a fallback position is approved by **both** the
+business requester **and** the assigned attorney — plus any other **Required Approvers**
+configured for that contract: executive leadership, other management, and stakeholder
+departments such as ISO, Privacy, Compliance, and Risk. The system must support a configurable
+list of Required Approvers per contract, and every approval is recorded by name.
+
+**What this replaces.** An earlier ambiguity where the ladder spec said in one place that the
+software could settle a push-back on its own, and in another that the requester alone did it.
+Neither is right: the retreat path is pre-approved language, but *taking* it on a given deal is
+a decision, and the people with a stake in that decision all sign it.
+
+**Cost, openly.** This puts the attorney back in the loop on every concession. The ladder still
+saves the drafting and the research — the approvers are choosing among pre-approved positions,
+not writing anything — but the approval round-trip is real. Who counts as Required for which
+contracts still needs to be designed (by category? by deal size?) — that is build work, not a
+new decision.
+
+---
+
+## 2026-07-25 · No disclosure of AI-drafted origin to counterparties
+
+**Decision.** Rejected until there is a legal reason. We do not tell the other side that a
+clause began as an AI draft. There is no requirement for this in negotiation.
+
+**What we checked.** As of today we know of no US or EU rule requiring disclosure of AI
+assistance in drafting business-to-business contract language that a lawyer reviewed and
+approved. The EU AI Act's transparency rules aim at things like chatbots and synthetic media,
+not human-approved contract text. To be confirmed with counsel whenever we next engage one —
+and revisited if any jurisdiction we operate in adopts such a rule.
+
+**Unchanged.** Internally, origin is still stamped on every clause permanently. This decision
+is only about what the counterparty is told.
+
+---
+
+## 2026-07-25 · Legal owns the unedited-approval rate
+
+**Decision.** The number that shows whether lawyers are actually reviewing AI drafts — how often
+a draft is approved without a single edit — is owned by **Legal**. The threshold that triggers
+concern will be set in consultation with counsel later; until then the number is measured and
+visible, with no alarm wired to it.
+
+**Why it matters.** The AI-drafting decision (ADR-0010) names review quality as the control the
+whole thing rests on. A control needs an owner. It now has one.
+
+---
+
+## 2026-07-25 · The provenance counts live in the system, never on the contract
+
+**Decision, from Mike.** The contract document itself carries no provenance claim — the old
+"0 LLM-authored characters" footer line is gone from every generated document. Both counts
+(machine-written characters: zero, and characters from AI-drafted but lawyer-approved clauses)
+are computed and kept **in the system record** for every contract, where Legal and auditors see
+them.
+
+**Why.** The contract is the counterparty-facing legal document. Internal assurance figures
+belong in the internal record, not on paper the other side signs.
+
+**Still enforced.** Removing the sentence from the page removes nothing from the guarantee: the
+character-by-character zero check still runs on every build and the build still fails if it is
+ever non-zero. The claim was never the footer; the footer was advertising.
+
+---
+
 ## 2026-07-25 · What we concede and what we stand for are different records
 
 **Decision.** Accepting a vendor's wording is a **concession** — a note that on *this one deal* we
@@ -374,3 +458,167 @@ automatically.
 
 **Why it is safe enough.** Every piece keeps a pointer back to the exact text in
 their document, so a reviewer can always check the split rather than trust it.
+
+---
+
+## 2026-07-26 · The tests were checking the wrong thing, and that hid four faults
+
+**What we found.** Every test that mattered ran as the database owner. The owner
+bypasses every permission rule by design, so a protection could be completely
+missing and the tests would still pass. Four separate faults were living in that
+blind spot, including one where accepting a supplier's wording into the library
+could be done over and over, each time creating another copy, while the system
+reported success.
+
+**The rule now.** If a protection is a permission rule, the test must perform the
+protected action **as the person the rule names**. Anything else measures the
+owner's privileges, not the system's.
+
+**Why it matters beyond the four faults.** We already wrote down once that "a
+protection that worked by accident is not a protection." This is the same lesson
+arriving from a different direction: a test that cannot fail is not a test. We
+built a small piece of machinery so this is now the easy path rather than the
+diligent one.
+
+---
+
+## 2026-07-26 · A check caught by the wrong test is a failure, not a pass
+
+**Decision.** Our deliberate-breakage harness — the one that breaks each
+protection in turn to prove the tests notice — used to accept "something failed"
+as good enough. It now requires the failure to come from **the test that names
+the guarantee**. Anything else is reported as a failure.
+
+**Why we changed it.** The first run after the change immediately found two
+checks pointing at the wrong test. One of them meant a test we believed protected
+our headline claim — that no machine-written words reach a contract — was
+actually being carried by a different test entirely. The claim was safe; our
+evidence for it was not.
+
+**The cost, honestly.** The harness is now slow — over ten minutes — because it
+re-runs whole test suites more than a hundred times. That is the price of the
+evidence being real, and it is worth paying, but it means it is run deliberately
+rather than constantly.
+
+---
+
+## 2026-07-26 · The audit trail was accusing an honest system of tampering
+
+**What was wrong.** Our tamper-evidence works by chaining records together so
+that changing any one of them breaks everything after it. But the chain included
+the timestamp *as written text*, and different people's connections write the
+same moment differently. Two colleagues checking the same untouched log would get
+different answers, and one of them would be told the records had been tampered
+with.
+
+**Why that is serious.** This is the mechanism every provenance claim in the
+product rests on. A tamper alarm that cries wolf is worse than none — the first
+few false alarms teach everyone to ignore the real one.
+
+**Also fixed:** we could not previously detect someone deleting the *newest*
+records, because what remained still looked consistent. And buyers could read
+each other's concession records in the log — information we carefully hide one
+table over.
+
+**Two limits we are stating rather than hiding.** The anchor that detects
+deletion is not cryptographically signed, so it constrains staff but not someone
+with full database control. And the safeguard against two people writing at the
+exact same instant cannot be tested in our current test database.
+
+---
+
+## 2026-07-26 · A machine may propose a concession; it may never settle one
+
+**The contradiction we resolved.** One part of our own specification said the
+system could settle a supplier's ask against a pre-approved fallback position
+without a human. Another said stepping down to a fallback is a person's recorded
+act. Both were written down. The second is right.
+
+**What is built.** Settling at a fallback position now requires the Requester
+**and** the assigned attorney, plus whichever approvers are configured for that
+contract — leadership, other management, and stakeholder departments such as ISO,
+Privacy, Compliance and Risk. It is configurable per contract, and a contract
+with no configuration **refuses to settle** rather than waving it through.
+
+**What this costs.** It reduces the scaling claim, and we should say so plainly:
+fallback ladders remove the drafting and the research, not the approval. We chose
+to write the smaller true claim rather than keep the larger one.
+
+---
+
+## 2026-07-26 · The approval gate now exists, and it watches itself
+
+**What changed.** The Review queue — the single door through which new wording
+enters the library — existed only as prose until now. It is built: tickets,
+states, a rejection that genuinely requires a reason, and the record of an AI
+draft including which model produced it.
+
+**The part worth understanding.** When we allowed AI to draft candidate wording,
+we said the safeguard would be measuring how often lawyers approve drafts without
+editing them — because a fluent draft is approved faster than a blank page is
+filled. That number is now derived from what was actually stored, not from anyone
+reporting it, and the original draft is frozen once it is attached to a ticket.
+Otherwise the measurement could be made to look perfect by editing the wrong
+thing.
+
+**Still yours to decide.** What the number should be. Legal sets it with counsel.
+The system measures it and shows it, and must never pick it.
+
+---
+
+## 2026-07-26 · Four decisions we deliberately did not make for you
+
+**Decision.** Where the right answer is a business judgement rather than an
+engineering one, we built both paths, shipped a default, and recorded it as an
+open question — rather than quietly choosing and moving on.
+
+They are held in the database itself, marked as undecided, so they cannot be
+forgotten:
+
+1. **Renewals** — does a renewal open from the last signed deal, or from today's
+   standard library? Shipped opening from the signed deal, because that is how
+   counterparties actually behave. Both paths are fully built, and whichever is
+   used is recorded.
+2. **Work orders** — may a work order contradict its master agreement? Shipped as
+   "no", the stricter reading.
+3. **Database ownership** — how the owner account maps to the five roles.
+4. **The unedited-approval threshold** — Legal's, in consultation with counsel.
+
+**Why record them this way.** An open question in a document gets read once. An
+open question in the schema gets encountered by whoever next touches the thing it
+governs.
+
+---
+
+## 2026-07-26 · The four open decisions, settled
+
+**Renewals open from the deal we actually signed.** Not from today's standard
+library. Suppliers expect last year's deal as the starting point, and pretending
+otherwise reopens fights we already had. Restarting from standard remains
+available as a deliberate, recorded choice.
+
+**The cost we are accepting, stated plainly:** a concession we made once can
+become permanent unless somebody reads the comparison report. That report is
+therefore the control, and it has to stay in front of whoever opens the renewal
+rather than sitting in a menu.
+
+**A work order may depart from its master agreement — with the same approval a
+concession needs.** Not never, and not freely. Departing from the master binds
+the company to something other than its standard position, which is exactly what
+conceding to a supplier does, so it earns the same signatures: the Requester, the
+assigned attorney, and every approver configured for that deal.
+
+It is granted **one category at a time**, not once for the whole work order. A
+blanket permission gets signed once and then quietly inherited by every later
+change to that work order, with nobody looking again. And an authorised
+departure is still *reported* — approved is not the same as hidden.
+
+**The AI-drafting safeguard is measured and shown, and blocks nothing yet.**
+Legal sets the threshold with counsel, against real data rather than a guess. The
+system will never pick that number: choosing what counts as adequate legal review
+is content, and content is not ours.
+
+**Where these live.** In the database, as rows marked settled, with the reasoning
+attached — not only in this file. A decision in a document gets read once. A
+decision in the schema is encountered by whoever next touches the thing it
+governs.

@@ -81,6 +81,58 @@ def test_baseline_ordered_by_framework_section(snap):
     assert sections == sorted(sections)
 
 
+def test_a_lapsed_always_include_clause_gates_it_does_not_vanish(snap):
+    """E4. If Definitions expires, the contract must not simply come out one
+    section shorter with nothing said. It is a decision record, and a loud one."""
+    library = [c for c in snap.clauses if c.clause_id != "DF-B-001"]
+    library.append(clause("DF-B-001", cat="Definitions", sev=STANDARD,
+                          always_include=True, framework_section="1.1",
+                          state=EXPIRED, selectable=False,
+                          expires_on=date(2025, 1, 1)))
+    s = Snapshot.build(library, ladders=snap.ladders)
+
+    r = resolve(Manifest(vendor="Northwind"), s)
+    baseline = [d for d in r.decisions if d.baseline]
+
+    # The section is still accounted for — it did not disappear.
+    assert len(baseline) == 2
+    gap = [d for d in baseline if d.selected is None]
+    assert len(gap) == 1, "the lapsed baseline clause left no decision record"
+    d = gap[0]
+    assert d.unresolved
+    assert d.expired_only, "same vocabulary as the risk pass: lapsed, not absent"
+    assert d.risk.category == "Definitions"
+    assert "1 candidate(s) retired or expired" in d.reason
+    assert d.warning and "every version has lapsed" in d.warning
+    # And it is loud where a caller actually looks.
+    assert d in r.unresolved
+    assert d in r.warnings
+
+
+def test_a_baseline_clause_with_a_lapsed_older_version_still_resolves(snap):
+    """The gate must fire on 'no version is usable', not on 'some version lapsed'."""
+    library = list(snap.clauses)
+    library.append(clause("DF-B-001", ver=2, cat="Definitions", sev=STANDARD,
+                          always_include=True, framework_section="1.1"))
+    library = [c for c in library if not (c.clause_id == "DF-B-001" and c.version == 1)]
+    library.append(clause("DF-B-001", ver=1, cat="Definitions", sev=STANDARD,
+                          always_include=True, framework_section="1.1",
+                          state=EXPIRED, selectable=False))
+    r = resolve(Manifest(vendor="N"), Snapshot.build(library))
+    d = [x for x in r.decisions if x.baseline and x.risk.category == "Definitions"][0]
+    assert d.selected is not None and d.selected.ref == "DF-B-001@v2"
+    assert not d.expired_only
+
+
+def test_a_never_present_baseline_category_is_not_invented(snap):
+    """The counterpart: a framework section the library never had produces no
+    baseline decision at all. Nothing here fabricates a section."""
+    r = resolve(Manifest(vendor="N"), snap)
+    cats = {d.risk.category for d in r.decisions if d.baseline}
+    assert "Order of Precedence" in cats
+    assert "Force Majeure" not in cats
+
+
 def test_baseline_clauses_are_not_offered_to_risks(snap):
     """A baseline clause is placed once, by the baseline pass, and never
     re-selected as though it answered a risk."""
@@ -143,6 +195,51 @@ def test_unselectable_clauses_never_reach_a_contract(snap):
     chosen = [d.selected.ref for d in r.decisions if d.selected]
     assert "SC-H-012@v1" not in chosen
     assert "SC-S-004@v1" not in chosen
+
+
+def test_the_newest_selectable_version_wins():
+    """E3a. Two versions of one clause are both selectable — the usual state
+    while a superseded version runs off beside its replacement. The newer
+    wording is the one Legal approved most recently, and it is the one that
+    must reach the contract."""
+    library = [
+        clause("DP-H-014", ver=1, body="Notify within 72 hours."),
+        clause("DP-H-014", ver=3, body="Notify within 24 hours."),
+        clause("DP-H-014", ver=2, body="Notify within 48 hours."),
+    ]
+    m = Manifest(vendor="N", risks=(Risk("Data Privacy", HIGH),))
+    d = resolve(m, Snapshot.build(library)).decisions[0]
+    assert d.selected.version == 3, f"picked v{d.selected.version}, not the newest"
+    assert d.selected.body == "Notify within 24 hours."
+    # The older versions are still on the record as what lost.
+    assert {c.version for c in d.suppressed} == {1, 2}
+
+
+def test_a_lapsed_newer_version_does_not_beat_a_live_older_one():
+    """Newest-SELECTABLE-wins. A newer version that has been retired is not a
+    candidate at all, so the live older version still stands."""
+    library = [
+        clause("DP-H-014", ver=1, body="Notify within 72 hours."),
+        clause("DP-H-014", ver=2, body="Notify within 24 hours.",
+               state=RETIRED, selectable=False),
+    ]
+    m = Manifest(vendor="N", risks=(Risk("Data Privacy", HIGH),))
+    d = resolve(m, Snapshot.build(library)).decisions[0]
+    assert d.selected.version == 1
+
+
+def test_the_newest_baseline_version_wins():
+    """The always-include pass obeys the same rule as the risk pass."""
+    library = [
+        clause("DF-B-001", ver=1, cat="Definitions", sev=STANDARD,
+               always_include=True, framework_section="1.1"),
+        clause("DF-B-001", ver=2, cat="Definitions", sev=STANDARD,
+               always_include=True, framework_section="1.1"),
+    ]
+    r = resolve(Manifest(vendor="N"), Snapshot.build(library))
+    baseline = [d for d in r.decisions if d.baseline]
+    assert len(baseline) == 1, "one clause, one section — not one per version"
+    assert baseline[0].selected.ref == "DF-B-001@v2"
 
 
 def test_unprovenanced_clause_is_selectable_but_warns():

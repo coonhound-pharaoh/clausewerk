@@ -11,34 +11,31 @@ data yet, so schema and hash-format changes are still free.
 
 ## Phase 0 — Decisions (owner + Legal; no code)
 
-These block or shape everything after them.
+**All five decided by the owner on 2026-07-25** — recorded individually in `memory.md`. Summary:
 
-1. **Decide the footer claim.** Once the first AI-drafted clause is approved, "0 LLM-authored
-   characters" is true of assembly and false of the library. Decide now what the document
-   footer says. Recommendation: print both numbers ("0 machine-written characters; N characters
-   from AI-drafted, lawyer-approved clauses") — the longer claim is the honest one, and honesty
-   is this product's brand.
-2. **Name an owner and a threshold for the unedited-approval rate.** ADR-0010 calls this the
-   binding control. Recommendation: Legal leadership owns it; set a provisional review trigger
-   (e.g. investigate if >70% of drafts are approved unedited in any month) and revise with data.
-3. **Ask counsel the disclosure question before the first AI-drafted clause ships** — whether a
-   counterparty has any interest in knowing signed wording began as an AI draft. Make the answer
-   a release gate, not a footnote.
-4. **Resolve the ladder-descent actor.** Recommendation: descent within the approved range is a
-   *Requester* act, recorded with their name; the system only recommends. If descent is ever
-   automated, it is logged as a machine act (ADR-0008 reserved the record type for exactly
-   this). Update CLA §3/§7 to agree with each other.
-5. **Decide the supplier-paper lifecycle story.** Recommendation: supplier-paper deals execute
-   and freeze normally but register as *manual-obligation* agreements — clearly badged as
-   outside the automatic guarantee — rather than pretending coverage that isn't there. The same
-   badge applies to conceded vendor wording inside our own paper: a concession should carry an
-   optional Legal-authored obligations note, because those are the obligations most likely to
-   be missed.
+1. **Footer claim — decided.** No provenance count is printed on the contract document; the old
+   footer line is removed (done — backend and prototype, tests green). Both counts are computed
+   and kept in the system record. The zero-authored property is still asserted by test on every
+   build.
+2. **Unedited-approval rate — decided.** Legal owns it. The threshold will be set in
+   consultation with counsel later; until then the rate is measured and visible.
+3. **Counterparty disclosure — rejected.** No disclosure that wording began as an AI draft,
+   absent a legal requirement — none is known in US or EU law for lawyer-approved B2B contract
+   language. Confirm when counsel is next engaged; revisit if a jurisdiction adopts such a rule.
+4. **Concession approval — decided.** Settling at a fallback position requires the Requester
+   **and** the assigned attorney, plus any **Required Approvers** configured for the contract
+   (executive leadership, other management, and stakeholder departments such as ISO, Privacy,
+   Compliance, Risk). Build work that follows: a configurable Required-Approvers model, and
+   updating CLA §3/§7 to match (moved to Phase 3).
+5. **Supplier-paper obligations — reframed by the owner.** Clausewerk is responsible for the
+   *system*, not for contract content. The product's job is to badge what is and isn't covered
+   and give the responsible person a place to act — content coverage is the operator's
+   responsibility. This principle is recorded in `memory.md` and `CLAUDE.md` and governs how
+   future gaps of this kind are framed.
 
-**Also in Phase 0 (one hour of hygiene):** commit ADR-0010 and `NEGOTIATION-ARCHITECTURE.md`;
-add "amended by ADR-0010" notes to ADR-0001 *and* ADR-0002; update `docs/decisions/README.md`
-(index 0010; correct the "all implemented in the prototype" claim); record the Phase 0 decisions
-in `memory.md`.
+**Remaining Phase 0 hygiene:** commit ADR-0010 and `NEGOTIATION-ARCHITECTURE.md`; add "amended
+by ADR-0010" notes to ADR-0001 *and* ADR-0002; update `docs/decisions/README.md` (index 0010;
+correct the "all implemented in the prototype" claim).
 
 ---
 
@@ -113,8 +110,9 @@ In dependency order:
    version, inputs, `edited_before_approval`). This is the architecture's single mutation gate
    and currently exists only as prose; both the concession path and the Builder need it.
 2. **Origin on clause versions** (`legal_authored | ai_drafted | vendor_derived | external`) —
-   schema + engine model + the second character count, so both footer numbers are computable
-   before the first AI draft is ever approved.
+   schema + engine model + the second character count, so both provenance counts are computable
+   for the system record before the first AI draft is ever approved (they are not printed on
+   the contract — Phase 0, decision 1).
 3. **Spec repairs before their subjects are built:** write the rule-grammar section the NA cites
    but that doesn't exist; refresh `docs/data-model.md` to cover all four architectures; five
    roles everywhere; specify e-signature byte-capture; add legal hold to retention; decide
@@ -139,7 +137,8 @@ In dependency order:
 
 ## What this buys, in one sentence each
 
-- **Phase 0** makes the system's most consequential decision visible, owned, and honest.
+- **Phase 0** (now done, minus commit hygiene) makes the system's most consequential decision
+  visible, owned, and honest.
 - **Phase 1** makes the guarantees the documents already state actually true under real
   permissions, real concurrency, and real reproduction.
 - **Phase 2** makes the one door where untrusted material enters safe against real-world files

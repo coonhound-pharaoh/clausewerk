@@ -2,18 +2,25 @@
 
 The load-bearing choices Clausewerk is built on, and — more usefully — what each one costs.
 
-These are **retrospective**: the decisions were made during the prototype and are recorded here
-from [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and the ingested v3 source. They document reasoning
-that already shaped the system rather than proposing anything new. Status is `Accepted` throughout
-because the prototype implements them.
+Records **0001–0007 are retrospective**: those decisions were made during the prototype and are
+recorded here from [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and the ingested v3 source. They
+document reasoning that already shaped the system rather than proposing anything new, and the
+prototype implements them.
+
+**0008, 0009 and 0010 are forward-looking.** They were decided after the prototype and are *not*
+implemented in it — 0008's five roles and recorded overrides and 0009's separation of concession
+from supersession exist in the backend schema, and 0010's AI-drafted candidates are specified but
+not yet built. Status is `Accepted` throughout because the decisions are settled, not because the
+code exists everywhere. Where a record has been narrowed by a later one, it carries an amendment
+note at the top: **0001 and 0002 are both amended by 0010.**
 
 Most "why can't I just…" questions are answered by the **Consequences** section of one of these.
 That is the section to read.
 
 | ADR | Decision | The cost |
 |---|---|---|
-| [0001](ADR-0001-model-never-authors-contract-language.md) | The model never authors contract language | Coverage gaps become hard failures instead of soft prose |
-| [0002](ADR-0002-manifest-is-the-trust-boundary.md) | The manifest is the sole inference→determinism crossing | Nuance not expressible as a category triple is lost |
+| [0001](ADR-0001-model-never-authors-contract-language.md) *(amended by 0010)* | The model never authors contract language | Coverage gaps become hard failures instead of soft prose |
+| [0002](ADR-0002-manifest-is-the-trust-boundary.md) *(amended by 0010)* | The manifest is the sole inference→determinism crossing | Nuance not expressible as a category triple is lost |
 | [0003](ADR-0003-review-queue-is-the-only-mutation-surface.md) | Only the Review queue can add clauses | Legal is a throughput bottleneck, deliberately |
 | [0004](ADR-0004-suppressed-candidates-are-retained.md) | Losing candidates are retained, not discarded | Every decision record carries its rejects forever |
 | [0005](ADR-0005-deterministic-fallbacks.md) | Every inference call has a deterministic fallback | Two implementations of every judgement, kept in step |

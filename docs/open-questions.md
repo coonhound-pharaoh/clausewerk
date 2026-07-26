@@ -24,6 +24,37 @@ number. Every other number is stable — they are referred to by number in conve
 
 ---
 
+## Owner decisions — all four settled, 2026-07-26 ✅
+
+These were never architecture questions. They were choices only the business owner could make, and
+the system deliberately did not make them. **All four are now settled.** They are recorded as rows
+in `cw.governance_setting` with the reasoning attached, not only here — a decision in a document
+gets read once; a decision in the schema is met by whoever next touches the thing it governs.
+
+| # | Decision | Settled as | Where it is enforced |
+|---|---|---|---|
+| `U1` | **Which positions a renewal opens from** | **From the agreement as executed**, with the drift report alongside. Counterparties expect last year's deal as the starting point. Restarting from current library standard stays fully built and reachable as an explicit, recorded choice | `cw.governance_setting`, `cw.open_renewal()`, `0011` |
+| `U2` | **May a statement of work contradict its master** | **Yes — with the same approval a concession needs**, and one category at a time. Not never, and not freely | `cw.sow_hangs_off_a_master()`, `cw.sow_override*`, `0012` |
+| `U3` | **What the database owner account maps to** | **No application role.** Governed acts run as a named role | `cw.app_role()`, `0001` |
+| `U4` | **The unedited-approval-rate threshold** | **Deliberately unset.** Measured and shown from day one; nothing is blocked on it. Legal sets the number with counsel, against real data | `cw.review_quality`, `0008` |
+
+### The costs of each, stated rather than buried
+
+- **`U1`** — a concession made once can become permanent unless somebody reads the drift report. The
+  report is therefore the control, and it must stay in front of whoever opens the renewal rather
+  than sitting in a menu.
+- **`U2`** — the master agreement stops being a complete statement of what the company is committed
+  to, because a work order may lawfully depart from it. Two things contain that: the departure is
+  granted per category, never as a blanket permission that later changes silently inherit; and an
+  authorised departure is **still reported** in `cw.sow_conflict`. Approved is not the same as
+  hidden.
+- **`U3`** — administrative work is less convenient, by design. That inconvenience is what makes the
+  test suite able to see permission faults at all.
+- **`U4`** — a measurement nobody is accountable for tends to get ignored. The system cannot fix
+  that; naming an owner for the number is a business act, and it is the obvious next one.
+
+---
+
 ## 1. Auto-approve vs. the audit story — decided ✅
 
 **Decision: auto-approval must be auditable.** Every approval now records whether the auto-approve
@@ -160,8 +191,10 @@ populations (standard positions, fallback ladders, concessions), version history
 and the negotiation-intelligence layer that turns concession data into proposed library changes.
 
 The load-bearing idea is the **fallback ladder** — a pre-approved preferred position, acceptable
-fallback, and floor per category. It moves Legal's involvement from per-negotiation to
-per-category, which is the difference between a system that scales and one that doesn't.
+fallback, and floor per category. It moves Legal's work from **drafting** a fallback under deadline
+to **choosing** among positions already approved. The attorney is still in the loop on every
+concession (owner decision, 2026-07-25) — what disappears is the research and the drafting, not the
+approval. See [CLA §3](../CLAUSE-LIBRARY-ARCHITECTURE.md).
 
 Its own open questions are in [CLA §11](../CLAUSE-LIBRARY-ARCHITECTURE.md) — chiefly ladder depth,
 how much weight to give old concessions, and how many similar concessions constitute a pattern

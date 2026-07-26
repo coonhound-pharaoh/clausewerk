@@ -32,16 +32,25 @@ create table cw.snapshot_member (
   -- later, because it is a function of the date the snapshot was taken.
   selectable  boolean not null,
   primary key (snapshot_id, clause_id, version),
-  foreign key (clause_id, version) references cw.clause_version(clause_id, version)
+  foreign key (clause_id, version) references cw.clause_version(clause_id, version),
+  -- The same CHECK discipline the rest of the schema carries (WP-23, D8). The
+  -- run store was written without it, so it was the one place a nonsense row
+  -- could land — and it is the place where nonsense is hardest to notice,
+  -- because nobody reads a stored run until a dispute.
+  constraint member_version_positive check (version >= 1)
 );
 
 create table cw.snapshot_ladder_rung (
   snapshot_id  text not null references cw.snapshot(snapshot_id),
   category_key text not null references cw.category(key),
-  severity     text not null,
-  rung         int  not null,
+  -- Severity is a closed set everywhere else in the schema (cw.clause,
+  -- cw.ladder). It was free text here, so a pinned ladder could be stored at a
+  -- severity no ladder can have — and a stored run is the artefact that has to
+  -- survive longest and is checked least.
+  severity     text not null check (severity in ('Standard','High','Baseline')),
+  rung         int  not null check (rung >= 0),
   clause_id    text not null,
-  version      int  not null,
+  version      int  not null check (version >= 1),
   is_floor     boolean not null default false,
   primary key (snapshot_id, category_key, severity, rung),
   foreign key (clause_id, version) references cw.clause_version(clause_id, version)
@@ -61,14 +70,14 @@ create table cw.ruleset (
 create table cw.ruleset_member (
   ruleset_id text not null references cw.ruleset(ruleset_id),
   rule_id    text not null,
-  version    int  not null,
+  version    int  not null check (version >= 1),
   primary key (ruleset_id, rule_id, version),
   foreign key (rule_id, version) references cw.conflict_rule(rule_id, version)
 );
 
 -- ── Runs ────────────────────────────────────────────────────────────────────
 create table cw.run (
-  run_id       text primary key,
+  run_id       text primary key check (btrim(run_id) <> ''),
   agreement_id text references cw.agreement(agreement_id),
   vendor       text not null,
   value        text,
@@ -81,7 +90,22 @@ create table cw.run (
   -- that produced it is not reproducible, and recording it would be a lie.
   snapshot_id  text not null references cw.snapshot(snapshot_id),
   ruleset_id   text not null references cw.ruleset(ruleset_id),
-  result_hash  text not null,
+  -- A result hash is a SHA-256 or it is not a result hash. cw.snapshot and
+  -- cw.ruleset have carried this shape check since they were written; the
+  -- column that names what the run PRODUCED did not, which is backwards.
+  result_hash  text not null check (result_hash ~ '^[0-9a-f]{64}$'),
+  -- ── Which engine produced that hash (WP-32) ──
+  -- Three packages have now changed how `result_hash` is computed, and until
+  -- this column existed nothing recorded which version of the code produced a
+  -- given one. Two runs of two different engines were indistinguishable in
+  -- storage: a stored hash that no longer reproduces looks exactly like
+  -- tampering, and a hash that reproduces by luck looks exactly like proof.
+  --
+  -- NOT NULL and no default, deliberately. A default would let a writer that
+  -- does not know its own version record a run anyway, and the column would
+  -- then mean "whatever the schema guessed" — which is worse than absent,
+  -- because it reads like a fact. `engine.model.ENGINE_VERSION` supplies it.
+  engine_version text not null check (btrim(engine_version) <> ''),
   gate_open    boolean not null,
   overridden   boolean not null default false,
   override_ref text,
@@ -90,19 +114,36 @@ create table cw.run (
   constraint override_needs_ref check (not overridden or override_ref is not null)
 );
 
+-- ── Indexes on the lookups this schema actually performs (WP-25a · D9) ──────
+-- Not speculative. Each of these backs a query that already exists in a view,
+-- a policy or a test in this repository, and every one of them is a foreign-key
+-- column — PostgreSQL indexes the referenced side automatically and the
+-- referencing side never.
 create index on cw.run (agreement_id);
 create index on cw.run (snapshot_id);
+create index on cw.run (ruleset_id);
+-- cw.run's row-level policy filters on created_by for a requester, and the
+-- portfolio question "what has this person run?" is the common one.
+create index on cw.run (created_by);
 
 create table cw.run_decision (
   run_id        text not null references cw.run(run_id),
-  seq           int  not null,
-  category      text not null,
-  severity      text not null,
+  seq           int  not null check (seq >= 0),
+  -- The KEY, with an FK, like every other category column in the schema. It
+  -- was a free-text label, which is how the engine could emit a label here and
+  -- a key next door and both suites stay green. A decision that cannot be tied
+  -- to a defined category is not auditable — and a hallucinated category must
+  -- not be storable at all (see cw.run.manifest, which records what was
+  -- dropped at the trust boundary).
+  category_key  text not null references cw.category(key),
+  -- Closed set, as on cw.clause. A decision recorded at a severity the library
+  -- cannot express is not auditable, and this column is read by every report.
+  severity      text not null check (severity in ('Standard','High','Baseline')),
   justification text,
   -- Null when nothing could be selected: a hard flag, never a substitution.
   clause_id     text,
-  version       int,
-  reason        text not null,
+  version       int check (version is null or version >= 1),
+  reason        text not null check (btrim(reason) <> ''),
   baseline      boolean not null default false,
   expired_only  boolean not null default false,
   warning       text,
@@ -116,11 +157,11 @@ create table cw.run_decision (
 
 create table cw.run_finding (
   run_id       text not null references cw.run(run_id),
-  seq          int  not null,
+  seq          int  not null check (seq >= 0),
   rule_id      text not null,
-  rule_version int  not null,
+  rule_version int  not null check (rule_version >= 1),
   severity     text not null check (severity in ('Standard','High')),
-  title        text not null,
+  title        text not null check (btrim(title) <> ''),
   detail       text,
   refs         text[] not null default '{}',
   primary key (run_id, seq),
@@ -131,10 +172,27 @@ create table cw.run_finding (
 
 -- ── Immutability ────────────────────────────────────────────────────────────
 -- A run is a historical record of what happened. Nothing about it may change.
+--
+-- DELETE RAISES, and TRUNCATE raises (WP-25b/c · settled decision S0-3).
+--
+-- The DELETE half was `do instead nothing` on all eight tables. The UPDATE half
+-- has always raised, so the two halves of one guarantee behaved differently for
+-- no stated reason: rewriting a run was an error, erasing one was a success
+-- message. cw.run_immutable() now serves both, and the message it raises names
+-- the table and the operation.
+--
+-- TRUNCATE is added because it was the way around both. It fires neither row
+-- triggers nor ON DELETE rules, so `truncate cw.run cascade` would have emptied
+-- the entire run store — every stored snapshot, every decision, every finding —
+-- against a schema that claims runs are a permanent record.
 create or replace function cw.run_immutable() returns trigger
 language plpgsql as $$
 begin
-  raise exception 'runs are immutable: % is a record of what happened', tg_table_name
+  raise exception 'runs are immutable: % is a record of what happened and cannot be %',
+    tg_table_name,
+    case tg_op when 'UPDATE' then 'rewritten'
+               when 'TRUNCATE' then 'emptied'
+               else 'deleted' end
     using errcode = 'restrict_violation';
 end $$;
 
@@ -147,7 +205,11 @@ begin
       'create trigger %I_no_edit before update on cw.%I
        for each row execute function cw.run_immutable()', t, t);
     execute format(
-      'create rule %I_no_delete as on delete to cw.%I do instead nothing', t, t);
+      'create trigger %I_no_delete before delete on cw.%I
+       for each row execute function cw.run_immutable()', t, t);
+    execute format(
+      'create trigger %I_no_truncate before truncate on cw.%I
+       for each statement execute function cw.run_immutable()', t, t);
   end loop;
 end $$;
 
@@ -167,16 +229,17 @@ join lateral (select cv_c.severity, v.title, v.body) cv on true;
 
 -- What a run actually issued, resolvable forever.
 create or replace view cw.run_contract as
-select d.run_id, d.seq, d.category, d.severity, d.reason, d.baseline,
+select d.run_id, d.seq, c.label as category, d.severity, d.reason, d.baseline,
        d.clause_id, d.version,
        v.title, v.body, d.warning, d.suppressed
 from cw.run_decision d
+join cw.category c on c.key = d.category_key
 left join cw.clause_version v on v.clause_id = d.clause_id and v.version = d.version
 order by d.run_id, d.seq;
 
 create or replace view cw.run_summary as
 select r.run_id, r.vendor, r.agreement_id, r.manifest_source,
-       r.snapshot_id, r.ruleset_id, r.result_hash,
+       r.snapshot_id, r.ruleset_id, r.result_hash, r.engine_version,
        r.gate_open, r.overridden, r.created_by, r.created_at,
        (select count(*) from cw.run_decision d where d.run_id = r.run_id)                    as decisions,
        (select count(*) from cw.run_decision d where d.run_id = r.run_id and d.clause_id is null) as unresolved,
@@ -191,7 +254,8 @@ begin
   perform cw.audit('run_recorded', new.run_id, jsonb_build_object(
     'vendor', new.vendor, 'snapshot', new.snapshot_id, 'ruleset', new.ruleset_id,
     'result_hash', new.result_hash, 'gate_open', new.gate_open,
-    'overridden', new.overridden, 'manifest_source', new.manifest_source));
+    'overridden', new.overridden, 'manifest_source', new.manifest_source,
+    'engine_version', new.engine_version));
   return new;
 end $$;
 

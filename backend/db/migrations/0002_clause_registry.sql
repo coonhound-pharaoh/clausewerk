@@ -31,6 +31,44 @@ create table cw.clause (
 
 create index on cw.clause (category_key, severity);
 
+-- ════════════════════════════════════════════════════════════════════════════
+-- THE ID MUST AGREE WITH THE CATEGORY (WP-23 · finding D8)
+-- ════════════════════════════════════════════════════════════════════════════
+-- `cw.category.short` is documented two declarations above as "the two-letter
+-- code embedded in clause IDs", and is UNIQUE precisely so that "a clause ID
+-- always identifies exactly one category". Both sentences were true of the
+-- intent and false of the schema: nothing checked that `DP-H-014` actually sat
+-- in the category whose short code is `DP`.
+--
+-- That is not cosmetic. Every human in this system reads the ID, not the
+-- foreign key. A clause filed as `DP-H-014` in the Liability Cap category
+-- appears in a Data Privacy search by eye and in a Liability report by query,
+-- and the two answers disagree with nobody at fault. Worse, it makes the
+-- comment above a false statement of a property people rely on.
+--
+-- A CHECK constraint cannot do this: it would have to read cw.category, and
+-- check constraints may not contain a subquery. So it is a trigger, on INSERT
+-- and on UPDATE — the category_key is movable, and moving a clause to a
+-- category whose short code disagrees is the same defect arriving later.
+create or replace function cw.clause_id_agrees_with_category() returns trigger
+language plpgsql as $$
+declare want text;
+begin
+  select c.short into want from cw.category c where c.key = new.category_key;
+  if want is not null and left(new.clause_id, 2) <> want then
+    raise exception
+      'clause id % does not agree with its category: % is filed under short '
+      'code %, so the id must begin %-',
+      new.clause_id, new.category_key, want, want
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end $$;
+
+create trigger clause_id_agrees_with_category
+  before insert or update on cw.clause
+  for each row execute function cw.clause_id_agrees_with_category();
+
 -- ── Clause versions (immutable) ─────────────────────────────────────────────
 create table cw.clause_version (
   clause_id      text    not null references cw.clause(clause_id),
@@ -45,8 +83,14 @@ create table cw.clause_version (
   -- (finding #8). Unknown provenance is a data-quality problem, not an expiry.
   approved_on    date,
   expires_on     date,
+  -- How this wording got here. 'reviewed' is the Review-queue entrance built in
+  -- 0008; 'promoted' is the concession entrance (ADR-0009); 'seeded' is the
+  -- library as it was first loaded. Distinct from `origin` (0009), which says
+  -- who or what composed the words — a lawyer, a model, a vendor. A clause can
+  -- be `reviewed` in provenance and `ai_drafted` in origin, and both facts
+  -- matter to a different question.
   provenance     text not null default 'seeded'
-                   check (provenance in ('seeded','promoted')),
+                   check (provenance in ('seeded','promoted','reviewed')),
   retired        boolean not null default false,
   retired_reason text,
   retired_on     date,
@@ -64,15 +108,38 @@ comment on table cw.clause_version is
    permitted mutation and is itself audited.';
 
 -- Immutability, enforced. Retiring is allowed; rewriting history is not.
+--
+-- WP-05 closed two holes here.
+--
+--   · `reviewer` was unprotected. That is the named human who stands behind
+--     this wording. If it can be rewritten after approval, the provenance
+--     chain an auditor walks — obligation → clause → policy → REVIEWER →
+--     approval date — is a claim the system cannot support. It is now as
+--     immutable as the body it approves.
+--
+--   · Retirement was a one-way door in intent only. Nothing stopped an UPDATE
+--     setting `retired` back to false, which silently returns withdrawn
+--     language to the selectable pool. Withdrawing wording is a deliberate
+--     legal act; putting it back is a NEW approval and must go through the
+--     same gate as any other — a new version. So un-retiring is refused
+--     outright, and the correct move is stated in the error message.
 create or replace function cw.clause_version_immutable() returns trigger
 language plpgsql as $$
 begin
+  if old.retired and not new.retired then
+    raise exception
+      'clause_version %@v% is retired; un-retiring it is not an edit but a new '
+      'approval — create a new version instead',
+      old.clause_id, old.version
+      using errcode = 'restrict_violation';
+  end if;
   if new.clause_id is distinct from old.clause_id
      or new.version is distinct from old.version
      or new.body is distinct from old.body
      or new.title is distinct from old.title
      or new.rationale is distinct from old.rationale
      or new.citations is distinct from old.citations
+     or new.reviewer is distinct from old.reviewer
      or new.approved_on is distinct from old.approved_on
      or new.expires_on is distinct from old.expires_on
      or new.provenance is distinct from old.provenance then
@@ -88,8 +155,38 @@ create trigger clause_version_no_edit
   before update on cw.clause_version
   for each row execute function cw.clause_version_immutable();
 
-create rule clause_version_no_delete as
-  on delete to cw.clause_version do instead nothing;
+-- DELETE RAISES (WP-25c · settled decision S0-3).
+--
+-- This was `on delete to cw.clause_version do instead nothing` — a rule that
+-- swallowed the statement and reported success. Finding D9 names that pattern
+-- for what it is: an application bug that deletes clause versions becomes
+-- indistinguishable from an application that never tried. The caller gets
+-- "DELETE 0" either way, and nobody is ever told.
+--
+-- The guarantee is unchanged — a version still cannot be removed — but now the
+-- attempt is audible. A rule is replaced by a trigger because a rule cannot
+-- raise per row and a trigger can name what was refused.
+create or replace function cw.clause_version_no_delete() returns trigger
+language plpgsql as $$
+begin
+  raise exception
+    'clause_version %@v% cannot be deleted: a contract executed under it must '
+    'resolve it forever (ADR-0006). Retire it instead.',
+    old.clause_id, old.version
+    using errcode = 'restrict_violation';
+end $$;
+
+create trigger clause_version_no_delete
+  before delete on cw.clause_version
+  for each row execute function cw.clause_version_no_delete();
+
+create trigger clause_version_no_truncate
+  before truncate on cw.clause_version
+  for each statement execute function cw.no_truncate();
+
+create trigger clause_no_truncate
+  before truncate on cw.clause
+  for each statement execute function cw.no_truncate();
 
 -- ── Supersession (ADR-0009) ─────────────────────────────────────────────────
 -- A deliberate Legal act replacing one version with another. NOT what happens
@@ -188,8 +285,17 @@ begin
     perform cw.audit('clause_version_created',
       new.clause_id || '@v' || new.version,
       jsonb_build_object('provenance', new.provenance, 'reviewer', new.reviewer));
-  elsif new.retired and not old.retired then
-    perform cw.audit('clause_retired',
+  -- BOTH directions of the retired flag are recorded (WP-05). The hook used to
+  -- fire only on the way out — so a clause coming BACK left no trace at all.
+  --
+  -- The un-retire branch is unreachable while cw.clause_version_no_edit stands,
+  -- because that trigger refuses the change before this one runs. It is here on
+  -- purpose, as the second line: if the guard is ever disabled, dropped, or
+  -- worked around from below the application, the log still says what happened.
+  -- The test proves it by disabling the guard and checking the record appears.
+  elsif new.retired is distinct from old.retired then
+    perform cw.audit(
+      case when new.retired then 'clause_retired' else 'clause_unretired' end,
       new.clause_id || '@v' || new.version,
       jsonb_build_object('reason', new.retired_reason));
   end if;

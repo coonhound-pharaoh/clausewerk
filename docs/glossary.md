@@ -23,6 +23,24 @@ result, renders the .docx. Never calls a model.
 
 ---
 
+## Permission roles
+
+Distinct from the actors above. **Actors** say who or what does the work; **roles** say who is
+permitted to. There are **five**, defined in
+[ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md) and created as real
+database roles so that a missing privilege stops an act even if a permission rule is written
+wrongly.
+
+| Role | Database role | May |
+|---|---|---|
+| **Viewer** | `cw_viewer` | Read contracts and clause text. Change nothing. Sees no concession record |
+| **Requester** | `cw_requester` | Run intake, negotiate, request overrides, propose concessions on their own deals |
+| **Legal reviewer** | `cw_legal_reviewer` | Adjudicate the Review queue, approve overrides, verify clause promotions |
+| **Legal admin** | `cw_legal_admin` | Everything a reviewer may do, plus activate, retire and supersede clauses, and promote a concession into the library |
+| **Auditor** | `cw_auditor` | Read everything, including the full audit log. Mutate nothing |
+
+---
+
 ## Pipeline stages
 
 **Intake** (Tier 1) — the conversational risk-discovery interview. An LLM playing a senior

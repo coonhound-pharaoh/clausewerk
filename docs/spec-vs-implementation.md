@@ -178,3 +178,80 @@ dates in code would only have hidden it again.
 Declared as such by §7 Prototype fidelity — substitutions of transport, not of logic: the "python
 executor" (JS under a Python-shaped trace), vector embeddings (additive keyword scoring stands in),
 SharePoint/O365 sync, multi-user identity and RBAC, server persistence, and e-signature.
+
+---
+
+# Part 2 — the backend, 2026-07-26
+
+Everything above concerns the v3 prototype. A backend now exists, and a full review on 2026-07-25
+([`REVIEW-2026-07-25.md`](REVIEW-2026-07-25.md)) found a second, different class of drift: **not
+the code disagreeing with the prose, but the code failing to enforce what the prose asserted
+absolutely.**
+
+The distinction matters. Prototype drift was visible to anyone who read both. Backend drift was
+invisible to the tests themselves, because **the tests ran as the database owner, who bypasses
+row-level security and holds every privilege.** A protection could be entirely absent and the suite
+would still be green.
+
+## Findings and their status
+
+| # | Finding | Status |
+|---|---|---|
+| D1 | Concession promotion silently did nothing under real permissions; the same vendor text could be minted repeatedly | **Fixed** |
+| D2 | The audit chain reported tampering on an honest database, and truncation was undetectable | **Fixed** |
+| D3 | The acting role was read from a value the client could set | **Fixed**, with a stated residual |
+| D4 | "Immutable" records had editable holes; some edits left no audit trace | **Fixed** |
+| D5 | The "absolute" floor consulted the wrong ladder and failed open when none existed | **Fixed** |
+| D6 | Concessions were immutable only by accident — via bug D1 | **Fixed** (with D1, as one item) |
+| D7 | An agreement's status could never change | **Fixed** |
+| D8 | Claimed coherences unenforced; the test fixtures themselves violated one | **Fixed** |
+| D9 | Missing indexes; TRUNCATE outside the immutability story; silent no-op DELETE | **Fixed** |
+| — | `cw.audit_event` had no row-level security at all — buyers could read rivals' concessions | **Fixed** (found during the work, not in the review) |
+| E1 | Ladder condition was fingerprinted but never stored, so some runs could never be reproduced | **Fixed** |
+| E2 | The engine↔database write seam had never been exercised and was already wrong | **Fixed** |
+| E3 | With two selectable versions, the **oldest** won | **Fixed** (E3a). Ladder-preferred rung deferred (E3b) |
+| E4 | A lapsed boilerplate clause vanished silently from the contract | **Fixed** |
+| E5 | Text inside hyperlinks, content controls and smart tags was invisible to Legal | **Fixed** |
+| E6 | Hostile uploads unmitigated | **Fixed** — see the correction below |
+| E7 | The manifest trust boundary existed only in the prototype | **Fixed**, with a stated limitation |
+| E8 | Dead code, README drift, a test that asserted nothing | **Fixed** |
+
+## Where the review itself was wrong
+
+Recorded because a review is evidence, not scripture, and three of its claims did not survive
+checking:
+
+- **E6 — the entity-expansion threat was not live.** The XML parser in use already refuses classic
+  billion-laughs and quadratic blowup, and the unfixed code already rejected the bomb. Implementing
+  the proposed guard would have added a check that **could never fail** — worse than no check,
+  because it looks like protection. The *real* exposures, both measured, were a zip bomb (102 KB
+  expanding to 344 MB) and unbounded element nesting. Those are what was fixed.
+- **E5 was overstated.** Only redline parsing walked direct children. Document assembly already
+  recursed, and the character counter only ever runs on our own output — so the
+  zero-authored-characters claim was never at risk.
+- **E2 named nine mismatches; there was one**, plus its mirror image on the read side. A
+  column-by-column audit found the rest were not defects.
+
+Two further review claims about missing documents were simply stale — the records had been committed
+already.
+
+## Residuals — stated, not hidden
+
+- The audit checkpoint is **unsigned**, so it constrains application roles, not the database owner.
+- The advisory lock serialising audit appends has **no test coverage** — the test database is
+  single-connection.
+- The *person's* name in the audit log is still self-asserted; the five roles are shared service
+  accounts.
+- The identity scheme is **incompatible with transaction-mode connection pooling**.
+- `check_manifest` has no production caller, because there is no service layer yet.
+- Redline fixtures are hand-built markup; **Word was not available**, so no Word fidelity is claimed
+  beyond what those fixtures exercise.
+- Retention gates and records the destruction decision; it does not destroy stored bytes.
+- Master/work-order structure is modelled but cannot be delivered end to end, because obligations do
+  not exist.
+
+## Not drift
+
+Deliberate omissions, recorded in [`data-model.md`](data-model.md) §14: obligations, the
+negotiation-intelligence engine, entitlement valuation, package-trade modelling, the vector index,
+and resolution consulting ladders for a preferred rung.

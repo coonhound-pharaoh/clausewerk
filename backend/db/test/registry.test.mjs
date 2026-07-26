@@ -10,6 +10,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { roleHelpers } from './roles.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // Overridable so mutation-check.mjs can point the same suite at a deliberately
@@ -54,6 +55,7 @@ const asRole = async (role, actor = 'test@clausewerk') => {
 };
 const rows = async (sql, params) => (await db.query(sql, params)).rows;
 const one = async (sql, params) => (await rows(sql, params))[0];
+const { queryAs, mustWrite } = roleHelpers(db);
 
 await asRole('legal_admin');
 
@@ -87,6 +89,91 @@ await test('short code format is enforced', async () => {
   await throws(() => db.exec(`insert into cw.category (key,label,short) values ('x','X','abc')`));
 });
 
+// ── WP-23 · the ID must agree with the category (finding D8) ────────────────
+console.log('\nclause ids agree with their category (WP-23, finding D8)');
+
+await test('a clause id whose prefix disagrees with its category is refused', async () => {
+  // cw.category.short is documented as "the two-letter code embedded in clause
+  // IDs" and is UNIQUE so that "a clause ID always identifies exactly one
+  // category". Nothing checked it. Everyone in this system reads the ID rather
+  // than the foreign key, so a clause filed as LC-* under Data Privacy shows up
+  // in a Liability search by eye and a Data Privacy report by query — two
+  // answers, nobody at fault.
+  await throws(
+    () => db.exec(`insert into cw.clause (clause_id,category_key,severity)
+                   values ('LC-H-777','data','High')`),
+    'does not agree with its category',
+    'a clause id that lies about its category must not be storable');
+});
+
+await test('moving a clause to a disagreeing category is refused too', async () => {
+  // The same defect arriving later. category_key is an ordinary column, so
+  // without an UPDATE branch the constraint would only hold at birth.
+  await throws(
+    () => db.exec(`update cw.clause set category_key='liab' where clause_id='DP-H-014'`),
+    'does not agree with its category');
+  const r = await one(`select category_key from cw.clause where clause_id='DP-H-014'`);
+  eq(r.category_key, 'data', 'and the clause stayed where it was');
+});
+
+await test('a clause id that agrees with its category still inserts', async () => {
+  // The positive control. A constraint that refuses everything is not a
+  // constraint, and the seed above would not prove it because it predates the
+  // trigger's own INSERT branch being exercised deliberately.
+  await db.exec(`insert into cw.clause (clause_id,category_key,severity)
+                 values ('CF-S-777','conf','Standard')`);
+  const r = await one(`select category_key from cw.clause where clause_id='CF-S-777'`);
+  eq(r.category_key, 'conf');
+});
+
+// ── WP-23b · a conflict rule must actually ask something ────────────────────
+console.log('\nconflict rules must ask something (WP-23b)');
+
+const emptyRule = (id, predicate) => db.exec(`insert into cw.conflict_rule
+  (rule_id,version,name,severity,title,detail,predicate,approved_by,effective_on)
+  values ('${id}',1,'empty_${id}','High','Asks nothing','No predicate content.',
+          '${predicate}','R. Vance','2026-01-01')`);
+
+await test('a rule that asks nothing is refused', async () => {
+  // The hole WP-20 handed over. The "at least one primitive" clause required a
+  // predicate to USE a primitive, never to SAY anything with it. An empty
+  // all_present loops zero times, finds no violation, and the engine returns an
+  // empty tuple rather than None — which COUNTS AS THE RULE FIRING. A rule that
+  // asks nothing therefore raises a finding on every contract in the system.
+  await throws(() => emptyRule('NUL-001', '{"all_present": []}'),
+    'predicate_grammar', 'an empty tag list must not be publishable');
+  await throws(() => emptyRule('NUL-002', '{"none_present": []}'),
+    'predicate_grammar', 'the same hole from the other side');
+  await throws(() => emptyRule('NUL-003', '{"conflicting_values": ""}'),
+    'predicate_grammar', 'an empty namespace is falsy and is skipped, so it fires vacuously');
+  const r = await one(`select count(*)::int n from cw.conflict_rule
+                       where rule_id like 'NUL-%'`);
+  eq(r.n, 0, 'none of the three reached the table');
+});
+
+await test('a legitimate rule still publishes', async () => {
+  // The positive control demanded by the handover. A one-tag all_present rule
+  // is the smallest legal predicate there is, and it must survive.
+  await db.exec(`insert into cw.conflict_rule
+    (rule_id,version,name,severity,title,detail,predicate,approved_by,effective_on)
+    values ('REG-001',1,'regulated_no_cyber','High','Regulated data, no cyber cover',
+            'Regulated data is in scope and no cyber cover is present.',
+            '{"all_present":["data:regulated"],"none_present":["insurance:cyber"]}',
+            'R. Vance','2026-01-01')`);
+  const r = await one(`select predicate from cw.conflict_rule where rule_id='REG-001'`);
+  assert(r, 'a rule that asks a real question is unaffected');
+});
+
+await test('a conflict rule cannot be deleted', async () => {
+  // WP-25c (settled decision S0-3). This was `do instead nothing`, so a caller
+  // who deleted a published rule by mistake was told it had worked. Findings
+  // cite the rule version that raised them, so a rule has to stay resolvable.
+  await throws(() => db.exec(`delete from cw.conflict_rule where rule_id='REG-001'`),
+    'cannot be deleted', 'deleting a published rule must be refused, not ignored');
+  const r = await one(`select count(*)::int n from cw.conflict_rule where rule_id='REG-001'`);
+  eq(r.n, 1, 'and the rule is still there');
+});
+
 // ── ADR-0006 · versions are immutable ───────────────────────────────────────
 console.log('\nversion immutability (ADR-0006)');
 await test('versions insert', async () => {
@@ -118,10 +205,25 @@ await test('editing approval dates is refused', async () => {
     () => db.exec(`update cw.clause_version set approved_on='2020-01-01' where clause_id='DP-H-014' and version=1`),
     'immutable');
 });
-await test('deleting a version is a no-op, not a deletion', async () => {
-  await db.exec(`delete from cw.clause_version where clause_id='DP-H-014' and version=1`);
+await test('deleting a version is refused, not silently ignored', async () => {
+  // WP-25c (settled decision S0-3). This was `do instead nothing`, and the test
+  // asserted only that the row survived. The row surviving is necessary but not
+  // sufficient: a caller who deletes a clause version by mistake was told the
+  // delete had worked. Both facts are now asserted — the raise AND the survival.
+  await throws(
+    () => db.exec(`delete from cw.clause_version where clause_id='DP-H-014' and version=1`),
+    'cannot be deleted');
   const r = await one(`select count(*)::int n from cw.clause_version where clause_id='DP-H-014'`);
   eq(r.n, 2, 'versions must survive a delete attempt');
+});
+
+await test('a clause version cannot be truncated around the guard', async () => {
+  // TRUNCATE fires no row trigger and obeys no ON DELETE rule, so the library
+  // was erasable in one statement whatever the trigger above said (WP-25b).
+  await throws(() => db.exec(`truncate cw.clause_version cascade`),
+    'cannot be truncated', 'truncate must not be the way around immutability');
+  const r = await one(`select count(*)::int n from cw.clause_version where clause_id='DP-H-014'`);
+  eq(r.n, 2, 'the library survives a truncate attempt');
 });
 await test('retiring IS permitted (the one allowed mutation)', async () => {
   await db.exec(`insert into cw.clause (clause_id,category_key,severity) values ('DP-H-021','data','High')
@@ -138,6 +240,119 @@ await test('retiring without a reason is refused', async () => {
   await throws(
     () => db.exec(`update cw.clause_version set retired=true where clause_id='LC-S-009' and version=1`),
     'retired_needs_reason');
+});
+
+// ── WP-05 · the immutability holes (finding D4) ─────────────────────────────
+// Three things were editable on approved wording that should never have been.
+console.log('\nimmutability holes closed (WP-05, finding D4)');
+
+await test('the named reviewer cannot be rewritten', async () => {
+  // The reviewer is the named human standing behind this wording. It is the
+  // last link in the provenance chain an auditor walks, and it was the one
+  // field in that chain anyone could quietly change after approval.
+  await throws(
+    () => db.exec(`update cw.clause_version set reviewer='Someone Else'
+                   where clause_id='DP-H-014' and version=2`),
+    'immutable', 'who approved this language must not be rewritable');
+  const r = await one(`select reviewer from cw.clause_version
+                       where clause_id='DP-H-014' and version=2`);
+  eq(r.reviewer, 'A. Reyes', 'and the original name is still there');
+});
+
+await test('the reviewer cannot be rewritten by a real legal_admin either', async () => {
+  // Run as the actual database role that holds UPDATE on this table — the most
+  // privileged role there is here. A trigger that only stops the test harness
+  // is not a protection.
+  let threw = false, msg = '';
+  try {
+    await queryAs('legal_admin',
+      `update cw.clause_version set reviewer='Someone Else'
+       where clause_id='DP-H-014' and version=2`);
+  } catch (e) { threw = true; msg = e.message; }
+  assert(threw && msg.includes('immutable'),
+    `cw_legal_admin must be refused by the trigger, got: ${msg || 'no error'}`);
+  // roles.mjs claims an actor of its own; put the suite's actor back so the
+  // audit assertions further down still describe this suite, not the helper.
+  await asRole('legal_admin');
+});
+
+await test('a retired clause cannot be un-retired', async () => {
+  // Withdrawing wording is a deliberate legal act. Putting it back is a NEW
+  // approval and must go through the same gate — not an UPDATE that silently
+  // returns withdrawn language to the selectable pool.
+  await db.exec(`
+    insert into cw.clause (clause_id,category_key,severity) values ('LC-S-020','liab','Standard');
+    insert into cw.clause_version (clause_id,version,title,body,approved_on,expires_on,
+                                   retired,retired_reason)
+    values ('LC-S-020',1,'Withdrawn cap','Capped at 10x fees.','2025-01-01','2028-01-01',
+            true,'Commercially unacceptable');`);
+  await throws(
+    () => db.exec(`update cw.clause_version set retired=false
+                   where clause_id='LC-S-020' and version=1`),
+    'un-retiring it is not an edit', 'retirement is a one-way door');
+  const r = await one(`select selectable from cw.clause_version_state
+                       where clause_id='LC-S-020' and version=1`);
+  eq(r.selectable, false, 'and it is still out of the pool');
+});
+
+await test('un-retiring leaves a record even if the guard is bypassed', async () => {
+  // The audit hook used to fire only on the way OUT, so language coming BACK
+  // left no trace at all. It now records both directions.
+  //
+  // The immutability guard above refuses this change before the audit hook can
+  // ever run, so the only way to prove the hook works is to take the guard away
+  // — from below the application, exactly as an attacker with database access
+  // would. That is the point of a second line of defence.
+  await db.exec(`alter table cw.clause_version disable trigger clause_version_no_edit;
+                 update cw.clause_version set retired=false
+                 where clause_id='LC-S-020' and version=1;
+                 update cw.clause_version set retired=true,
+                   retired_reason='Commercially unacceptable'
+                 where clause_id='LC-S-020' and version=1;
+                 alter table cw.clause_version enable trigger clause_version_no_edit;`);
+  const e = await one(`select subject from cw.audit_event
+                       where event_type='clause_unretired' order by seq desc limit 1`);
+  assert(e, 'bringing withdrawn language back must be recorded, not silent');
+  eq(e.subject, 'LC-S-020@v1');
+});
+
+// ── WP-05 · conflict rules cannot have their history rewritten ──────────────
+console.log('\nconflict rule history is fixed (WP-05, finding D4)');
+
+await test('a rule publishes', async () => {
+  await db.exec(`insert into cw.conflict_rule
+    (rule_id,version,name,severity,title,detail,predicate,approved_by,effective_on)
+    values ('JUR-001',1,'jurisdiction_split','High','Two governing laws',
+            'The decision set names more than one governing law.',
+            '{"conflicting_values":"jurisdiction"}','R. Vance','2026-01-01')`);
+  const r = await one(`select effective_on from cw.conflict_rule where rule_id='JUR-001'`);
+  assert(r, 'the rule exists');
+});
+
+await test("a rule's effective date cannot be moved retroactively", async () => {
+  // effective_on decides which rules were in force on any given day. Every
+  // conflict finding cites a rule version precisely so that question has one
+  // fixed answer. A movable date makes the citation worthless — it lets someone
+  // arrange, after the fact, for a contract to have been checked against rules
+  // that were not actually in force when it was signed.
+  await throws(
+    () => db.exec(`update cw.conflict_rule set effective_on='2020-01-01'
+                   where rule_id='JUR-001' and version=1`),
+    'immutable', 'which rules were in force is history, not a setting');
+  const r = await one(`select (effective_on = date '2026-01-01') as unchanged
+                       from cw.conflict_rule where rule_id='JUR-001' and version=1`);
+  eq(r.unchanged, true, 'the original date stands');
+});
+
+await test('a retired conflict rule cannot be brought back by an edit', async () => {
+  await db.exec(`update cw.conflict_rule set retired=true, retired_reason='Replaced by policy'
+                 where rule_id='JUR-001' and version=1`);
+  await throws(
+    () => db.exec(`update cw.conflict_rule set retired=false
+                   where rule_id='JUR-001' and version=1`),
+    'bringing it back into force is a new publication');
+  const r = await rows(`select rule_id from cw.active_conflict_rule where rule_id='JUR-001'`);
+  eq(r.length, 0, 'and it is still out of force');
 });
 
 // ── ADR-0009 · four-state model and supersession ────────────────────────────
@@ -240,6 +455,20 @@ await test('the actor and role are captured on every event', async () => {
   const r = await one(`select count(*)::int n from cw.audit_event
                        where actor is null or actor_kind is null`);
   eq(r.n, 0);
+  // WP-04 / settled decision U3: cw.app_role() now comes from the connection's
+  // real database role, and the owner deliberately holds none. This assertion
+  // therefore had to move onto a governed write made by an actual
+  // cw_legal_admin — which is the stronger test anyway: it proves the recorded
+  // role is the one the connection genuinely holds, not one it claimed.
+  await mustWrite('legal_admin', `insert into cw.clause
+      (clause_id,category_key,severity) values ('DP-H-077','data','High')`,
+    [], 'test@clausewerk');
+  await mustWrite('legal_admin', `insert into cw.clause_version
+      (clause_id,version,title,body,rationale,citations,reviewer,approved_on,expires_on)
+    values ('DP-H-077',1,'Transfer impact','Recipient shall complete a transfer assessment.',
+            'Baseline',array['Policy-DP-077'],'A. Reyes','2026-01-05','2028-01-05')`,
+    [], 'test@clausewerk');
+  await asRole('legal_admin');
   const a = await one(`select actor, actor_role from cw.audit_event order by seq desc limit 1`);
   eq(a.actor, 'test@clausewerk'); eq(a.actor_role, 'legal_admin');
 });

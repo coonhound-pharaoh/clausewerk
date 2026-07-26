@@ -162,7 +162,7 @@ function DossierPanel({ manifest, decisions, dossier, setTab, ledger }) {
 
               <div className="mt-14 pt-6 border-t flex items-center justify-between" style={{borderColor:'rgba(26,23,20,.15)'}}>
                 <div className="font-mono text-[10px]" style={{color:'#78706A'}}>
-                  Assembled by Clausewerk · {decisions.filter(d => d.selected).length} clauses · 0 LLM-authored characters
+                  Assembled by Clausewerk · {decisions.filter(d => d.selected).length} clauses
                 </div>
                 <div className="font-mono text-[10px]" style={{color:'#78706A'}}>End of document</div>
               </div>

@@ -40,11 +40,16 @@ const rows = async (s) => (await db.query(s)).rows;
 const one = async (s) => (await rows(s))[0];
 
 const H1 = 'a'.repeat(64), H2 = 'b'.repeat(64), R1 = 'c'.repeat(64);
+// A result hash is a SHA-256 (WP-23 added the shape check to cw.run, to match
+// cw.snapshot and cw.ruleset). These fixtures used 'h' and 'deadbeef' as
+// stand-ins, which the constraint now correctly refuses.
+const RH = 'd'.repeat(64);
 
 await db.exec(`
   select set_config('cw.role','legal_admin',false);
   select set_config('cw.actor','buyer@cw',false);
-  insert into cw.category (key,label,short) values ('data','Data Privacy','DP');
+  insert into cw.category (key,label,short) values
+    ('data','Data Privacy','DP'), ('insu','Insurance','IN');
   insert into cw.clause (clause_id,category_key,severity) values
     ('DP-H-014','data','High'), ('DP-H-052','data','High');
   insert into cw.clause_version (clause_id,version,title,body,approved_on,expires_on) values
@@ -71,49 +76,150 @@ console.log('\nrun records');
 await test('a run records both pins', async () => {
   await db.exec(`insert into cw.run
     (run_id,agreement_id,vendor,value,manifest,manifest_source,snapshot_id,ruleset_id,
-     result_hash,gate_open,created_by)
+     result_hash,engine_version,gate_open,created_by)
     values ('RUN-001','AG-001','Northwind','$240K','{"risks":[]}','llm','${H1}','${R1}',
-            'deadbeef',true,'buyer@cw')`);
+            '${RH}','clausewerk-engine/3',true,'buyer@cw')`);
   const r = await one(`select snapshot_id, ruleset_id from cw.run where run_id='RUN-001'`);
   eq(r.snapshot_id, H1); eq(r.ruleset_id, R1);
 });
 
 await test('a run cannot omit the library pin', async () => {
   await throws(() => db.exec(`insert into cw.run
-    (run_id,vendor,manifest,manifest_source,ruleset_id,result_hash,gate_open,created_by)
-    values ('RUN-X','N','{}','llm','${R1}','h',true,'buyer@cw')`),
+    (run_id,vendor,manifest,manifest_source,ruleset_id,result_hash,engine_version,
+     gate_open,created_by)
+    values ('RUN-X','N','{}','llm','${R1}','${RH}','clausewerk-engine/3',true,'buyer@cw')`),
     'null value', 'a run that cannot name its library is not reproducible');
 });
 
 await test('a run cannot omit the rules pin', async () => {
   await throws(() => db.exec(`insert into cw.run
-    (run_id,vendor,manifest,manifest_source,snapshot_id,result_hash,gate_open,created_by)
-    values ('RUN-Y','N','{}','llm','${H1}','h',true,'buyer@cw')`), 'null value');
+    (run_id,vendor,manifest,manifest_source,snapshot_id,result_hash,engine_version,
+     gate_open,created_by)
+    values ('RUN-Y','N','{}','llm','${H1}','${RH}','clausewerk-engine/3',true,'buyer@cw')`), 'null value');
 });
 
 await test('a run cannot pin a snapshot that was never stored', async () => {
   await throws(() => db.exec(`insert into cw.run
-    (run_id,vendor,manifest,manifest_source,snapshot_id,ruleset_id,result_hash,gate_open,created_by)
-    values ('RUN-Z','N','{}','llm','${H2}','${R1}','h',true,'buyer@cw')`),
+    (run_id,vendor,manifest,manifest_source,snapshot_id,ruleset_id,result_hash,
+     engine_version,gate_open,created_by)
+    values ('RUN-Z','N','{}','llm','${H2}','${R1}','${RH}','clausewerk-engine/3',true,'buyer@cw')`),
     'foreign key', 'naming a snapshot nobody can rebuild is the failure this prevents');
+});
+
+// ── WP-23 · the run store carries the same CHECK discipline (finding D8) ────
+console.log('\nthe run store is held to the same standard as the rest (WP-23)');
+
+await test('a result hash that is not a hash is refused', async () => {
+  // cw.snapshot and cw.ruleset have carried this shape check since they were
+  // written. The column that names what the run PRODUCED did not — so the run
+  // store was the one place a nonsense value could land, and it is the place
+  // where nonsense is hardest to notice, because nobody reads a stored run
+  // until there is a dispute.
+  await throws(() => db.exec(`insert into cw.run
+    (run_id,vendor,manifest,manifest_source,snapshot_id,ruleset_id,result_hash,
+     engine_version,gate_open,created_by)
+    values ('RUN-BAD','N','{}','llm','${H1}','${R1}','not-a-hash',
+            'clausewerk-engine/3',true,'buyer@cw')`),
+    'result_hash_check', 'a result hash is a SHA-256 or it is not a result hash');
+});
+
+await test('a decision cannot record a severity the library cannot express', async () => {
+  // Severity is a closed set on cw.clause and cw.ladder and was free text here.
+  // Every report reads this column, so a decision at an invented severity is a
+  // row nobody can reconcile with the library it came from.
+  await throws(() => db.exec(`insert into cw.run_decision
+    (run_id,seq,category_key,severity,reason)
+    values ('RUN-001',90,'data','Critical','invented severity')`),
+    'severity_check');
+});
+
+await test('a pinned ladder rung cannot be stored at a negative rung', async () => {
+  await throws(() => db.exec(`insert into cw.snapshot_ladder_rung
+    (snapshot_id,category_key,severity,rung,clause_id,version,is_floor)
+    values ('${H1}','data','High',-1,'DP-H-014',1,false)`),
+    'rung_check');
+});
+
+await test('a snapshot member cannot cite version zero', async () => {
+  await throws(() => db.exec(`insert into cw.snapshot_member
+    (snapshot_id,clause_id,version,selectable) values ('${H1}','DP-H-014',0,true)`),
+    'member_version_positive');
+});
+
+await test('a decision with a real severity still records', async () => {
+  // The positive control: the closed set is the set the library actually uses,
+  // so an ordinary decision is unaffected. On its own run, because RUN-001's
+  // decision and finding counts are asserted exactly further down.
+  await db.exec(`insert into cw.run
+    (run_id,vendor,manifest,manifest_source,snapshot_id,ruleset_id,result_hash,
+     engine_version,gate_open,created_by)
+    values ('RUN-OK','N','{}','llm','${H1}','${R1}','${RH}',
+            'clausewerk-engine/3',true,'other@cw');
+    insert into cw.run_decision
+      (run_id,seq,category_key,severity,clause_id,version,reason)
+      values ('RUN-OK',0,'data','High','DP-H-014',1,'ordinary High selection');`);
+  const r = await one(`select severity from cw.run_decision where run_id='RUN-OK' and seq=0`);
+  eq(r.severity, 'High');
 });
 
 await test('an override must name its authorisation', async () => {
   await throws(() => db.exec(`insert into cw.run
     (run_id,vendor,manifest,manifest_source,snapshot_id,ruleset_id,result_hash,
-     gate_open,overridden,created_by)
-    values ('RUN-W','N','{}','llm','${H1}','${R1}','h',true,true,'buyer@cw')`),
+     engine_version,gate_open,overridden,created_by)
+    values ('RUN-W','N','{}','llm','${H1}','${R1}','${RH}','clausewerk-engine/3',true,true,'buyer@cw')`),
     'override_needs_ref');
+});
+
+// ── Which engine produced the hash (WP-32) ─────────────────────────────────
+// Three packages have changed how `result_hash` is computed. Until this column
+// existed, a stored run of one engine and a stored run of another were
+// indistinguishable — so a hash that no longer reproduces looked exactly like
+// tampering, and one that reproduced by luck looked exactly like proof.
+
+await test('a run records which engine produced its result hash', async () => {
+  const r = await one(`select engine_version, result_hash from cw.run where run_id='RUN-001'`);
+  eq(r.engine_version, 'clausewerk-engine/3');
+  assert(r.result_hash, 'and the hash it qualifies');
+});
+
+await test('a run cannot omit which engine produced it', async () => {
+  // NOT NULL with no default, deliberately: a default would let a writer that
+  // does not know its own version record a run anyway, and the column would
+  // then read like a fact while meaning "whatever the schema guessed".
+  await throws(() => db.exec(`insert into cw.run
+    (run_id,vendor,manifest,manifest_source,snapshot_id,ruleset_id,result_hash,
+     gate_open,created_by)
+    values ('RUN-V','N','{}','llm','${H1}','${R1}','${RH}',true,'buyer@cw')`),
+    'null value',
+    'an unattributable hash cannot be told apart from a hash of another engine');
+});
+
+await test('the engine version reaches the permanent record', async () => {
+  const e = await one(`select payload from cw.audit_event
+                       where event_type='run_recorded' and subject='RUN-001'`);
+  eq(e.payload.engine_version, 'clausewerk-engine/3',
+     'the audit log is where this question gets asked years later');
+});
+
+// ── Both provenance figures, in the system record only (WP-17) ─────────────
+// Owner decision, 2026-07-25: neither count is printed on the contract. They
+// live here, where Legal and auditors read them.
+
+await test('both provenance counts are recorded on the run', async () => {
+  const r = await one(`select authored_chars, ai_origin_chars from cw.run where run_id='RUN-001'`);
+  eq(r.authored_chars, 0, 'the headline claim: this system wrote nothing');
+  eq(r.ai_origin_chars, 0,
+     'and no AI-originated wording reached this contract — a real zero, not an absent figure');
 });
 
 console.log('\ndecisions and findings');
 
 await test('decisions record selections and nulls alike', async () => {
   await db.exec(`insert into cw.run_decision
-    (run_id,seq,category,severity,clause_id,version,reason,suppressed) values
-    ('RUN-001',0,'Data Privacy','High','DP-H-014',1,'Matched High variant',
+    (run_id,seq,category_key,severity,clause_id,version,reason,suppressed) values
+    ('RUN-001',0,'data','High','DP-H-014',1,'Matched High variant',
      array['DP-H-052@v1']),
-    ('RUN-001',1,'Insurance','High',null,null,'No clause available in Ledger','{}')`);
+    ('RUN-001',1,'insu','High',null,null,'No clause available in Ledger','{}')`);
   const r = await rows(`select clause_id, reason from cw.run_decision
                         where run_id='RUN-001' order by seq`);
   eq(r[1].clause_id, null, 'an unresolved risk is recorded, never omitted');
@@ -121,15 +227,15 @@ await test('decisions record selections and nulls alike', async () => {
 
 await test('a half-written selection is refused', async () => {
   await throws(() => db.exec(`insert into cw.run_decision
-    (run_id,seq,category,severity,clause_id,version,reason)
-    values ('RUN-001',9,'Data Privacy','High','DP-H-014',null,'broken')`),
+    (run_id,seq,category_key,severity,clause_id,version,reason)
+    values ('RUN-001',9,'data','High','DP-H-014',null,'broken')`),
     'selection_is_whole');
 });
 
 await test('a decision cannot cite a clause version that does not exist', async () => {
   await throws(() => db.exec(`insert into cw.run_decision
-    (run_id,seq,category,severity,clause_id,version,reason)
-    values ('RUN-001',10,'Data Privacy','High','DP-H-014',99,'ghost')`), 'foreign key');
+    (run_id,seq,category_key,severity,clause_id,version,reason)
+    values ('RUN-001',10,'data','High','DP-H-014',99,'ghost')`), 'foreign key');
 });
 
 await test('findings cite the exact rule version', async () => {
@@ -161,9 +267,28 @@ for (const [table, sql] of [
 }
 
 await test('a run cannot be deleted', async () => {
-  await db.exec(`delete from cw.run where run_id='RUN-001'`);
+  // WP-25c (settled decision S0-3). This used to assert the delete was a silent
+  // NO-OP: the row survived and the caller was told nothing. That is finding
+  // D9's pattern exactly — an application bug that deletes runs is then
+  // indistinguishable from an application that never tried.
+  //
+  // Both halves are asserted, and the original one is kept: the statement must
+  // RAISE, and the row must still be there. Dropping the survival check in
+  // favour of the raise would trade one assertion for another rather than
+  // adding one.
+  await throws(() => db.exec(`delete from cw.run where run_id='RUN-001'`),
+    'cannot be deleted', 'deleting history must be refused, not silently ignored');
   const r = await one(`select count(*)::int n from cw.run where run_id='RUN-001'`);
-  eq(r.n, 1, 'deleting history must be a no-op, not a success');
+  eq(r.n, 1, 'and the row is still there');
+});
+
+await test('a run cannot be truncated around the guard', async () => {
+  // TRUNCATE fires neither row triggers nor ON DELETE rules, so before WP-25b
+  // every guarantee above could be walked past by one statement.
+  await throws(() => db.exec(`truncate cw.run cascade`),
+    'cannot be', 'truncate must not be the way around immutability');
+  const r = await one(`select count(*)::int n from cw.run where run_id='RUN-001'`);
+  eq(r.n, 1, 'the run store survives a truncate attempt');
 });
 
 console.log('\nresolvable forever');
@@ -205,8 +330,9 @@ await test('a requester sees only their own runs', async () => {
     insert into cw.agreement (agreement_id,counterparty,requester)
       values ('AG-002','Contoso','other@cw');
     insert into cw.run (run_id,agreement_id,vendor,manifest,manifest_source,
-                        snapshot_id,ruleset_id,result_hash,gate_open,created_by)
-      values ('RUN-002','AG-002','Contoso','{}','llm','${H1}','${R1}','h',true,'other@cw');
+                        snapshot_id,ruleset_id,result_hash,engine_version,gate_open,created_by)
+      values ('RUN-002','AG-002','Contoso','{}','llm','${H1}','${R1}','${RH}',
+              'clausewerk-engine/3',true,'other@cw');
     select set_config('cw.role','requester',false);
     select set_config('cw.actor','buyer@cw',false);`);
   await db.exec(`set role cw_requester;`);
@@ -215,9 +341,16 @@ await test('a requester sees only their own runs', async () => {
 });
 
 await test('an auditor sees every run', async () => {
+  // The expected count moved from 2 to 3 when WP-23's positive control added
+  // RUN-OK. Same assertion, same strength — "every run" is still every run in
+  // the fixture, and the number is checked against what the owner can see so it
+  // cannot drift quietly again.
+  await db.exec(`reset role;`);
+  const all = await one(`select count(*)::int n from cw.run`);
   await db.exec(`reset role; select set_config('cw.role','auditor',false); set role cw_auditor;`);
   const r = await one(`select count(*)::int n from cw.run`);
-  eq(r.n, 2);
+  eq(all.n, 3, 'the fixture holds three runs');
+  eq(r.n, 3);
 });
 
 await test('a viewer cannot read runs', async () => {
