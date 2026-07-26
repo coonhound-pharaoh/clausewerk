@@ -1433,6 +1433,117 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     find: `      return /[",\\n]/.test(s) ? \`"\${s.replace(/"/g, '""')}"\` : s;`,
     repl: `      return s;`,
     expect: 'the auditor can export, and the export is of what is on screen' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The override request workflow (WP-U10, migration 0015)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // THE GATE OPENING ON REQUEST RATHER THAN APPROVAL. The difference between
+  // asking and being allowed is the entire product, and this is the v3 button
+  // returning in one line.
+  // Written to drop BOTH conditions, and that took a second attempt. Relaxing
+  // only the decision filter left the socialisation join in place, so a merely
+  // requested override still passed nothing and a different test caught it —
+  // reported IMPRECISE, which is the harness refusing to credit the wrong test.
+  { suite: 'override.test.mjs',
+    name: 'the gate opens on the request rather than the approval',
+    find: `join cw.override_socialisation s on s.request_id = f.request_id
+where f.decision = 'approved';`,
+    repl: `where true;`,
+    expect: 'a request on its own passes NOTHING' },
+
+  { suite: 'override.test.mjs',
+    name: 'a rejected finding is let past with the approved ones',
+    find: `where f.decision = 'approved';`,
+    repl: `where f.decision is not null;`,
+    expect: 'the gate opens for the approved finding ONLY' },
+
+  // THE WINDOW, SKIPPED. The watchers are told and given no time to object,
+  // which makes the socialisation decoration.
+  { suite: 'override.test.mjs',
+    name: 'a decision can be taken before the window closes',
+    find: `  if now() < s.window_closes then`,
+    repl: `  if false then`,
+    expect: 'a decision inside the window is refused' },
+
+  // The guard skipped entirely. With no socialisation row, `now() < s.window_closes`
+  // compares against null, which is not true — so the window check falls through
+  // too and the decision lands on a request nobody was ever told about.
+  { suite: 'override.test.mjs',
+    name: 'a decision can be taken before any socialisation at all',
+    find: `  if not found then
+    raise exception 'override request % has not been socialised; the point of the '`,
+    repl: `  if false then
+    raise exception 'override request % has not been socialised; the point of the '`,
+    expect: 'nothing can be decided before the request has been socialised' },
+
+  // SOCIALISATION RECORDED AS SENT WHEN NOBODY WAS TOLD — a lie in the
+  // permanent record, and the failure the whole step exists to prevent.
+  { suite: 'override.test.mjs',
+    name: 'an empty audience is treated as "nobody to tell"',
+    find: `  if n = 0 then`,
+    repl: `  if false then`,
+    expect: 'an override with nobody to tell is REFUSED, not quietly sent' },
+
+  { suite: 'override.test.mjs',
+    name: 'socialisation is recorded as a human act',
+    find: `                       'window_setting', win), 'system');`,
+    repl: `                       'window_setting', win));`,
+    expect: 'the socialisation event is a SYSTEM act, never a person\'s' },
+
+  // THE JUSTIFICATION, hollowed out. `not null` is satisfied by the empty
+  // string, which is exactly what a form posts when nobody types anything.
+  { suite: 'override.test.mjs',
+    name: 'a blank or boilerplate justification is accepted',
+    find: `  constraint justification_is_not_boilerplate check (
+    length(btrim(justification)) >= 20),`,
+    repl: `  constraint justification_is_not_boilerplate check (justification is not null),`,
+    expect: 'a justification cannot be boilerplate or blank' },
+
+  { suite: 'override.test.mjs',
+    name: 'a rejection needs no note',
+    find: `  constraint rejection_needs_a_note check (
+    decision is distinct from 'rejected'
+    or (note is not null and btrim(note) <> ''))`,
+    repl: `  constraint rejection_needs_a_note check (true)`,
+    expect: 'a rejection without a note is refused' },
+
+  { suite: 'override.test.mjs',
+    name: 'a decision can be revisited',
+    find: `  if old.decision is not null then
+    raise exception 'finding % on request % was decided %; a decision is not '`,
+    repl: `  if false then
+    raise exception 'finding % on request % was decided %; a decision is not '`,
+    expect: 'a decided finding is not revisited' },
+
+  { suite: 'override.test.mjs',
+    name: 'somebody can decide their own override request',
+    find: `  if r.requested_by = cw.app_actor() then`,
+    repl: `  if false then`,
+    expect: 'a reviewer cannot decide a request they opened' },
+
+  { suite: 'override.test.mjs',
+    name: 'a gate can be recorded for a finding nobody approved',
+    find: `  if not exists (select 1 from cw.override_passes
+                  where request_id = p_request_id and finding_ref = p_finding_ref) then`,
+    repl: `  if false then`,
+    expect: 'recording a gate for a rejected finding is refused' },
+
+  // A ROLE ABLE TO ASSERT SOCIALISATION BY HAND — the state stops being earned
+  // and becomes a claim.
+  { suite: 'override.test.mjs',
+    name: 'a role can write a socialisation row by hand',
+    find: `grant insert on cw.override_request, cw.override_finding to cw_requester;`,
+    repl: `grant insert on cw.override_request, cw.override_finding to cw_requester;
+grant insert on cw.override_socialisation, cw.override_notified to cw_requester;`,
+    expect: 'nobody can assert socialisation directly — no role holds the insert' },
+
+  { suite: 'override.test.mjs',
+    name: 'a viewer sees every override request, told about it or not',
+    find: `  or (cw.app_role() = 'viewer'
+      and cw.was_notified(override_request.request_id, cw.app_actor())));`,
+    repl: `  or cw.app_role() = 'viewer');`,
+    expect: 'a viewer sees a request only if they were told about it' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();

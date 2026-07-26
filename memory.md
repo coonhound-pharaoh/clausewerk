@@ -7,6 +7,62 @@ running log of *what we decided and why*, readable without opening the code.
 
 ---
 
+## 2026-07-26 · The front door is Python, and we run standard PostgreSQL
+
+**Two decisions by Mike, taken together**, after a report weighing JavaScript, Python and Rust,
+and after he asked whether we should change database at all. The report is
+[`SERVICE-STACK-OPTIONS-2026-07-26.md`](SERVICE-STACK-OPTIONS-2026-07-26.md).
+
+**The database: standard PostgreSQL, from now on.** We are not changing database — we already
+chose PostgreSQL and it is the right choice, because this product puts its rules *inside* the
+database rather than in the application, and very few databases can do that. What changed is the
+*packaging*: we were running PostgreSQL in a form that lives inside the program, which needed no
+installation. We now run the ordinary version, as separate software, the way commercial products
+do. The thirteen sets of rules are ordinary PostgreSQL instructions and run unchanged.
+
+**What that buys, and two of them are gaps our own code admitted to in writing.** The audit
+checkpoint can now be properly sealed — until now it was *anchored but unsigned*, so it caught
+accidental deletion and bad backups but not deliberate rewriting. A protection against two
+writers splitting the history in two, which shipped on reasoning alone because no test could
+observe it, becomes testable. And the front door's most important test — hand a connection back
+and prove it has forgotten who was using it — becomes real rather than simulated. Plus backups,
+standby copies and managed hosting, none of which existed before.
+
+**The cost, honestly.** It is now software to run and pay for, every machine needs it before
+tests pass, and tests get slower. Worth it, and cheapest done *before* the front door is written
+rather than after — otherwise the most safety-critical code in the system gets written twice.
+
+**The front door: Python.** It belongs with the parts that must be provably correct — the
+contract engine and the database rules — not with the screens. It also calls the contract engine
+directly rather than running it as a separate program.
+
+**A reversal worth recording, because Mike caused it.** I first recommended JavaScript, on two
+grounds: only JavaScript could talk to the old in-program database, and our role-impersonation
+test equipment is written in it. Mike asked whether the JavaScript was simply inherited from the
+prototype he brought over from Claude Design — *"if yes, that's the opposite of the intent."*
+The honest answer was a split one. The core was deliberately Python and the database deliberately
+PostgreSQL; neither followed the prototype. But the test equipment is JavaScript only because the
+in-program database was a JavaScript component — the convenience we had just agreed to remove. So
+the argument was circular: defending a language on the strength of tooling that exists only to
+support the packaging we were dropping. I had also overstated the rebuild cost — that helper is
+about forty lines of instructions; what matters in it is the *instinct* it encodes, which
+transfers to any language.
+
+**Rust: not used, and the reason is not fashion.** Rust prevents a category of mistake that
+arises when a program manages the computer's memory by hand. Python and the database already do
+that for us, and our front door does almost no work — it establishes who you are and hands the
+job to the database. Our failure modes are "the wrong person's name was believed" and "a rule was
+bypassed", and Rust has no opinion about either.
+
+**One place stays on the list.** The reader that opens a vendor's Word document is the only part
+of the system that takes input from strangers, the only part where being slow *is* the attack —
+a malicious file that takes forever to refuse takes the system down — and it is self-contained.
+Not now: its defences are already right, and the failing speed test is a budget set on a faster
+machine. If we later want that reader sealed off from the contracts and the audit history, Rust
+is the right tool. Nothing we are building forecloses it.
+
+---
+
 ## 2026-07-25 · We are responsible for the system, not the contract text
 
 **The principle, from Mike.** Clausewerk is a system. It records, gates, checks, and proves

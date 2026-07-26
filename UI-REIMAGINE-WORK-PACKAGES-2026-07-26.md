@@ -582,7 +582,24 @@ access-history section.
 
 ---
 
-## WP-U10 · The override request workflow (closing the ADR-0008 gap)
+## WP-U10 · The override request workflow — **CLOSED 2026-07-26**
+
+*Delivered in [`0015_override_request.sql`](backend/db/migrations/0015_override_request.sql),
+four endpoints, and [`override.test.mjs`](backend/db/test/override.test.mjs) — 26 tests,
+13 mutations. ADR-0008 moves from "specified, not built" to **built**;
+`docs/open-questions.md` §2 closes.*
+
+**A real fault the suite found on its first run.** The viewer's read policy on `cw.override_request`
+consults `cw.override_notified`, whose own policy consulted `cw.override_request` — Postgres refuses
+the pair outright with *"infinite recursion detected in policy"*, and **every read of a request
+failed, for every role**. The policies were individually reasonable; only the cycle was wrong, and
+nothing but running it could have found that. `cw.was_notified()` breaks it, the same shape as
+`cw.owns_agreement()`.
+
+**A note on the empty-audience refusal.** `cw.agreement.requester` is `not null`, so a deal always
+has an owner to tell — the "nobody to socialise to" case only arises for a run not attached to a
+deal whose findings no watcher covers. Rarer than it looks, and correspondingly easy to leave
+untested; it has its own test and its own mutation.
 
 **Objective.** The specified-but-never-built workflow exists: a requester
 *requests*, watchers are told, a window passes, Legal decides per finding —

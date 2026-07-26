@@ -6,7 +6,7 @@ Rebuilt 2026-07-26. The previous version predated three of the four architecture
 described only the prototype's in-browser records, so it had quietly become a map of a smaller
 system than the one that exists.
 
-**How to read it.** The backend schema is the authoritative record shape, defined in thirteen
+**How to read it.** The backend schema is the authoritative record shape, defined in fifteen
 migrations under [`backend/db/migrations/`](../backend/db/migrations). This document gives the
 *shape and the reasoning* — what each table is for, why it exists, and which architecture document
 governs it. It deliberately does **not** copy column lists: duplicating DDL is what made the
@@ -560,3 +560,60 @@ Recorded so each absence is a decision rather than an oversight:
   second, quieter selection authority.
 - **Vector index** — the redline matcher's embedding store.
 - **Destruction of stored bytes** — retention gates and records the decision only.
+
+---
+
+## 15. The override request workflow — `0015`
+
+Governed by [ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md), specified
+2026-07-25 and **built 2026-07-26** (WP-U10). It is the retirement of the v3 prototype's blanket
+`acknowledge · override` button: one person, one click, gate open, no record of who else should
+have known.
+
+```
+requested → socialised → approved | rejected → (if approved) gate opens
+```
+
+| Record | Purpose |
+|---|---|
+| `cw.override_request` `[db]` | The ask: findings covered, a mandatory justification, the commercial pressure cited |
+| `cw.override_finding` `[db]` | One row per finding, **carrying its own decision** |
+| `cw.override_socialisation` `[db]` | That the stakeholders were told, when, and how long the window runs |
+| `cw.override_notified` `[db]` | Who was told, and why — deal owner, category watcher, always-watcher |
+| `cw.override_passes` `[db]` | Derived. **The findings an approval actually lets past** |
+| `cw.override_status` `[db]` | Derived. Where a request has got to, for the requester watching it |
+
+**The decision lives on the finding, not on the request.** That is what makes per-finding real
+rather than conventional: there is no column anywhere that could be set to approve all of them, no
+function that takes a list, and no loop in the schema or the service that calls the deciding
+function repeatedly on a caller's behalf. A batch endpoint would be the blanket button with a
+for-loop in front of it, and the deciding person would not have seen each finding.
+
+**`cw.override_passes` is phrased as "which findings may be passed"**, not "is this request
+approved". The second phrasing is what makes a blanket override easy to reintroduce by accident.
+
+> **Socialisation cannot be asserted, only earned.** No role holds `insert` on
+> `cw.override_socialisation` — it is written solely by a security-definer function that resolves
+> the audience first and **refuses when nobody would be told**. An empty watcher list silently
+> treated as "nobody to tell" would record that the stakeholders were notified when nobody was;
+> instead the uncovered category is surfaced as a gap for an Administrator to close.
+>
+> The function is definer-rights because the question is who the *system* says should be told, not
+> who the caller can see — a caller blind to a watcher would otherwise socialise to fewer people and
+> the record would say that was everybody.
+
+**The window is stored, not recomputed.** Shortening `override_review_window` later must not
+retrospectively close a window that was open when it mattered, so the value in force is written onto
+the socialisation row.
+
+**A recursion worth knowing about.** The viewer's read policy on `cw.override_request` has to ask
+whether that viewer was notified, and `cw.override_notified`'s own policy asked whether they could
+see the request — Postgres refuses the pair outright with *"infinite recursion detected in policy"*,
+and **every read of a request failed, for every role**. `cw.was_notified()` is a definer-rights
+helper that breaks the cycle, the same shape as `cw.owns_agreement()`. The policies were
+individually reasonable; only the cycle was wrong, and only running the suite could find it.
+
+**Audit events added** — the six ADR-0008 types: `human_override_request`,
+`human_override_socialise` (**`actor_kind = 'system'`**; nobody performs a notification),
+`human_override_approve`, `human_override_reject`, `human_override_gate`, and `auto_approve`
+(reserved for genuine machine approval, `actor_kind = 'controller'`).

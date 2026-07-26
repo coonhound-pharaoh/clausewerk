@@ -146,6 +146,50 @@ export const MUTATIONS = {
       [required(body, 'concession_id'), required(body, 'approver_kind')]),
   },
 
+  // ── Overrides (ADR-0008, WP-U10) ────────────────────────────────────────
+  //
+  // FOUR ENDPOINTS FOR FOUR ACTS, and the shape is the control. Note what is
+  // absent: there is no endpoint that decides a whole request. Deciding takes a
+  // single finding reference, and there is no variant taking a list — a batch
+  // endpoint that iterated approvals would be the blanket acknowledge button
+  // with a for-loop in front of it, and the person pressing it would not have
+  // seen each finding.
+  'POST /overrides': {
+    rule: 'cw.open_override_request() — requester only; the justification cannot '
+        + 'be blank or boilerplate; a request opens no gate',
+    run: (query, body) => query(
+      `select cw.open_override_request($1,$2,$3::jsonb,$4) as request_id`,
+      [required(body, 'run_id'), required(body, 'justification'),
+       JSON.stringify(required(body, 'findings')),
+       body.commercial_pressure ?? null]),
+  },
+
+  'POST /overrides/socialise': {
+    rule: 'cw.socialise_override_request() — refuses when nobody would be told, '
+        + 'because recording that as sent would put a lie in the record',
+    run: (query, body) => query(
+      `select cw.socialise_override_request($1) as notified`,
+      [required(body, 'request_id')]),
+  },
+
+  'POST /overrides/decide': {
+    rule: 'cw.decide_override_finding() — Legal only, ONE finding, and never '
+        + 'before the review window closes',
+    run: (query, body) => query(
+      `select cw.decide_override_finding($1,$2,$3,$4)`,
+      [required(body, 'request_id'), required(body, 'finding_ref'),
+       required(body, 'decision'),
+       body.decision === 'rejected' ? required(body, 'note') : (body.note ?? null)]),
+  },
+
+  'POST /overrides/gate': {
+    rule: 'cw.record_override_gate() — refuses unless that finding is actually '
+        + 'in cw.override_passes',
+    run: (query, body) => query(
+      `select cw.record_override_gate($1,$2)`,
+      [required(body, 'request_id'), required(body, 'finding_ref')]),
+  },
+
   // ── Holds ───────────────────────────────────────────────────────────────
   'POST /holds': {
     rule: 'cw.legal_hold policies — opening a hold is Legal\'s act',

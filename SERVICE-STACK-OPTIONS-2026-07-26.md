@@ -109,9 +109,70 @@ code in the system, changed twice.
 
 ---
 
-## Part 2 — The language, revisited
+## Part 2 — The language, revisited twice
 
-### What the owner's question changed
+### The owner's second question, and why it changed the answer
+
+*Added after the owner asked: "Is everything in JavaScript because it is based on
+the prototype I brought over? If yes, that's the opposite of the intent."*
+
+The honest answer is a split one, and the half that is "yes" was load-bearing in
+my earlier recommendation.
+
+**The core is not JavaScript, deliberately.** The engine that must be provably
+correct — resolution, validation, the run store, document handling — is Python,
+and the architecture document records that as the intended shape from the
+beginning. The database is PostgreSQL, also deliberate. Neither followed the
+prototype.
+
+**But the JavaScript test equipment is an accident of convenience.** The backend
+README gives the reason in its own words: *"There is no database to install."*
+The database tests are JavaScript because the in-program PostgreSQL is a
+JavaScript component, so its tests had to be. The prototype did not cause that;
+the no-installation convenience did.
+
+**That convenience is exactly what Part 1 recommends removing.** So the argument
+"stay in JavaScript because the test equipment is JavaScript" is circular: it
+defends a language on the strength of tooling that exists only to support the
+packaging we are dropping.
+
+**Two corrections to what I told the owner earlier this morning**, both of which
+change the decision:
+
+1. **I overstated the cost of rebuilding the test equipment.** Counted properly,
+   the role-impersonation helper is roughly forty lines of actual instructions;
+   the rest of the file is explanation. What is valuable in it is the *instinct* —
+   above all, that a change which reports success while changing nothing must be
+   treated as a failure, which is how a real past failure went unnoticed. That
+   instinct transfers as a design principle in any language. It is not forty lines
+   of irreplaceable machinery.
+2. **With the database argument and the test-equipment argument both gone, one
+   argument for JavaScript remains:** it shares a language with the screens. That
+   is a convenience, not a guarantee.
+
+### The recommendation, changed: Python
+
+The front door is the third piece of must-be-provably-correct engineering,
+alongside the contract engine and the database rules. **It belongs with the core,
+not with the screens.**
+
+- On standard PostgreSQL it reaches the database as well as anything does.
+- It calls the contract engine directly rather than running it as a separate
+  program — the one advantage Python always had, now no longer outweighed.
+- The project settles at **two** languages for the parts that must be correct
+  (Python and the database's own), with JavaScript where it belongs: the screens.
+  That boundary between the thinking and the display is a normal one, not a
+  compromise.
+
+**JavaScript remains defensible** on the shared-language-with-the-screens point
+alone, and I would not call it a mistake. It is no longer what I recommend.
+
+**Rust is unchanged and still not recommended**, for the reason set out below,
+which none of this touches.
+
+---
+
+### What the owner's first question changed (retained for the record)
 
 My earlier recommendation rested substantially on one fact: today's database can
 only be loaded by a JavaScript program, so JavaScript was the only option that
@@ -167,18 +228,12 @@ having nobody else able to maintain it, and taking the slowest route to a
 provable front door. If some specific piece later turns out to need Rust, one
 component can be moved then, on evidence.
 
-### Recommendation
+### Where that left it, before the owner's second question
 
-**JavaScript**, but by a narrower margin than this morning, and the honest reason
-is now the test equipment and the screens rather than the database.
-
-**Python is a legitimate second choice** and I would not argue hard against it.
-If you would rather the two pieces of engineering that do the thinking — the
-contract engine and the front door — share one language, that is a coherent
-position with a real benefit, and the price is rebuilding the role-impersonation
-test equipment before we can prove anything.
-
-**Rust I do not recommend**, for the reason above.
+**JavaScript**, by a narrower margin, resting on the test equipment and the
+screens rather than on the database. The section above supersedes this: the test
+equipment argument did not survive scrutiny, and the recommendation is now
+Python.
 
 ---
 
@@ -204,8 +259,9 @@ combination above.
 ## What I need from you
 
 1. **Standard PostgreSQL?** My recommendation is yes, and now rather than later.
-2. **Which language for the front door?** JavaScript recommended; Python
-   defensible; Rust not recommended.
+2. **Which language for the front door?** **Python recommended** — it belongs
+   with the core, not with the screens. JavaScript defensible. Rust not
+   recommended.
 
 Both answers go into `memory.md` as recorded decisions, and then I start on the
 doorway.

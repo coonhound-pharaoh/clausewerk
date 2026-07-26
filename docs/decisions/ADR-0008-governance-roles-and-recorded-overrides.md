@@ -1,6 +1,7 @@
 # ADR-0008 — Governance: roles, socialised overrides, and auditable auto-approval
 
-**Status:** Accepted · partially implemented.
+**Status:** Accepted · **built**, as of 2026-07-26 (WP-U10).
+Amended by [ADR-0011](ADR-0011-the-administrator-is-a-steward.md): the five roles are now six.
 
 - **The five-role model is built** in the backend (`0001_foundation.sql`) as real database roles,
   with row-level security and table privileges as two independent lines of defence. Since
@@ -10,10 +11,24 @@
   bypasses every policy and proves nothing.
 - **Every act carries an actor and a role** in the hash-chained audit log, and the role is part of
   the hash — rewriting who held the authority is detectable.
-- **The override-request workflow is still specified, not built.** So is the socialisation step.
-- **Known residual:** the *person's* name is still self-asserted, because the five roles are shared
-  service accounts. The scheme assumes one connection means one person and is incompatible with
-  transaction-mode connection pooling. See `ARCHITECTURE.md` §5.
+- **The override-request workflow is built**, in
+  [`0015_override_request.sql`](../../backend/db/migrations/0015_override_request.sql), together
+  with the socialisation step. All six event types are emitted, and
+  `human_override_socialise` carries `actor_kind = 'system'` because nobody performs it.
+  The four rules that make it more than paperwork are enforced in the database and each has a
+  mutation check:
+  - **the gate opens on approval, never on request** — `cw.override_passes` returns rows only for
+    findings individually approved on a socialised request;
+  - **approval is per finding**, with no approve-all function, parameter or loop anywhere. The
+    deciding function takes one finding reference and there is no variant that takes a list;
+  - **nothing is decided before the review window closes**, and the window in force is stored on
+    the record so shortening the setting later cannot retrospectively close it;
+  - **socialisation refuses when nobody would be told.** An empty audience is a gap in the watcher
+    lists, not an audience of nobody, and recording it as sent would put a lie in the record.
+- **Known residual:** the *person's* name is still self-asserted, because the six roles are shared
+  service roles. `cw.account` narrows this — the name can be checked against somebody the system
+  knows — but does not close it. The scheme assumes one connection means one person and is
+  incompatible with transaction-mode connection pooling. See `ARCHITECTURE.md` §5.
 
 Supersedes the unanswered questions at
 [`open-questions.md` §1 and §2](../open-questions.md).

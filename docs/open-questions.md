@@ -9,7 +9,7 @@ underspecified, or in tension with its own premises.
 | # | Question | Status |
 |---|---|---|
 | 1 | Auto-approve vs. the audit story | **Decided** — [ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md) |
-| 2 | Who may override the validation gate | **Decided** — [ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md) |
+| 2 | Who may override the validation gate | **Decided and BUILT** — [ADR-0008](decisions/ADR-0008-governance-roles-and-recorded-overrides.md), `0015` |
 | 3 | Clause expiring mid-flight | **Decided** — [LCMA §2](../LIFECYCLE-ARCHITECTURE.md), warnings implemented |
 | 4 | The redline matcher's production form | **Decided** — keyword scorer is retained as the fallback |
 | 5 | Who authors validation rules | **Decided** — attorneys, through a Legal gate |

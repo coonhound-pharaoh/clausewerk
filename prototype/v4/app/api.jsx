@@ -93,6 +93,9 @@ const API = (() => {
     health:           () => call('GET', '/health'),
     watchers:         () => call('GET', '/watchers'),
     watcherCoverage:  () => call('GET', '/watchers/coverage'),
+    overrides:        () => call('GET', '/overrides'),
+    overrideFindings: () => call('GET', '/overrides/findings'),
+    overrideNotified: () => call('GET', '/overrides/notified'),
     retentionDue:     () => call('GET', '/retention/due'),
     record:           () => call('GET', '/record'),
 
@@ -110,6 +113,13 @@ const API = (() => {
     decideSetting: (b) => call('POST', '/settings/decide', b),
     addWatcher:    (b) => call('POST', '/watchers', b),
     removeWatcher: (b) => call('POST', '/watchers/remove', b),
+    // Four acts, four calls. There is deliberately no decideAll: the endpoint
+    // takes one finding, and a helper here that looped over them would be the
+    // blanket acknowledge button rebuilt in the browser.
+    requestOverride:   (b) => call('POST', '/overrides', b),
+    socialiseOverride: (b) => call('POST', '/overrides/socialise', b),
+    decideOverride:    (b) => call('POST', '/overrides/decide', b),
+    openOverrideGate:  (b) => call('POST', '/overrides/gate', b),
     nudgeRetention:(b) => call('POST', '/retention/nudge', b),
     takeCheckpoint:() => call('POST', '/checkpoints', {}),
     runCheck:      (which) => call('POST', `/health-checks/${which}`, {}),

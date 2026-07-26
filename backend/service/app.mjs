@@ -132,6 +132,29 @@ const READS = {
     rule: 'cw.watcher_coverage — a zero is a visible gap, not a silence',
   },
 
+  'GET /overrides': {
+    sql: `select request_id, run_id, agreement_id, requested_by, requested_at,
+                 state, justification, commercial_pressure, socialised_at,
+                 window_closes, notified_count, window_closed, findings, decided,
+                 approved
+          from cw.override_status order by requested_at desc`,
+    rule: 'cw.override_request read_scoped — a requester sees their own, Legal '
+        + 'and Audit see all, a viewer sees only what they were told about',
+  },
+
+  'GET /overrides/findings': {
+    sql: `select request_id, finding_ref, severity, summary, decision,
+                 decided_by, decided_at, note
+          from cw.override_finding order by request_id, finding_ref`,
+    rule: 'cw.override_finding read_scoped — the decision lives per finding',
+  },
+
+  'GET /overrides/notified': {
+    sql: `select request_id, person, reason from cw.override_notified
+          order by request_id, person`,
+    rule: 'cw.override_notified read_scoped — who was told, and why',
+  },
+
   'GET /retention/due': {
     sql: `select agreement_id, retention_until, under_hold, matters
           from cw.retention_due order by retention_until`,
