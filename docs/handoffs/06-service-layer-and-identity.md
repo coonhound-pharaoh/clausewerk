@@ -1,11 +1,13 @@
 # Handoff · The service layer and identity — the doorway
 
-**State: not started.** Nothing in this workstream exists yet. Everything it
-depends on does.
+**State: built (WP-U05), 2026-07-26.** The doorway exists. A person signs in by
+name, their session is bound to the one role the database says they hold, and
+the API holds no opinions.
 
-Your detailed plan is
+Read [§9 — what shipped](#9-what-shipped-wp-u05) first if you are picking this
+up; the sections above it are the context that made those choices, and they are
+still accurate. Your original plan is
 [`SERVICE-LAYER-AND-IDENTITY-PLAN-2026-07-26.md`](../../SERVICE-LAYER-AND-IDENTITY-PLAN-2026-07-26.md).
-This handoff is the context you need before that plan makes sense.
 
 ---
 
@@ -222,3 +224,137 @@ ever comes back dirty, stop.
 - [ADR-0011](../decisions/ADR-0011-the-administrator-is-a-steward.md) — the Administrator: content-visible, content-powerless.
 - [`../open-questions.md`](../open-questions.md) — the settled owner decisions `U1`–`U8` and what each one cost.
 - [`05-frontend.md`](05-frontend.md) — the workstream yours feeds.
+
+---
+
+## 9. What shipped (WP-U05)
+
+Three files under [`backend/service/`](../../backend/service), about 400 lines
+including the reasoning, plus
+[`service.test.mjs`](../../backend/db/test/service.test.mjs) — 29 tests and 9
+mutations.
+
+| File | Job |
+|---|---|
+| `db.mjs` | The only way the service touches the database. Binds a connection to a person and a role, and offers no other path. |
+| `sessions.mjs` | Tokens, expiry, and one deliberate omission — see below. |
+| `app.mjs` | Routing, the read endpoints, and the refusal shape. No permission logic. |
+| `server.mjs` | The HTTP wrapper, deliberately thin. |
+
+### How identity binds to role
+
+1. **Sign in** with a name. `POST /sign-in`. There is no password — that is the
+   seam an identity provider plugs into, and it is marked as a seam rather than
+   dressed up as authentication. What is already real is that the **role never
+   comes from the request**: the person names themselves, and the database says
+   what that person may do.
+2. A session is issued for as long as the `session_length` operational setting
+   says — an Administrator's knob (WP-U03).
+3. **Every request** resolves the person's role from `cw.effective_role`, fresh.
+   Nothing is cached.
+4. The request runs on a connection bound to that role and carrying that name,
+   and every audited write it makes lands with both on the chain.
+
+**The session stores a person and nothing else about their authority**, and that
+is the single most load-bearing choice in the layer. If the role were captured at
+sign-in, revoking somebody would take effect at their next *sign-in* — which for
+an eight-hour session means tomorrow, while the console said revoked and the
+person went on working.
+
+So the promise is precise, and the console must not enlarge it:
+**revocation is honoured at the next request.** A request already in flight
+completes. That gap is real and small; closing it would mean interrupting work in
+progress, and pretending it is closed is the failure class this whole effort is
+paying down.
+
+### Why there is no privileged path
+
+The database enforces the entire permission model, and **all of it is bypassed by
+the owner connection** — row-level security is `ENABLED`, not `FORCED`. So a
+single "it's just a count" query run as the owner does not merely leak that count:
+it proves nothing about whether the caller was allowed to have it, and it will be
+copied.
+
+`db.mjs` therefore exports **one class**, whose every query path sets a role
+first. There is no general-purpose query function to reach for when an endpoint
+is awkward. `migrate()` is the one privileged entry point and it runs before the
+server listens.
+
+Sign-in is the one genuine chicken-and-egg: `cw.account` must be read before any
+role is known. It runs as **`cw_viewer`** — the least-privileged role in the
+system, which can read the staff list and do nothing else — not as the owner. So
+the worst a bug on that path can do is expose who works here.
+
+### How to add an endpoint without adding permission logic
+
+Add a row to `READS` in `app.mjs`: a SQL statement and a note naming the database
+rule that decides what comes back. That is the whole procedure.
+
+**Do not** add an `if (role === …)`. There is not one in the service and a test
+fails the build if one appears. Two permission systems drift, and the drift is
+the vulnerability precisely because it is invisible — both keep working, they
+just stop agreeing, and the one that is wrong is the one nobody tested as a real
+role.
+
+**Do not** add a `WHERE` clause to narrow what a role sees. If a workspace needs
+a narrower slice, that is a read model on the backend. A test asserts the
+`/deals` query has no `WHERE` at all, because the scoping is a policy on
+`cw.agreement` and moving it here would be the second permission system arriving
+one endpoint at a time.
+
+### Refusals
+
+A database refusal is passed through **unchanged**, classified by SQLSTATE.
+
+That last part was a bug this file shipped with, and the test caught it: the
+first version classified by matching the message text for "permission denied",
+which catches the refusals Postgres words itself and misses every refusal the
+*schema* words — and those are the good ones. `"renewal_default_baseline is an
+owner decision and only a legal admin may change it"` was being reported as a
+`400 bad request`. Reading `42501` respects what the schema raises and needs no
+maintenance as more rules are written.
+
+Never reword a refusal. Those messages name the rule and the role; a friendlier
+sentence here would be vaguer and would have to be kept in step with the schema
+forever.
+
+### The pool bleed, and what is actually load-bearing
+
+PGlite is a single connection, so requests are **serialised** onto it. That is
+the strictest reading of the "one connection, one identity" assumption in
+`ARCHITECTURE.md` §5, and also the shape most likely to leak.
+
+Three things prevent cross-attribution, and the mutation harness proves each:
+the **actor binding** at the start of a request, the **role binding**, and the
+**queue** that stops two requests interleaving them.
+
+The `finally` cleanup is a **second line, not the mechanism** — removing it
+changes no observable behaviour, because every entry point binds both values
+before reading anything. That was found by the harness rather than assumed, and
+`db.mjs` says so in place. If you add an entry point, bind both values in it;
+do not rely on the cleanup.
+
+### What the harness can now reach
+
+The mutation check gained a `target: 'service'` mode: it copies
+`backend/service/*.mjs` into `backend/.mutation-service/`, mutates one line, and
+points `CW_SERVICE` at the copy. The copies live **inside** `backend/` because
+Node resolves `@electric-sql/pglite` by walking up for `node_modules`, and from
+the system temp directory that walk finds nothing — every service mutation
+crashed on import and was scored `IMPRECISE` for tests that were perfectly fine.
+
+If you add a guarantee to the service, add its mutation with
+`target: 'service'`, and confirm it reports `ok`.
+
+### What is still open
+
+- **Authentication.** Sign-in takes a name and trusts it. This is a development
+  doorway, and the identity provider replaces `App.signIn` without touching the
+  privilege story — the role has never come from the request.
+- **The name is still self-asserted at the database level.** `cw.account`
+  narrows the residual from "any name at all" to "any name, by a caller with
+  direct database access". `ARCHITECTURE.md` §5 states it; it is not closed.
+- **The nightly job has no scheduler.** All four integrity checks are runnable on
+  demand (WP-U04); wiring them to a trigger belongs with this runtime.
+- **Mutation endpoints** are WP-U06. `app.mjs` has the hook (`this.mutations`)
+  and the refusal shape; the endpoints themselves land there.

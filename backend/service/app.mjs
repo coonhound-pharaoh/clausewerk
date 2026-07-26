@@ -1,0 +1,245 @@
+// The service. Identity in, rows out, and no opinions in between.
+//
+// WHAT THIS LAYER IS FOR, and it is a shorter list than it looks:
+//
+//   1. Work out WHO is calling, from the session.
+//   2. Ask the database what that person may do RIGHT NOW.
+//   3. Run their query on a connection bound to that role and that name.
+//   4. Report what the database said, including its refusals, unchanged.
+//
+// WHAT IT DELIBERATELY DOES NOT DO: decide anything. There is not one
+// `if (role === 'legal_admin')` in this file, and there must never be. The
+// database already holds the whole permission model — six roles' worth of
+// row-level policies, the countersign rule, the append-only guarantees — and a
+// second copy of those rules here would drift from the first. The drift is the
+// vulnerability, because it is invisible: both systems keep working, they just
+// stop agreeing, and the one that is wrong is the one nobody tested as a real
+// role.
+//
+// So an endpoint is a SQL statement and a route. Adding one adds no permission
+// logic, because there is no permission logic to add to. If a workspace needs a
+// narrower slice of something, that is a read model on the backend, not a
+// filter here and certainly not a filter in the browser.
+//
+// THREE THINGS THE BROWSER CANNOT INFLUENCE, ever:
+//   · the role     — it comes from cw.effective_role, keyed on the session
+//   · the actor    — it comes from the session, never from a header or a body
+//   · the rows     — they come from a policy, never from a WHERE clause we add
+//                    on the client's behalf
+
+import { Sessions, parseDuration, EIGHT_HOURS } from './sessions.mjs';
+
+// ── The read endpoints ─────────────────────────────────────────────────────
+// Each is a pass-through of an existing read model. The comment on each says
+// which database rule decides what comes back, because that rule — not this
+// file — is the answer to "why can this person see this?".
+const READS = {
+  // Whoever I am, and what I may do. The shell's masthead.
+  'GET /me': {
+    sql: `select person, display_name, unit, role, granted_by, granted_at,
+                 countersigned_by
+          from cw.effective_role where person = current_setting('cw.actor')`,
+    rule: 'cw.effective_role — a revoked or uncountersigned grant answers nothing',
+  },
+
+  // The requester's deals. Scoped by cw.agreement's read_own policy: a
+  // requester sees their own; Legal and Audit see all; a viewer sees none.
+  'GET /deals': {
+    sql: `select agreement_id, counterparty, requester, status
+          from cw.agreement order by agreement_id`,
+    rule: 'cw.agreement read_own policy',
+  },
+
+  // What is waiting on Legal. Ordered oldest first because the desk exists to
+  // make the oldest wait visible — sort order is a control, not a preference.
+  'GET /waiting/tickets': {
+    sql: `select ticket_id, agreement_id, clause_id, version, state, opened_by,
+                 opened_at
+          from cw.review_ticket where state = 'pending'
+          order by opened_at`,
+    rule: 'cw.review_ticket read_scoped policy',
+  },
+
+  // The countersign queue. Read by everyone; only a Legal admin can act on it.
+  'GET /waiting/countersign': {
+    sql: `select grant_id, person, display_name, unit, role, proposed_by,
+                 proposed_at, reason
+          from cw.countersign_pending`,
+    rule: 'cw.countersign_pending — grants that confer nothing while they sit here',
+  },
+
+  // People and access. Everyone may read it: access is not a secret, and it
+  // carries role names rather than contract content.
+  'GET /people': {
+    sql: `select a.person, a.display_name, a.unit, a.role as declared_role,
+                 a.state, a.created_by, a.created_at,
+                 e.role as effective_role, e.countersigned_by
+          from cw.account a
+          left join cw.effective_role e on e.person = a.person
+          order by a.person`,
+    rule: 'cw.account read_all policy; effectiveness from cw.effective_role',
+  },
+
+  'GET /access-history': {
+    sql: `select grant_id, action, person, role, grant_ref, acted_by, acted_at,
+                 reason, is_bootstrap
+          from cw.role_grant order by grant_id desc`,
+    rule: 'cw.role_grant read_all policy — append-only, so this is the whole story',
+  },
+
+  'GET /settings': {
+    sql: `select key, value, kind, is_owner_decision, decided, decided_by,
+                 rationale, purpose, updated_at
+          from cw.governance_setting order by kind, key`,
+    rule: 'cw.governance_setting read_all policy; writing is split by kind',
+  },
+
+  'GET /health': {
+    sql: `select tile, state, as_of, detail from cw.health_summary`,
+    rule: 'granted to administrator and auditor only',
+  },
+
+  'GET /watchers': {
+    sql: `select watcher_id, category_key, person, added_by, added_at,
+                 removed_by, removed_at
+          from cw.override_watcher where removed_at is null
+          order by category_key nulls first, person`,
+    rule: 'cw.override_watcher read_all policy',
+  },
+
+  'GET /watchers/coverage': {
+    sql: `select category_key, label, watcher_count from cw.watcher_coverage`,
+    rule: 'cw.watcher_coverage — a zero is a visible gap, not a silence',
+  },
+};
+
+// A database refusal reported as what it is. The message comes from the
+// database and is passed through UNCHANGED — those messages name the rule and
+// the role ("X is an owner decision and only a legal admin may change it"), and
+// rewording them here would replace an accurate sentence with a vaguer one and
+// then have to be kept in step with the schema forever.
+// Classified by SQLSTATE, not by reading the message.
+//
+// Message-matching was the first attempt and it was wrong in a way worth
+// recording: it looked for "permission denied" and "row-level security", which
+// catches the refusals Postgres words itself and misses every refusal the
+// SCHEMA words — and those are the good ones. "X is an owner decision and only a
+// legal admin may change it" was being reported as a 400 bad request, because
+// the sentence a human wrote does not contain the phrase a regex was looking
+// for. The schema raises those with `errcode = 'insufficient_privilege'`
+// deliberately; reading the code respects that and needs no maintenance as more
+// rules are written.
+//
+// 42501 covers privilege errors, row-level security violations, and every
+// schema-raised refusal that names insufficient_privilege.
+function refusal(e) {
+  const msg = String(e?.message ?? 'refused');
+  const denied = e?.code === '42501'
+    || /permission denied|row-level security/i.test(msg);
+  return {
+    status: denied ? 403 : 400,
+    body: { error: 'refused', reason: msg },
+  };
+}
+
+export class App {
+  #db; #sessions;
+
+  constructor(db, { now = () => Date.now() } = {}) {
+    this.#db = db;
+    this.#sessions = new Sessions({ now });
+  }
+
+  get sessions() { return this.#sessions; }
+
+  // Resolve the caller: session → person → the role the database says they
+  // hold right now. Every request, every time. Nothing is cached, which is what
+  // makes revocation bite at the next request rather than the next sign-in.
+  async #caller(token) {
+    const person = this.#sessions.personFor(token);
+    if (!person) return { error: { status: 401, body: { error: 'no session' } } };
+
+    const rows = await this.#db.lookUpIdentity(({ query }) =>
+      query(`select role from cw.effective_role where person = $1`, [person]));
+    if (!rows.length) {
+      // Revoked, or a Legal grant still waiting on its countersign. Both mean
+      // the same thing and the message says so rather than guessing which.
+      this.#sessions.endAllFor(person);
+      return { error: { status: 403, body: {
+        error: 'refused',
+        reason: 'this account holds no effective role — it has been revoked, or '
+              + 'its grant of a Legal role is still waiting to be countersigned',
+      } } };
+    }
+    return { person, role: rows[0].role };
+  }
+
+  async #sessionLength() {
+    const rows = await this.#db.lookUpIdentity(({ query }) =>
+      query(`select value from cw.governance_setting where key = 'session_length'`));
+    return parseDuration(rows[0]?.value, EIGHT_HOURS);
+  }
+
+  // ── Sign in ──────────────────────────────────────────────────────────────
+  // No password. This is the seam an identity provider plugs into, and it is
+  // marked as a seam rather than dressed up as authentication — see the
+  // handoff. What is real here, and what the rest of the system relies on, is
+  // that the ROLE is never taken from the request: the person names themselves,
+  // and the database says what that person may do.
+  async signIn(person) {
+    if (!person || !String(person).trim())
+      return { status: 400, body: { error: 'name yourself' } };
+
+    const rows = await this.#db.lookUpIdentity(({ query }) =>
+      query(`select role, display_name, unit from cw.effective_role where person = $1`,
+        [person]));
+    if (!rows.length)
+      return { status: 403, body: {
+        error: 'refused',
+        reason: 'no active account with an effective role for that person',
+      } };
+
+    const { token, expiresAt } = this.#sessions.issue(person, await this.#sessionLength());
+    return { status: 200, body: {
+      token, expiresAt,
+      person, role: rows[0].role,
+      display_name: rows[0].display_name, unit: rows[0].unit,
+    } };
+  }
+
+  // ── Every other request ──────────────────────────────────────────────────
+  async handle(method, path, { token = null, body = null } = {}) {
+    if (method === 'POST' && path === '/sign-in')
+      return this.signIn(body?.person);
+
+    if (method === 'POST' && path === '/sign-out') {
+      this.#sessions.end(token);
+      return { status: 200, body: { ok: true } };
+    }
+
+    const caller = await this.#caller(token);
+    if (caller.error) return caller.error;
+
+    const read = READS[`${method} ${path}`];
+    if (read) {
+      try {
+        const rows = await this.#db.asPerson(caller.person, caller.role,
+          ({ query }) => query(read.sql));
+        return { status: 200, body: { rows } };
+      } catch (e) { return refusal(e); }
+    }
+
+    const write = this.mutations?.[`${method} ${path}`];
+    if (write) {
+      try {
+        const rows = await this.#db.asPerson(caller.person, caller.role,
+          ({ query }) => write.run(query, body ?? {}, caller));
+        return { status: 200, body: { rows } };
+      } catch (e) { return refusal(e); }
+    }
+
+    return { status: 404, body: { error: 'no such endpoint', path } };
+  }
+}
+
+export { READS, refusal };

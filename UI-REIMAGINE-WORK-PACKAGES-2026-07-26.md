@@ -309,7 +309,17 @@ what each check proves, what to do when one fails.
 
 ---
 
-## WP-U05 · Service layer: sign-in and the borrowed permission model
+## WP-U05 · Service layer: sign-in and the borrowed permission model — **CLOSED 2026-07-26**
+
+*Delivered in [`backend/service/`](backend/service) and
+[`service.test.mjs`](backend/db/test/service.test.mjs) — 30 tests, 9 mutations.
+Documented in [handoff 06 §9](docs/handoffs/06-service-layer-and-identity.md).*
+
+**The mutation harness now reaches JavaScript.** The pool-bleed guard, the per-request role
+resolution and the no-privileged-path rule are all code, not SQL, and a harness that could only
+mutate migrations would have left the most dangerous protections in the system as tests nobody had
+ever seen fail. `target: 'service'` copies `backend/service/*.mjs`, mutates one line, and points
+`CW_SERVICE` at the copy.
 
 **Objective.** The doorway exists: a person signs in by name, their session is
 bound to their one effective role, and the API holds no opinions — the database

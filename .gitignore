@@ -53,3 +53,7 @@ outbox/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Mutation harness scratch: mutated copies of backend/service, made and removed
+# per run. Inside backend/ so Node can resolve node_modules from them.
+backend/.mutation-service/

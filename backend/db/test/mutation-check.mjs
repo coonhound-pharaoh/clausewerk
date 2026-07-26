@@ -6,7 +6,7 @@
 //
 //   node db/test/mutation-check.mjs
 
-import { readFileSync, writeFileSync, mkdtempSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir, cpus } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -1020,6 +1020,121 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
                 cw.health_rebuild, cw.health_summary
   to cw_administrator, cw_auditor, cw_requester, cw_viewer, cw_legal_reviewer;`,
     expect: 'a requester or viewer can reach none of them' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The service layer (WP-U05) — target: 'service'
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // THE POOL BLEED, in each of the three ways it can happen. This is the
+  // ADR-0008 residual as a live wire, and every one of these failures looks
+  // like two perfectly successful requests plus a permanent record naming the
+  // wrong person — which is why none of them would be noticed in use.
+
+  // 1. The actor is not BOUND at the start of a request, so the connection
+  //    keeps whatever name it last carried and every audited write lands under
+  //    the wrong person.
+  //
+  //    Named against the FIRST test in the suite rather than the pool-bleed one,
+  //    and the reason is worth keeping. With the binding gone, cw.app_actor()
+  //    answers 'unattributed' for everybody — so WP-U02's "the proposer cannot
+  //    also be the acceptor" rule fires during the suite's own SEEDING, and the
+  //    file dies before reaching the pool-bleed test at all. Two guarantees
+  //    colliding, both working. The fix is to assert the binding directly and
+  //    early, which the suite now does.
+  { target: 'service', suite: 'service.test.mjs',
+    name: 'the actor is not bound at the start of a request',
+    find: `      await this.#pg.query(\`select set_config('cw.actor', $1, false)\`, [person]);`,
+    repl: `      await this.#pg.query('select 1');`,
+    expect: 'a bound session sets both the name and the authority' },
+
+  // 2. The role is not bound, so the request runs as whatever the connection
+  //    was — up to and including the owner, who bypasses row-level security.
+  { target: 'service', suite: 'service.test.mjs',
+    name: 'the role is not bound at the start of a request',
+    find: `      await this.#pg.exec(\`set role \${dbRole};\`);`,
+    repl: `      await this.#pg.query('select 1');`,
+    expect: 'every request runs as a real application role, never the owner' },
+
+  // 3. Requests are not serialised onto the single connection, so two of them
+  //    interleave their `set role` and their statements.
+  { target: 'service', suite: 'service.test.mjs',
+    name: 'requests are not serialised onto the connection',
+    find: `    const result = this.#queue.then(run, run);`,
+    repl: `    const result = run();`,
+    expect: 'interleaved requests never cross-attribute — asserted on the audit rows' },
+
+  // 4. The exit cleanup removed.
+  //
+  //    WHAT THIS MUTATION ACTUALLY PROVED, recorded because the first version of
+  //    it was wrong and the harness said so. Removing the `reset role` and the
+  //    actor clear changes NO behaviour that any test can observe — because
+  //    every entry point binds both before its first statement, so a stale value
+  //    is always overwritten rather than read. The cleanup is a genuine second
+  //    line of defence, not the mechanism, and the mechanism is mutations 1–3.
+  //
+  //    So this entry keys on the structural assertion instead, and the comment
+  //    in db.mjs says the same thing. Claiming a behavioural test for it would
+  //    have been a document promising what no code enforced — which is the exact
+  //    failure class the 2026-07-25 review catalogued eighteen of.
+  { target: 'service', suite: 'service.test.mjs',
+    name: 'the connection is never cleaned up after a request',
+    find: `        await this.#pg.exec('reset role;');`,
+    repl: `        await this.#pg.query('select 1');`,
+    expect: 'the service exposes no way to query outside a bound session' },
+
+  // THE PRIVILEGED SHORTCUT. Sign-in reads cw.account before any role is known;
+  // doing it as the owner would be the one place a privileged connection could
+  // hide, and the owner bypasses row-level security entirely.
+  { target: 'service', suite: 'service.test.mjs',
+    name: 'sign-in looks up identity on a privileged connection',
+    find: `    return this.asPerson('__signin__', 'viewer', fn);`,
+    repl: `    return fn({ query: async (sql, params = []) =>
+      (await this.#pg.query(sql, params)).rows });`,
+    expect: 'sign-in itself is not privileged either' },
+
+  // REVOCATION AT NEXT REQUEST. If the role is cached on the session, revoking
+  // somebody takes effect at their next SIGN-IN — which for an eight-hour
+  // session means tomorrow, while the console says revoked.
+  { target: 'service', suite: 'service.test.mjs',
+    name: 'the effective role is resolved once and cached on the session',
+    find: `    const rows = await this.#db.lookUpIdentity(({ query }) =>
+      query(\`select role from cw.effective_role where person = $1\`, [person]));
+    if (!rows.length) {`,
+    repl: `    const rows = this.__roleCache?.[person]
+      ? [{ role: this.__roleCache[person] }]
+      : await this.#db.lookUpIdentity(({ query }) =>
+          query(\`select role from cw.effective_role where person = $1\`, [person]));
+    (this.__roleCache ??= {})[person] = rows[0]?.role;
+    if (!rows.length) {`,
+    expect: 'a revoked person is refused on their very next request' },
+
+  // SESSION EXPIRY, ignored.
+  { target: 'service', suite: 'service.test.mjs',
+    name: 'sessions never expire',
+    find: `    if (this.#now() >= s.expiresAt) { this.#byToken.delete(token); return null; }`,
+    repl: `    if (false) { return null; }`,
+    expect: 'a session expires and re-sign-in is required' },
+
+  // THE REFUSAL, REWORDED. The schema raises refusals that name the rule and
+  // the role; classifying by message text instead of SQLSTATE silently demotes
+  // every schema-worded refusal to a 400 bad request. This one is not
+  // hypothetical — it is the bug this file shipped with and the test caught.
+  { target: 'service', suite: 'service.test.mjs',
+    name: 'refusals are classified by reading the message, not the SQLSTATE',
+    find: `  const denied = e?.code === '42501'
+    || /permission denied|row-level security/i.test(msg);`,
+    repl: `  const denied = /permission denied|row-level security|insufficient_privilege/i.test(msg);`,
+    expect: 'the database\'s own words reach the caller unchanged' },
+
+  // THE FORGED CLAIM, and the scoping filter migrating into the API. Both are
+  // structural checks, and both would otherwise be enforced by good intentions.
+  { target: 'service', suite: 'service.test.mjs',
+    name: 'the deals endpoint scopes rows in the API instead of the database',
+    find: `    sql: \`select agreement_id, counterparty, requester, status
+          from cw.agreement order by agreement_id\`,`,
+    repl: `    sql: \`select agreement_id, counterparty, requester, status
+          from cw.agreement where true order by agreement_id\`,`,
+    expect: 'the difference comes from the database, not from a filter here' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();
@@ -1044,6 +1159,13 @@ console.log(`mutation check — each row must FAIL the suite via its named test`
 console.log(`${MUTATIONS.length} mutations, ${LANES} at a time\n`);
 
 const runOne = (m) => new Promise((resolve) => {
+  // A mutation targets either the migrations or the service. The service half
+  // arrived with WP-U05: the pool-bleed guard, the per-request role resolution
+  // and the no-privileged-path rule are all JavaScript, and a harness that
+  // could only reach SQL would leave the most dangerous protections in the
+  // system as tests nobody had ever seen fail.
+  if (m.target === 'service') return resolve(runServiceMutation(m));
+
   const dir = mkdtempSync(join(tmpdir(), 'cw-mut-'));
   let applied = false;
   for (const f of files) {
@@ -1064,6 +1186,44 @@ const runOne = (m) => new Promise((resolve) => {
       const out = (stdout || '') + (stderr || '');
       if (!err) return resolve({ m, verdict: 'miss' });
       resolve({ m, verdict: out.includes(`FAIL ${m.expect}`) ? 'ok' : 'imprecise' });
+    });
+});
+
+// The service half of the harness. Same contract as the SQL half — break one
+// guarantee, assert the suite fails via the test that names it — but it copies
+// backend/service/*.mjs into a temp directory and points CW_SERVICE at it.
+const SERVICE_SRC = join(HERE, '..', '..', 'service');
+const serviceFiles = readdirSync(SERVICE_SRC).filter(f => f.endsWith('.mjs'));
+const serviceOriginals = Object.fromEntries(
+  serviceFiles.map(f => [f, readFileSync(join(SERVICE_SRC, f), 'utf8')]));
+
+// The mutated copies live INSIDE backend/, not in the system temp directory.
+// They have to: the service imports '@electric-sql/pglite', and Node resolves a
+// bare specifier by walking up from the importing file looking for node_modules.
+// From C:\…\Temp\ that walk finds nothing, so every service mutation failed to
+// import at all — the suite crashed instead of failing a test, and all nine were
+// reported IMPRECISE, "the named test is unproven", for tests that were fine.
+// Under backend/ the walk finds backend/node_modules on the first step.
+const MUT_ROOT = join(HERE, '..', '..', '.mutation-service');
+
+const runServiceMutation = (m) => new Promise((resolve) => {
+  mkdirSync(MUT_ROOT, { recursive: true });
+  const dir = mkdtempSync(join(MUT_ROOT, 'svc-'));
+  let applied = false;
+  for (const f of serviceFiles) {
+    let src = serviceOriginals[f];
+    if (src.includes(m.find)) { src = src.replace(m.find, () => m.repl); applied = true; }
+    writeFileSync(join(dir, f), src);
+  }
+  const done = (verdict) => { rmSync(dir, { recursive: true, force: true }); resolve({ m, verdict }); };
+  if (!applied) return done('skip');
+
+  execFile(process.execPath, [join(HERE, m.suite || 'service.test.mjs')],
+    { env: { ...process.env, CW_SERVICE: dir }, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
+    (err, stdout, stderr) => {
+      const out = (stdout || '') + (stderr || '');
+      if (!err) return done('miss');
+      done(out.includes(`FAIL ${m.expect}`) ? 'ok' : 'imprecise');
     });
 });
 
