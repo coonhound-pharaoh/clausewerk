@@ -323,3 +323,54 @@ property the build refuses to ship without.
 **Also.** A contract assembled twice from identical inputs now produces a
 byte-identical file. Without that, the fingerprint we store against the signed
 contract would change every minute and mean nothing.
+
+---
+
+## 2026-07-25 · AI may now draft clauses — and what that costs us
+
+**Decision.** Mike asked for a Clause Library Builder that uses AI to draft
+clauses and negotiating moves. That collides directly with the rule the whole
+system was built on: *the model never writes contract language.* The collision
+is real and worth stating rather than smoothing over.
+
+**Where it lands.** The rule was doing two jobs. At assembly, it stops anything
+being generated into a contract — **that half is completely unchanged.** Nothing
+a model writes can reach a contract; the check that counts machine-written
+characters still returns zero and is still enforced by the build.
+
+The second job was at authoring: wording entered the library only if a lawyer
+composed it. That is what changes. AI can now draft a *proposal*; it becomes
+approved wording only when a named lawyer reviews and accepts it — the same
+approval step that already existed.
+
+**The rule now reads:** no contract language reaches an agreement without a
+named human's approval, and the origin of every clause is recorded permanently
+— written by a lawyer, drafted by AI, conceded to a vendor, or from supplier
+paper.
+
+**The honest cost.** "Zero machine-written characters" was a simple, checkable,
+unusual claim. It stays true of contract assembly, but not of the library once
+AI-drafted wording is approved into it. The system will compute both numbers.
+**Which one we publish is your call** — but quietly keeping the old wording on
+the document while the second number is above zero would mislead.
+
+**The risk to watch.** A lawyer reviewing a fluent draft approves faster than one
+writing from a blank page. We now measure how often drafts are approved with no
+edits at all. That number is the early warning that review has stopped being
+review, and somebody has to own it.
+
+---
+
+## 2026-07-25 · Supplier paper is now supported, but quarantined
+
+**Decision.** When the counterparty's template is the base document, AI breaks it
+into clause-like pieces so the system can categorise it, assess risk, and offer
+alternatives from our library.
+
+**The hard limit.** Those pieces belong to that one agreement. They are never
+selectable, never enter our library, and never appear in anything we draft. A
+lawyer can deliberately promote one, through the normal approval gate — never
+automatically.
+
+**Why it is safe enough.** Every piece keeps a pointer back to the exact text in
+their document, so a reviewer can always check the split rather than trust it.

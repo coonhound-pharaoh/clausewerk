@@ -23,6 +23,14 @@ Clausewerk is a **procurement contract assembly system**. A business requester d
 
 The organising principle: **the language model never authors contract language.** It reads, classifies, and points. A deterministic executor fetches immutable text by ID and assembles the document. Every artifact the system emits carries the count `0 LLM-authored characters` — that claim is the product.
 
+> **Amended by [ADR-0010](docs/decisions/ADR-0010-ai-drafted-clause-candidates.md).** The principle
+> now reads: *no contract language reaches an agreement without a named human's approval, and the
+> origin of every clause is recorded on it permanently.* Assembly is unchanged and still generates
+> nothing — but the Clause Library Builder may draft candidates for Legal to approve, so approved
+> wording may be `ai_drafted` in origin. The `0 LLM-authored characters` count remains true of the
+> assembly path and is still asserted by test; a second figure reports characters originating from
+> AI-drafted clauses. **Which is published is an owner decision.**
+
 Three consequences follow, and the whole architecture exists to serve them:
 
 1. **Legal reviews decisions, not prose.** Reviewers verify that the right clause was chosen, not that the wording is safe — the wording was already approved.
@@ -243,7 +251,15 @@ The model is used in exactly three places, each with a narrow contract and a det
 
 ### Hard prohibitions
 
-- The model **never** writes, paraphrases, summarises, or "improves" clause text.
+> **Amended by [ADR-0010](docs/decisions/ADR-0010-ai-drafted-clause-candidates.md).** The first
+> prohibition below is now narrowed: the Clause Library Builder may *draft candidate* clauses for a
+> named lawyer to approve. It still may not write into a contract, and it still may not commit
+> anything to the library. The four prohibitions after it are unchanged. See
+> [`NEGOTIATION-ARCHITECTURE.md`](NEGOTIATION-ARCHITECTURE.md) §5.
+
+- The model **never** writes, paraphrases, summarises, or "improves" clause text *in a contract*.
+  It may draft a candidate clause for the Review queue; only a named human turns that into
+  approved language.
 - The model **never** selects a clause outside the enumerated, active, in-category pool.
 - The model **never** invents a category — unknown categories are dropped at the boundary.
 - The model **never** commits anything to the Ledger. Only a named human, through Review, can.

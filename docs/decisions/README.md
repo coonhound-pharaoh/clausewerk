@@ -21,6 +21,7 @@ That is the section to read.
 | [0007](ADR-0007-one-redline-per-changed-paragraph.md) | One redline per changed paragraph, adjudicated independently | Cross-paragraph negotiation packages become invisible |
 | [0008](ADR-0008-governance-roles-and-recorded-overrides.md) | Five roles; override is a socialised request; auto-approval is recorded | Latency on exactly the deals already under deadline pressure |
 | [0009](ADR-0009-concession-is-not-supersession.md) | Concession, promotion, and supersession are three separate acts | Three concepts where operators saw one; promotion has no natural trigger |
+| [0010](ADR-0010-ai-drafted-clause-candidates.md) | AI may draft candidate clauses; only a human publishes them | The simplest form of the headline claim is gone; review quality becomes the binding control |
 
 ## Format
 

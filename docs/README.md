@@ -1,12 +1,14 @@
 # Clausewerk documentation
 
-Three specifications sit at the repository root and are the **canonical sources of truth**:
+Four specifications sit at the repository root and are the **canonical sources of truth**:
 
 - [`ARCHITECTURE.md`](../ARCHITECTURE.md) — assembly and negotiation, ending at `contract.docx`.
 - [`LIFECYCLE-ARCHITECTURE.md`](../LIFECYCLE-ARCHITECTURE.md) — the LCMA: everything after
   signature. Obligations, renewals, amendments, wind-down.
 - [`CLAUSE-LIBRARY-ARCHITECTURE.md`](../CLAUSE-LIBRARY-ARCHITECTURE.md) — the CLA: the library
   itself. Fallback ladders, concessions, version history, negotiation intelligence.
+- [`NEGOTIATION-ARCHITECTURE.md`](../NEGOTIATION-ARCHITECTURE.md) — the NA: end-to-end
+  negotiation. Rounds, supplier paper, per-round analysis, the Clause Library Builder.
 
 Everything in this folder is *complementary* to that document, never a restatement of it. Where a
 document here and `ARCHITECTURE.md` disagree, `ARCHITECTURE.md` wins and the document here is a
@@ -41,7 +43,7 @@ bug.
 |---|---|
 | [`data-model.md`](data-model.md) | Consolidated record shapes — manifest, clause, decision, finding, redline, ticket, audit event |
 | [`diagrams.md`](diagrams.md) | Pipeline, trust boundary, resolution algorithm, redline adjudication, review-ticket lifecycle |
-| [`decisions/`](decisions/) | Architecture Decision Records — the eight choices the system is built on |
+| [`decisions/`](decisions/) | Architecture Decision Records — the ten choices the system is built on |
 | [`glossary.md`](glossary.md) | Terms of art, in the specific sense Clausewerk uses them |
 | [`spec-vs-implementation.md`](spec-vs-implementation.md) | Seven verified places the v3 code and the spec disagree |
 | [`open-questions.md`](open-questions.md) | Gaps, tensions, and deferred scope in the current specification |

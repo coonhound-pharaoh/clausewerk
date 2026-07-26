@@ -9,11 +9,14 @@ trail explaining why each clause is present.
 
 ## The invariant
 
-> The language model never authors contract language.
+> No contract language reaches an agreement without a named human's approval, and the
+> origin of every clause is recorded on it permanently.
 
-It reads, classifies, and points. A deterministic executor fetches immutable text by ID and
-assembles the document. Every artifact the system emits carries the count
-`0 LLM-authored characters` — that claim is the product.
+At assembly the model generates nothing at all: a deterministic executor fetches immutable text by
+ID and assembles the document, and every emitted artifact carries the count
+`0 LLM-authored characters`, asserted by test. AI may *draft candidate* clauses for the library, but
+only a named lawyer turns a draft into approved language — see
+[ADR-0010](docs/decisions/ADR-0010-ai-drafted-clause-candidates.md).
 
 Three consequences follow, and the whole architecture exists to serve them:
 
@@ -45,6 +48,7 @@ inference side to the deterministic side.
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | **The specification.** Assembly and negotiation — intent, pipeline, the deterministic/inference split, back- and front-end requirements. Ends at `contract.docx` |
 | [`LIFECYCLE-ARCHITECTURE.md`](LIFECYCLE-ARCHITECTURE.md) | **The LCMA.** Everything after signature — obligations derived by clause ID, renewals, amendments, wind-down |
 | [`CLAUSE-LIBRARY-ARCHITECTURE.md`](CLAUSE-LIBRARY-ARCHITECTURE.md) | **The CLA.** The library itself — fallback ladders, concessions, version history and supersession, negotiation intelligence |
+| [`NEGOTIATION-ARCHITECTURE.md`](NEGOTIATION-ARCHITECTURE.md) | **The NA.** End-to-end negotiation — every round captured, supplier paper, per-round analysis, the Clause Library Builder |
 | [`memory.md`](memory.md) | Decision log in plain language — what we decided and why |
 | [`docs/`](docs) | Data model, diagrams, decision records, glossary, and the spec-vs-code drift list |
 | [`prototype/`](prototype) | The working prototype, ingested verbatim — v3 (current), v2, the pitch deck, and a single-file build |
