@@ -46,16 +46,29 @@ the plan's value order is U11, U12, U13, U14.
 
 ---
 
-## WP-U00 · Owner decisions
+## WP-U00 · Owner decisions — **CLOSED 2026-07-26**
 
 **Objective.** The four decisions in the architecture (§6) are made by the owner
 and recorded, so no later package builds on an assumption.
 
+**Settled as.** `U5` Administrator boundary — accepted, **amended**: the role may
+*read* content; write and judgement are the boundary, not sight. `U6` countersign
+— accepted as proposed, for the two Legal roles only. `U7` checkpoints — **move**
+to the Administrator, Legal admin's right revoked. `U8` workspace model —
+accepted as proposed.
+
+Recorded in [`memory.md`](memory.md) and [`docs/open-questions.md`](docs/open-questions.md)
+with rationale and accepted costs; §4 and §6 of the architecture trued to the
+`U5` amendment; the settings rows land with WP-U03, which is where the `kind`
+column they need is created.
+
 **Deliverables.**
-- Decisions on: the Administrator boundary; the countersign rule; checkpoint
+- ✅ Decisions on: the Administrator boundary; the countersign rule; checkpoint
   ownership (move or joint); the workspace model.
-- Each recorded in `memory.md` with rationale, and — where a decision is held as
+- ✅ Each recorded in `memory.md` with rationale, and — where a decision is held as
   data — a row in the governance settings, marked decided, naming the decider.
+  *(Rows deferred to U03 by dependency, not by choice: `cw.governance_setting`
+  has no `kind` column until then. Tracked, not forgotten.)*
 
 **Dependencies.** None. Gates everything.
 
@@ -84,9 +97,11 @@ name in an accounts table.
 - Migration 0013 (part 1): the `cw_administrator` role (nologin, like the five);
   `cw.app_role()` extended; `cw.account` (named person, unit, the one role they
   hold, active/revoked state, created by/on).
-- Explicitly **no** select/insert/update grants for the administrator on any
-  content table: agreements, manifests, runs, clauses, tickets, negotiations,
-  concessions, holds, executed records.
+- Per decision `U5`: `select` **is** granted to the administrator on the content
+  tables, and explicitly **no** `insert`/`update`/`delete` on any of them —
+  agreements, manifests, runs, clauses, tickets, negotiations, concessions,
+  holds, executed records — nor any execute grant on the functions that decide
+  them.
 - Audit event `account_created`.
 - The scripted, run-once **bootstrap ceremony**: owner creates the first
   Administrator and first Legal admin, each act recorded on the chain marked as
@@ -100,26 +115,32 @@ name in an accounts table.
 - *Common:* modelling accounts with a many-roles-per-person join "for later" —
   the design is one person, one role; a second role is a revoke and a grant,
   both recorded.
-- *Critical:* granting the administrator *any* content read "temporarily for
-  the health dashboard" — health evidence comes from purpose-built read models
-  (U04), never from content tables. Once a content grant exists, the steward
-  boundary is fiction.
+- *Critical:* granting the administrator any content **write** — insert, update,
+  delete, or execute on a deciding function — for any reason, including "the
+  health dashboard needs to mark a row checked". Health evidence comes from
+  purpose-built read models (U04). `U5` opened *reading*; it did not open
+  writing, and writing is where the steward boundary actually lives.
+- *Common:* describing the role as content-blind anywhere in code comments,
+  documents or UI copy. It reads content. Say content-visible and
+  content-powerless.
 - *Critical:* a bootstrap path that stays callable after first run — a standing
   owner-powered backdoor.
 
 **Testing.**
-- As administrator: every content table refused (read and write, the full
-  list, not a sample).
+- As administrator: every content table **writable by nobody** — insert, update
+  and delete refused on the full list, not a sample; and readable, which is
+  asserted positively so the `U5` grant is proven present rather than assumed.
 - As each of the five existing roles: `cw.app_role()` still answers correctly;
   owner still maps to null (settled decision U3 untouched).
 - Bootstrap: runs once, refuses twice; its audit rows carry the bootstrap
   marking.
-- Mutation checks: remove the administrator's exclusion from a content policy →
-  caught by the test that names it.
+- Mutation checks: remove the administrator's exclusion from a content **write**
+  policy → caught by the test that names it.
 
 **Documentation.** New ADR — *"The Administrator is a steward, not a superuser"*
-— in `docs/decisions/`; `ARCHITECTURE.md` role list becomes six;
-`docs/glossary.md` entry; `docs/data-model.md` gains `cw.account`.
+— in `docs/decisions/`, stating the `U5` amendment and its cost in its own
+words; `ARCHITECTURE.md` role list becomes six; `docs/glossary.md` entry;
+`docs/data-model.md` gains `cw.account`.
 
 ---
 
@@ -211,8 +232,8 @@ evidence: chain status, checkpoints on schedule, executed-document hash checks,
 a rebuild spot-check, retention coming due.
 
 **Deliverables.**
-- Checkpoint execute-right assigned per the U00 decision (administrator, or
-  jointly), recorded either way.
+- Checkpoint execute-right **moved** to the administrator per decision `U7`, and
+  revoked from legal admin in the same migration. Both halves recorded.
 - Health read models, each granted to administrator (and auditor where it
   already reads): last anchor-check result and chain height; checkpoint history
   and next-due; executed-document count vs hash-verified count; latest rebuild
@@ -228,17 +249,20 @@ a rebuild spot-check, retention coming due.
 - *Common:* a health view computed from assumptions ("documents stored = rows
   inserted") rather than verification actually performed. The tile says
   *verified*; the query must only count verifications that ran.
-- *Critical:* a health read model that leaks content — retention due must
-  expose identity and due-ness, not agreement bodies; the administrator reads
-  evidence *about* the record, never the record.
-- *Critical:* moving checkpoint duty without revoking the old right — two roles
-  silently holding a duty means neither owns it.
+- *Common:* a health read model that returns agreement bodies. `U5` means this is
+  no longer a leak, but it is still wrong design: a health model answers
+  *is the record sound*, and mixing content into it makes the tile impossible to
+  read at a glance. Retention due exposes identity and due-ness.
+- *Critical:* moving checkpoint duty without revoking the old right — decision
+  `U7` is a **move**. Legal admin's checkpoint right must be revoked in the same
+  migration; two roles silently holding a duty means neither owns it, and a test
+  must prove Legal admin is now refused.
 
 **Testing.**
 - Each read model as administrator (readable) and as requester/viewer
   (refused).
-- Checkpoint as the assigned role (works, audited); as the unassigned role
-  (refused) — matching the U00 decision exactly.
+- Checkpoint as administrator (works, audited); as legal admin (refused, where it
+  previously worked) — matching decision `U7` exactly.
 - A deliberately broken stored hash makes the health model report the mismatch.
 
 **Documentation.** `backend/README.md` operations section: what runs nightly,

@@ -1,6 +1,8 @@
 # UI & Administration Architecture (the UIA)
 
-*Proposed 2026-07-26. Status: awaiting owner acceptance. Companion mockup:
+*Proposed 2026-07-26. **Status: accepted 2026-07-26, being built** — the four
+decisions in §6 are settled; `U5` amended this document and §4 has been trued to
+the amendment. Companion mockup:
 [`prototype/v4-concept/Clausewerk V4 Concept.html`](prototype/v4-concept/Clausewerk%20V4%20Concept.html)
 — open it in a browser, no build step, and switch roles in the top-right corner.*
 
@@ -93,12 +95,25 @@ to the unaccountable owner account (worse: acts with no name on them).
 
 So the Administrator is designed as a **steward, not a superuser**:
 
-> **The Administrator runs the machine and can never touch what the machine
-> holds.** No reading of deals, no writing of clause text, no deciding of
-> tickets, overrides or concessions, no changing of owner decisions, and — like
-> everyone else — no editing of history.
+> **The Administrator runs the machine and can never change what the machine
+> holds.** No writing of clause text, no deciding of tickets, overrides or
+> concessions, no changing of owner decisions, and — like everyone else — no
+> editing of history.
 
 This is the product boundary applied to ourselves: system, not content.
+
+**Owner amendment, 2026-07-26 (decision `U5`).** This document originally
+proposed that the Administrator could not *read* contract content either. The
+owner relaxed that: the role **may read** deals, manifests, negotiations and
+redlines, so that whoever is supporting the system can see the thing being
+complained about. The boundary that is kept, and that the tests enforce, is
+**write and judgement** — the Administrator can change nothing and decides
+nothing.
+
+Say this accurately when describing the role: **content-visible,
+content-powerless.** "Content-blind" is no longer true, and a document claiming
+it would be exactly the failure the 2026-07-25 review catalogued. The cost is
+recorded in [`docs/open-questions.md`](docs/open-questions.md) under `U5`.
 
 ### 4.2 What the Administrator can and cannot do
 
@@ -106,7 +121,7 @@ This is the product boundary applied to ourselves: system, not content.
 |---|---|
 | Create accounts for named people; grant and revoke roles — **grants to the two Legal roles take effect only after a Legal admin countersigns** | Hold a second role at the same time, or grant themselves one |
 | Change **operational settings** (review-window length, ticket expiry, notification timing, session length) | Change an **owner decision** — those stay Legal admin's, read-only in the admin console |
-| Take audit checkpoints and run anchor/rebuild checks on a schedule | Read contract content, manifests, negotiations, or the review queue |
+| Take audit checkpoints and run anchor/rebuild checks on a schedule | Write contract content, manifests, negotiations, or anything in the review queue — reading them is permitted per `U5`; changing them never is |
 | Maintain watcher lists and notification rules — *who is told*, never *who decides* | Approve, reject or decide anything in any workflow |
 | Connect and monitor integrations (identity, model endpoint, e-signature, document store) | Give an integration a content role |
 | See what retention makes due, and nudge Legal | Destroy anything — destruction stays Legal admin's recorded act |
@@ -166,12 +181,14 @@ act *as the role the policy names*.
   socialisation step needs. The override request tables themselves are ADR-0008
   work that this design depends on but does not redefine.
 - **Checkpoint duty moves.** Taking an audit checkpoint is machine stewardship,
-  not a content judgement — it moves from Legal admin to the Administrator (or is
-  held by both during transition; owner's call, recorded either way).
-- **No read grants on content.** The Administrator role receives *no* select on
-  agreements, manifests, runs, clauses' review queue, negotiations, concessions.
-  Its surface is accounts, grants, settings, watchers, checkpoints, and the
-  health read models.
+  not a content judgement. Decision `U7`: it **moves** from Legal admin to the
+  Administrator, and Legal admin's right is *revoked* in the same migration —
+  not held jointly, because two roles holding one duty means neither owns it.
+- **Read on content, write on nothing.** Per decision `U5` the Administrator
+  role receives `select` on the content tables, and **no** `insert`, `update` or
+  `delete` on any of them — nor any grant on the functions that decide tickets,
+  overrides, concessions or owner decisions. Its *write* surface is exactly
+  accounts, grants, operational settings, watchers, and checkpoints.
 
 ### 4.5 Costs, stated plainly
 
@@ -186,9 +203,13 @@ act *as the role the policy names*.
   can hold. That bootstrap is done once, scripted, and recorded on the chain as
   such — the same pattern the schema already uses for seeded rows.
 - **The Administrator can starve the system** (revoke everyone, break a
-  setting). They cannot *corrupt* it — content and history stay out of reach —
+  setting). They cannot *corrupt* it — content and history stay unwritable —
   and every act of starvation is on the record under their name. Recovery is the
   bootstrap path, recorded again.
+- **The Administrator can read everything, and reading is not recorded.** Per
+  `U5` this is accepted: the system records acts, not glances, and adding
+  per-read logging for one role would be a second audit mechanism with different
+  guarantees. Anyone for whom that is unacceptable should not hold this role.
 
 ## 5. What has to exist for any of this to be real
 
@@ -199,11 +220,21 @@ sign in as a named person, hold their role on the connection, pass rows through 
 **no permission logic in the API itself**; it borrows the database's. That layer
 is a prerequisite phase in the project plan, not part of this document's scope.
 
-## 6. Decisions this proposal asks of the owner
+## 6. Decisions this proposal asked of the owner — all four settled
 
-1. **Accept the Administrator boundary** — steward of the machine, never a voice
-   in content (§4.1–4.2).
-2. **Accept the countersign rule** for grants of Legal roles (§4.2).
-3. **Who takes checkpoints** — move to Administrator, or hold jointly (§4.4).
-4. **Accept the workspace model** — deals as the requester's unit, waiting lists
-   first, nine global tabs retired (§3).
+Settled by Mike on 2026-07-26. Recorded with reasoning and accepted costs in
+[`memory.md`](memory.md) and [`docs/open-questions.md`](docs/open-questions.md),
+and held as rows in `cw.governance_setting`.
+
+| # | Decision | Settled as |
+|---|---|---|
+| `U5` | The Administrator boundary (§4.1–4.2) | **Accepted, amended.** Steward of the machine and never a voice in content — but content is **readable**. Write and judgement are the boundary, not sight |
+| `U6` | The countersign rule for Legal-role grants (§4.2) | **Accepted as proposed.** Two names for legal reviewer and legal admin; one name for viewer, requester and auditor |
+| `U7` | Who takes checkpoints (§4.4) | **Moves to the Administrator alone.** Legal admin's right is revoked, not shared |
+| `U8` | The workspace model (§3) | **Accepted as proposed.** Six workspaces, waiting lists first, deals as the requester's unit, nine global tabs retired |
+
+Status of this document therefore moves from *awaiting owner acceptance* to
+**accepted, being built** — see
+[`UI-REIMAGINE-WORK-PACKAGES-2026-07-26.md`](UI-REIMAGINE-WORK-PACKAGES-2026-07-26.md).
+It moves to *built* at WP-U15, with any drift between this design and what
+shipped listed rather than smoothed over.

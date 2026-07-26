@@ -625,25 +625,93 @@ governs.
 
 ---
 
-## 2026-07-26 · The Administrator is a steward, not a superuser (PROPOSED)
+## 2026-07-26 · The Administrator: a sixth role that runs the machine
 
-**Proposal, awaiting owner acceptance.** The UI is being reimagined as one
-workspace per role instead of nine tabs everyone can open, and that work
-surfaced a job with no chair: someone must grant access, keep settings, watch
-the health of the record, and connect integrations. We are proposing a sixth
-role — the Administrator — designed so that it **runs the machine and can never
-touch what the machine holds**: no contract content, no deciding of tickets,
-overrides or concessions, no owner decisions, no editing of history.
+**The job that had no chair.** Somebody has to create accounts, grant and revoke
+access, keep the operational settings, watch the health of the record, and
+connect the integrations. Today that work would fall either to Legal admin —
+which mixes machine housekeeping into contract judgement — or to the database
+owner account, which is worse, because "the owner is nobody" is already settled
+and an act done as the owner has no name on it. So we are adding a sixth role,
+the **Administrator**, and Mike has settled the four questions its design asked.
 
-**Why this shape.** "The owner is nobody" is already settled — administration
-done as the database owner would be an act with no name on it. And
-administration done as Legal admin would mix machine stewardship into content
-judgement. A named, recorded, content-blind role is the only shape that
-respects both boundaries. Grants of the two Legal roles take two names — the
-Administrator proposes, a Legal admin countersigns — because access to Legal
-judgement is itself a judgement.
+### U5 · The Administrator runs the machine, and may read but never change what it holds
 
-**Where it lives.** [`UI-AND-ADMINISTRATION-ARCHITECTURE.md`](UI-AND-ADMINISTRATION-ARCHITECTURE.md)
-(the design and the four decisions it asks of the owner),
-[`UI-REIMAGINE-PLAN-2026-07-26.md`](UI-REIMAGINE-PLAN-2026-07-26.md) (the plan),
-and a clickable concept at `prototype/v4-concept/`.
+**Decided: accepted, with contract content readable.** The Administrator creates
+accounts, grants and revokes roles, keeps operational settings, maintains the
+watcher lists, takes checkpoints, and reads the health evidence. The Administrator
+**cannot change anything the business cares about**: no writing clause text, no
+deciding tickets, overrides or concessions, no changing an owner decision, and —
+like everyone else, including the owner — no editing history.
+
+Mike's amendment to the proposal: the Administrator **can read** contract content.
+The original design gave the role no sight of deals at all.
+
+**The cost, stated plainly.** The person who administers accounts can read every
+deal, manifest, negotiation position and supplier redline in the system. Nothing
+in the database stops them, and every read is *not* individually recorded — we
+record acts, not glances. What contains this is that the Administrator can change
+none of it, holds no vote in any workflow, and cannot grant themselves a role
+that would give them one. The boundary we are keeping is **write and judgement**,
+not sight. Anyone describing this role to an auditor must say "content-visible,
+content-powerless" and not "content-blind" — the ADR is titled accordingly.
+
+### U6 · Access to Legal judgement takes two names
+
+**Decided: accepted as proposed.** A grant of either Legal role — reviewer or
+admin — takes effect only when a **Legal admin countersigns** it. The
+Administrator proposes; Legal accepts. Until then the grant confers nothing, and
+the *database* is what refuses, not the screen — a rule that lives only in the
+API is one bug away from gone.
+
+The other three roles — viewer, requester, auditor — the Administrator grants
+alone, recorded. None of them can change a contract or decide anything, so a
+second signature would buy control nobody needs and slow down every ordinary
+joiner.
+
+**Why this one survived when U5 was relaxed.** Reading everything is a
+containable risk; being able to hand somebody the power to approve contract
+language is not. This is the check that stops an Administrator assembling a
+voice in content by proxy — granting an ally Legal reviewer and having them
+approve the Administrator's own requests.
+
+**The cost.** A wait, every time Legal cover is needed in a hurry. That wait is
+the control working. A daily nudge to Legal admins keeps it short, and the
+countersign queue appears in Legal's own workspace, not only in the console
+where Legal never looks.
+
+### U7 · Checkpoints move to the Administrator, and are revoked from Legal admin
+
+**Decided: move, not share.** Taking an audit checkpoint is machine stewardship —
+it proves the record has not been tampered with, and says nothing about any
+contract. It becomes the Administrator's duty alone, and Legal admin's right to
+take one is **revoked**, not merely left unused.
+
+**Why not hold it jointly during transition.** Two roles holding one duty means
+neither owns it, and there is nobody to hold to account for a checkpoint that
+was never taken. A shared right also needs an end date somebody remembers to
+set. Cleaner to move it once and record the move.
+
+### U8 · Six workspaces replace nine global tabs
+
+**Decided: accepted as proposed.** Each person signs in as a named human holding
+one role, and their workspace is built only from what that role's database
+connection can actually read. Every workspace opens on *what is waiting on you*
+rather than on a menu to hunt through.
+
+Two structural consequences: **deals become the requester's unit of navigation**
+— the Intake → Manifest → Forge → Validate → Dossier pipeline stops being five
+global tabs and becomes the stages of one deal, so two deals at two stages never
+share a rail; and **the blanket acknowledge-and-override button is retired**, as
+ADR-0008 already decided, replaced by a request that is socialised, waits out a
+window, and is decided per finding.
+
+The visual language of v3 is kept wholesale. This is a reorganisation, not a
+restyling — no budget is spent on tokens, type, chips or buttons.
+
+**Where these live.** [`UI-AND-ADMINISTRATION-ARCHITECTURE.md`](UI-AND-ADMINISTRATION-ARCHITECTURE.md)
+(the design), [`UI-REIMAGINE-PLAN-2026-07-26.md`](UI-REIMAGINE-PLAN-2026-07-26.md)
+(the plan), [`UI-REIMAGINE-WORK-PACKAGES-2026-07-26.md`](UI-REIMAGINE-WORK-PACKAGES-2026-07-26.md)
+(the sixteen packages), and a clickable concept at `prototype/v4-concept/`.
+U5–U8 are also rows in `cw.governance_setting`, marked decided and naming the
+decider, so whoever next touches the thing they govern meets them there.

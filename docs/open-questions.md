@@ -24,10 +24,11 @@ number. Every other number is stable — they are referred to by number in conve
 
 ---
 
-## Owner decisions — all four settled, 2026-07-26 ✅
+## Owner decisions — all eight settled ✅
 
 These were never architecture questions. They were choices only the business owner could make, and
-the system deliberately did not make them. **All four are now settled.** They are recorded as rows
+the system deliberately did not make them. **All eight are now settled** — U1–U4 on 2026-07-26,
+and U5–U8 the same day when the UI redesign raised four more. They are recorded as rows
 in `cw.governance_setting` with the reasoning attached, not only here — a decision in a document
 gets read once; a decision in the schema is met by whoever next touches the thing it governs.
 
@@ -37,6 +38,10 @@ gets read once; a decision in the schema is met by whoever next touches the thin
 | `U2` | **May a statement of work contradict its master** | **Yes — with the same approval a concession needs**, and one category at a time. Not never, and not freely | `cw.sow_hangs_off_a_master()`, `cw.sow_override*`, `0012` |
 | `U3` | **What the database owner account maps to** | **No application role.** Governed acts run as a named role | `cw.app_role()`, `0001` |
 | `U4` | **The unedited-approval-rate threshold** | **Deliberately unset.** Measured and shown from day one; nothing is blocked on it. Legal sets the number with counsel, against real data | `cw.review_quality`, `0008` |
+| `U5` | **The Administrator's boundary** | **Steward, with sight.** The role runs the machine — accounts, grants, operational settings, watchers, checkpoints, health — and may **read** contract content, but can write none of it and decides nothing in any workflow | `cw_administrator` grants, `0013` |
+| `U6` | **Whether granting a Legal role takes two names** | **Yes, for the two Legal roles only.** A grant of legal reviewer or legal admin confers nothing until a Legal admin countersigns. Viewer, requester and auditor the Administrator grants alone | `cw.effective_role`, `0013` |
+| `U7` | **Who takes audit checkpoints** | **The Administrator, alone.** Moved from Legal admin, whose right is revoked rather than left unused | checkpoint grants, `0013` |
+| `U8` | **The workspace model** | **Six workspaces, one per role**, each opening on what is waiting on you; deals become the requester's unit and the pipeline becomes per-deal; the blanket override button is retired | the shell, `WP-U07` |
 
 ### The costs of each, stated rather than buried
 
@@ -53,6 +58,21 @@ gets read once; a decision in the schema is met by whoever next touches the thin
 - **`U4`** — the system measures the rate and shows it. What the number should be, and who watches
   it, belongs to the organisation using the system. If a customer wants to set rules around it, the
   measurement is already there to build on.
+- **`U5`** — the person who administers accounts can read every deal, manifest, negotiation position
+  and supplier redline in the system, and reads are not individually recorded because the system
+  records acts, not glances. What contains it: the role can change none of it, holds no vote in any
+  workflow, and cannot grant itself one. Describe this role as **content-visible and
+  content-powerless** — never as content-blind, which it is not.
+- **`U6`** — a wait every time Legal cover is needed in a hurry. That wait is the control working.
+  It is kept short by putting the countersign queue in Legal's own workspace rather than only in the
+  admin console, and by a daily nudge.
+- **`U7`** — during the changeover there is a window in which Administrator accounts must exist
+  before checkpoints can be taken at all, because Legal admin's right is revoked in the same
+  migration that grants the Administrator's. The bootstrap ceremony creates the first Administrator,
+  which is why it runs before anything else.
+- **`U8`** — the nine-tab prototype demos well to everybody at once, and six role-scoped workspaces
+  do not: showing the whole product now takes six sign-ins. Accepted deliberately, because a screen
+  that shows what the viewer's connection could never fetch is a leak dressed as a feature.
 
 ---
 
