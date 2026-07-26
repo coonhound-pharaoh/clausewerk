@@ -1135,6 +1135,74 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     repl: `    sql: \`select agreement_id, counterparty, requester, status
           from cw.agreement where true order by agreement_id\`,`,
     expect: 'the difference comes from the database, not from a filter here' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Attributed mutations (WP-U06) — target: 'service'
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // THE V3 BUG CLASS, restored one endpoint at a time. Each of these makes a
+  // write carry a name the request supplied instead of the one the session
+  // holds — which is the unattributed override wearing a different hat, and it
+  // succeeds silently every time.
+  { target: 'service', suite: 'mutations-api.test.mjs',
+    name: 'a deal can be opened in somebody else\'s name',
+    find: "       values ($1, $2, current_setting('cw.actor'))",
+    repl: "       values ($1, $2, coalesce($3, current_setting('cw.actor')))",
+    expect: 'the requester on a deal comes from the session, not the body' },
+
+  { target: 'service', suite: 'mutations-api.test.mjs',
+    name: 'the reviewer verifying a ticket is taken from the request',
+    find: `      \`select cw.verify_review_ticket($1,$2,$3,$4,$5,current_setting('cw.actor'),$6,$7,$8)`,
+    repl: `      \`select cw.verify_review_ticket($1,$2,$3,$4,$5,coalesce($9,current_setting('cw.actor')),$6,$7,$8)`,
+    expect: 'a legal reviewer verifies it, and the minted origin is derived' },
+
+  // THE SCHEMA'S OWN GATE, bypassed by an API-shaped shortcut. This is the
+  // mistake this file actually made before the database refused it, so it is
+  // worth keeping catchable rather than trusting nobody will make it again.
+  { target: 'service', suite: 'mutations-api.test.mjs',
+    name: 'verification becomes a raw update that mints nothing',
+    find: `  'POST /tickets/verify': {`,
+    repl: `  'POST /tickets/decide': {
+    rule: 'a shortcut',
+    run: (query, body) => query(
+      \`update cw.review_ticket set state = 'verified',
+              decided_by = current_setting('cw.actor'), decided_on = now()
+        where ticket_id = $1 returning ticket_id\`, [body.ticket_id]),
+  },
+  'POST /tickets/verify': {`,
+    expect: 'verification is one act, not an API-shaped shortcut round the schema' },
+
+  // THE APPROVED WORDING, defaulted. Every unedited approval becomes a fact the
+  // system invented rather than one it recorded, and owner decision U4's whole
+  // measurement rests on this column.
+  { target: 'service', suite: 'mutations-api.test.mjs',
+    name: 'the approved wording defaults to whatever was proposed',
+    find: `      [required(body, 'ticket_id'), required(body, 'approved_text'),`,
+    repl: `      [required(body, 'ticket_id'), body.approved_text ?? body.proposed_text ?? '',`,
+    expect: 'the approved wording is never defaulted to the proposal' },
+
+  // A REQUIRED FIELD QUIETLY OPTIONAL. The rejection note is the one the schema
+  // already guards, and the empty string is exactly what a form posts when
+  // nobody typed anything.
+  { target: 'service', suite: 'mutations-api.test.mjs',
+    name: 'a blank rejection note is accepted',
+    find: `  const v = body?.[field];
+  if (v === undefined || v === null || String(v).trim() === '')`,
+    repl: `  const v = body?.[field];
+  if (false)`,
+    expect: 'a rejection without a note is refused before it reaches the database' },
+
+  // THE REFUSAL, RETRIED. The single most damaging line anybody could add.
+  { target: 'service', suite: 'mutations-api.test.mjs',
+    name: 'a refused write is retried "to make the demo work"',
+    find: `        const rows = await this.#db.asPerson(caller.person, caller.role,
+          ({ query }) => write.run(query, body ?? {}));`,
+    repl: `        let rows;
+        try {
+          rows = await this.#db.asPerson(caller.person, caller.role,
+            ({ query }) => write.run(query, body ?? {}));
+        } catch { rows = []; }`,
+    expect: 'a viewer cannot open a deal, and nothing reaches the chain' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();

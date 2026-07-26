@@ -366,7 +366,18 @@ adding permission logic.
 
 ---
 
-## WP-U06 · Attributed mutations through the API
+## WP-U06 · Attributed mutations through the API — **CLOSED 2026-07-26**
+
+*Delivered in [`backend/service/mutations.mjs`](backend/service/mutations.mjs) and
+[`mutations-api.test.mjs`](backend/db/test/mutations-api.test.mjs) — 29 tests, 6 mutations.
+Endpoint inventory in [handoff 06 §10](docs/handoffs/06-service-layer-and-identity.md).*
+
+**The schema caught a real mistake here.** The first version had one
+`POST /tickets/decide` doing a raw `UPDATE` on `cw.review_ticket`. The database refused it:
+`verified_names_its_clause` requires a verified ticket to name the version it minted. That refusal
+was the schema stopping the API inventing a second, weaker way to promote language — which is what
+ADR-0003 makes the review queue for. Verify and reject are now two endpoints over the two
+purpose-built functions, and a test asserts no handler touches `cw.review_ticket` directly.
 
 **Objective.** Every write that goes through the doorway lands on the audit
 chain with the real person's name — which retires the prototype's unattributed

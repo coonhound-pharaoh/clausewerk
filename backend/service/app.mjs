@@ -28,6 +28,7 @@
 //                    on the client's behalf
 
 import { Sessions, parseDuration, EIGHT_HOURS } from './sessions.mjs';
+import { MUTATIONS } from './mutations.mjs';
 
 // ── The read endpoints ─────────────────────────────────────────────────────
 // Each is a pass-through of an existing read model. The comment on each says
@@ -229,11 +230,19 @@ export class App {
       } catch (e) { return refusal(e); }
     }
 
-    const write = this.mutations?.[`${method} ${path}`];
+    // `this.mutations` is an override the test suite installs to exercise the
+    // machinery — the pool bleed, the error path, the refusal shape — without
+    // depending on which real endpoints happen to exist. Real endpoints come
+    // from MUTATIONS and are the ones that ship.
+    const write = this.mutations?.[`${method} ${path}`] ?? MUTATIONS[`${method} ${path}`];
     if (write) {
       try {
+        // Note what is NOT passed to run(): nothing that could carry an actor.
+        // The person is already bound to the connection by asPerson, and every
+        // handler that records who acted reads it back with
+        // current_setting('cw.actor'). There is nowhere to put a different name.
         const rows = await this.#db.asPerson(caller.person, caller.role,
-          ({ query }) => write.run(query, body ?? {}, caller));
+          ({ query }) => write.run(query, body ?? {}));
         return { status: 200, body: { rows } };
       } catch (e) { return refusal(e); }
     }

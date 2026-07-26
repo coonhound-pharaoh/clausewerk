@@ -358,3 +358,80 @@ If you add a guarantee to the service, add its mutation with
   demand (WP-U04); wiring them to a trigger belongs with this runtime.
 - **Mutation endpoints** are WP-U06. `app.mjs` has the hook (`this.mutations`)
   and the refusal shape; the endpoints themselves land there.
+
+---
+
+## 10. Endpoint inventory (WP-U06)
+
+Reads are in `READS` in `app.mjs`; writes are in `mutations.mjs`. **Every entry
+names the database rule it defers to**, and that note is documentation of where
+the decision lives — not a decision being made in the service.
+
+### Reads
+
+| Endpoint | Scoped by |
+|---|---|
+| `GET /me` | `cw.effective_role` — a revoked or uncountersigned grant answers nothing |
+| `GET /deals` | `cw.agreement` `read_own` policy |
+| `GET /waiting/tickets` | `cw.review_ticket` `read_scoped` policy, oldest first |
+| `GET /waiting/countersign` | `cw.countersign_pending` |
+| `GET /people` | `cw.account` `read_all`; effectiveness from `cw.effective_role` |
+| `GET /access-history` | `cw.role_grant` `read_all` — append-only, so this is the whole story |
+| `GET /settings` | `cw.governance_setting` `read_all`; writing is split by `kind` |
+| `GET /health` | granted to administrator and auditor only |
+| `GET /watchers`, `GET /watchers/coverage` | `cw.override_watcher` `read_all` |
+
+### Writes
+
+| Endpoint | Defers to |
+|---|---|
+| `POST /deals` | `cw.agreement` `requester_writes`; the requester is the **session's** person |
+| `POST /tickets` | `cw.review_ticket` write policies; `opened_by` defaults to `cw.app_actor()` |
+| `POST /tickets/verify` | `cw.verify_review_ticket()` — Legal only, mints the version, derives `edited_before_approval` |
+| `POST /tickets/reject` | `cw.reject_review_ticket()`; `rejection_needs_note` refuses a blank |
+| `POST /concessions` | `cw.concession_requires_authority()` — the floor is absolute |
+| `POST /concessions/approve` | `cw.approval_names_the_right_person()` |
+| `POST /holds` | `cw.legal_hold` policies |
+| `POST /accounts`, `POST /accounts/revoke` | `cw.account` administrator policies; un-revoking is refused |
+| `POST /grants` | `cw.role_grant_rules()` — nobody grants themselves a role |
+| `POST /grants/countersign` | `legal_admin_countersigns` — decision `U6`; never the subject, never the proposer |
+| `POST /grants/revoke` | append-only, so a revocation is a new row |
+| `POST /settings`, `POST /settings/decide` | `cw.setting_write_rules()` — the split, both ways |
+| `POST /watchers`, `POST /watchers/remove` | `cw.override_watcher` administrator policies |
+| `POST /checkpoints` | execute on `cw.audit_checkpoint_take()` — decision `U7` |
+| `POST /health-checks/{anchor,chain,document,rebuild}` | the recording functions from WP-U04 |
+
+### The rules every write obeys
+
+**One act per endpoint.** No convenience endpoint bundles several governed acts
+into one call. Bundling blurs what was approved, and an auditor reading the chain
+afterwards cannot tell which of the bundled things the person actually looked at.
+
+**No retry, ever.** Nothing catches a refusal and tries again — not as a
+different role, not on a different connection. A refusal is the system working,
+and reissuing a refused write "to make the demo work" is the single most damaging
+line this file could hold. A test asserts `mutations.mjs` contains no `catch`.
+
+**Nowhere to put a different name.** No handler takes `actor`, `acted_by`,
+`approved_by`, `decided_by`, `opened_by`, `created_by`, `added_by`, `removed_by`,
+`revoked_by` or `granted_by` from the request body — asserted against all of
+them, not by trying a few. Handlers that record who acted read
+`current_setting('cw.actor')`, which `asPerson` bound from the session. The v3
+unattributed override is therefore not a bug that was fixed; it is a shape that
+cannot be expressed.
+
+Note the distinction that makes this workable: taking the **subject** of an act
+from the request is fine and necessary — `POST /grants` names the person being
+granted a role, which is not who is doing the granting.
+
+### One thing the schema caught, worth knowing about
+
+The first version of this file had a single `POST /tickets/decide` endpoint doing
+a raw `UPDATE` on `cw.review_ticket`. The database refused it outright:
+`verified_names_its_clause` requires a verified ticket to name the version it
+minted, and an update that sets the state and nothing else cannot.
+
+That refusal was the schema stopping the API inventing a second, weaker way to
+promote language — which is exactly what ADR-0003 makes the review queue for.
+Verifying and rejecting are now two endpoints over the two purpose-built
+functions, and a test asserts no handler updates `cw.review_ticket` directly.
