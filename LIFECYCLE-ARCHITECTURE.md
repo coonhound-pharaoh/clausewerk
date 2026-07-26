@@ -36,6 +36,10 @@ bolted onto documents of unknown provenance.
 
 ### What lifecycle management must not do
 
+- **Never modify a signed contract.** An executed agreement is frozen at signature — text, exhibits
+  and all — and stays frozen until it is destroyed at the end of its retention period. Library
+  changes never reach it. Renewal produces a new agreement; an amendment is a new signed instrument
+  appended to it. Neither edits what was signed.
 - Never re-open executed language. An amendment is a *new* assembly run, not an edit.
 - Never let a model determine an obligation, a date, a threshold, or a monetary amount.
 - Never silently re-resolve an executed agreement against a newer library.
@@ -51,6 +55,7 @@ model for.
 | | **Clause validity** | **Agreement term** |
 |---|---|---|
 | Governs | Whether language may be used in a *new* contract | Whether an *executed* contract is in force |
+| Applies to | The library only | The signed file only — whose **text never changes** |
 | Owner | Legal (the Ledger) | The deal (the executed record) |
 | Mechanism | `created` / `expires` / `active`, computed | `effective` / `expiry` / `renewal`, executed |
 | On lapse | Clause leaves the selectable pool | Agreement terminates or renews |
@@ -70,8 +75,14 @@ mid-flight*:
 - **At renewal or amendment**, the pin is released: the work re-enters assembly and resolves
   against the *current* library, which is exactly where stale language should be caught.
 
-Renewal is therefore the mechanism by which executed agreements converge on current approved
-language, without ever rewriting an executed one.
+Renewal never alters the signed agreement. It produces a **new** agreement, assembled from current
+approved language, which the parties sign separately. The old one stays exactly as executed for as
+long as it is retained.
+
+> **A signed contract is not a living document.** Nothing in this system edits, refreshes,
+> re-resolves or otherwise touches an executed agreement. Later library changes reach new
+> agreements and amendments only. Where this document describes clauses "changing", it always means
+> *the next contract will differ*, never *this one has been altered*.
 
 ---
 
@@ -102,12 +113,40 @@ language, without ever rewriting an executed one.
 
 Signature converts a dossier into an **executed agreement record**. Deterministic; no inference.
 
-- Pins `library_snapshot_id` and the full decision set. Reproducibility is now permanent.
-- Records counterparty, effective date, term, and the signature evidence (e-signature envelope ID).
-- Runs the **final expiry gate**: any clause in the document that has lapsed since Forge blocks
-  signature until re-resolved or overridden under
-  [ADR-0008](docs/decisions/ADR-0008-governance-roles-and-recorded-overrides.md).
-- Emits `agreement_executed` to the audit log.
+**The signed file is stored, byte for byte, and it is the contract.**
+
+This is not the same as being able to rebuild it, and the distinction is the most important one in
+this section. Assembly can reconstruct what it *issued*; it cannot reconstruct what was *signed*.
+Three reasons, each sufficient on its own:
+
+1. **A signed contract can contain language that is not in the library.** Conceded vendor wording is
+   quarantined by design ([ADR-0009](docs/decisions/ADR-0009-concession-is-not-supersession.md)) —
+   it is deliberately not selectable, so no regeneration will ever produce it.
+2. **Signature adds things assembly never saw**: executed signature blocks, counterpart pages,
+   dated initials, exhibits and schedules attached during negotiation, sometimes wet ink.
+3. **A reconstruction is evidence of what we believe; the file is evidence of what was agreed.**
+   Only one of those survives a dispute.
+
+So execution records:
+
+- **The executed document itself** — the exact bytes, their SHA-256, and where they are stored.
+  Immutable. This is the authoritative artefact.
+- The **assembly provenance**: the run, and through it the pinned library snapshot, rule set and
+  decision set. This *explains* the contract; it does not constitute it.
+- Counterparty, effective date, term, signatories, and signature evidence (e-signature envelope
+  reference).
+- The **final expiry gate**: any clause that has lapsed since Forge blocks signature until
+  re-resolved or overridden under
+  [ADR-0008](docs/decisions/ADR-0008-governance-roles-and-recorded-overrides.md). This is the last
+  point at which anything is checked against the live library — after signature, never again.
+- `agreement_executed` in the audit log.
+
+> **If the stored file and a regeneration ever disagree, the file wins and the discrepancy is an
+> incident.** The system must be able to detect that disagreement — hence the stored hash — but it
+> must never resolve it by preferring its own reconstruction.
+
+Amendments never edit any of this. An amendment is a new signed document appended to the chain, and
+the effective terms are the ordered composition of the original plus its amendments (§3.4).
 
 ### 3.2 Register — obligation extraction
 

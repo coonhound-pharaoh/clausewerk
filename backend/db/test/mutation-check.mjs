@@ -92,6 +92,27 @@ grant usage, select on sequence cw.supersession_id_seq to cw_legal_reviewer;`,
   or (cw.app_role() = 'requester' and cw.owns_agreement(concession.agreement_id)));`,
     repl: `create policy read_scoped on cw.concession for select using (true);`,
     expect: 'a requester sees only their own deals' },
+
+  // ── Executed agreements: a signed contract is frozen ──
+  { suite: 'executed.test.mjs',
+    name: 'signed documents can be edited after execution',
+    find: `    execute format('create trigger %I_frozen before update on cw.%I
+                    for each row execute function cw.executed_frozen()', t, t);`,
+    repl: `    perform 1;`,
+    expect: 'the signed document cannot be edited — not by anyone' },
+
+  { suite: 'executed.test.mjs',
+    name: 'signed documents can be deleted',
+    find: `    execute format('create rule %I_no_delete as on delete to cw.%I do instead nothing', t, t);`,
+    repl: `    perform 1;`,
+    expect: 'a signed document cannot be deleted' },
+
+  { suite: 'executed.test.mjs',
+    name: 'an amendment need not say what it amends',
+    find: `  constraint amendment_names_its_target check (
+    kind <> 'amendment' or supersedes_seq is not null)`,
+    repl: `  constraint amendment_names_its_target check (true)`,
+    expect: 'an amendment must name what it amends' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();

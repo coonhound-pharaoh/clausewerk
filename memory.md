@@ -260,3 +260,36 @@ answer, so the first cannot pass by luck.
 status field that changes whenever Legal retires a clause — but which has no
 effect on the outcome. Every stored contract would have stopped reproducing the
 first time anyone tidied the library. Removed.
+
+---
+
+## 2026-07-25 · A signed contract is frozen, and we store the signed file
+
+**Correction from Mike.** Some of my wording implied that as clause wording gets
+updated it somehow flows through to contracts already signed. That is not how
+contracts work and was never the design — but the wording was loose, and loose
+wording becomes wrong software eventually. Corrected throughout.
+
+**The rule, stated plainly.** A signed contract never changes. Not when the
+library is updated, not when a clause is replaced, not by an administrator.
+Renewal produces a *new* agreement. An amendment is a *new* signed document
+added alongside the original. Neither edits what was signed.
+
+**The real gap this exposed.** We were storing enough information to *rebuild* a
+contract, and treating that as sufficient. It is not, for three reasons:
+
+- A signed contract can contain wording we conceded to the vendor — which we
+  deliberately keep out of the library, so it could never be regenerated.
+- Signature adds things assembly never saw: signature pages, initials, exhibits
+  attached during the negotiation.
+- A rebuild is evidence of what we believe was agreed. The signed file is
+  evidence of what *was* agreed. Only one of those is any use in a dispute.
+
+**Decision.** The signed file itself is now stored and frozen, with a fingerprint
+so tampering is detectable. If a rebuild ever disagrees with the stored file, the
+file wins and the disagreement is treated as an incident to investigate — never
+resolved by trusting our own reconstruction.
+
+**Proven, not assumed.** Tests confirm that replacing and retiring the very
+clauses a contract used leave that contract byte-identical, and that no role —
+including the most privileged — can edit or delete a signed document.

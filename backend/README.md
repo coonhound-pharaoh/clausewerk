@@ -4,8 +4,8 @@ The deterministic core. This is the half of the system that must be provably
 correct and uses no AI at all.
 
 **Status:** clause registry, fallback ladders, the concession record, the
-resolution engine, the validation engine and the run store built and verified.
-Document service not yet started.
+resolution engine, the validation engine, the run store and frozen executed
+agreements built and verified. Document service not yet started.
 
 ## Running it
 
@@ -31,12 +31,14 @@ db/migrations/
   0003_ladders_and_concessions.sql  fallback ladders, concessions, promotion, analytics
   0004_conflict_rules.sql   clause tags and attorney-authored conflict rules
   0005_run_store.sql        stored snapshots, rule sets, and immutable runs
+  0006_executed_agreements.sql  frozen signed contracts and the amendment chain
 db/test/
-  registry.test.mjs         36 tests
+  registry.test.mjs         37 tests
   ladder.test.mjs           29 tests
   loader-sql.test.mjs       16 tests — the engine's SQL against the real schema
   run-store.test.mjs        22 tests
-  mutation-check.mjs        12 mutations — proves those tests can fail
+  executed.test.mjs         16 tests
+  mutation-check.mjs        15 mutations — proves those tests can fail
 engine/
   model.py                  frozen value types
   snapshot.py               content-addressed library snapshots
@@ -245,6 +247,36 @@ Runs, decisions, findings, snapshots and rule sets are all immutable. `UPDATE`
 raises; `DELETE` is a silent no-op rather than an error, so deleting history
 cannot succeed even by accident.
 
+## A signed contract is frozen
+
+The most important rule in the lifecycle half, and the one easiest to erode by
+accident: **nothing in this system modifies an executed agreement.** Not a
+library update, not a supersession, not an administrator. Renewal produces a
+*new* agreement; an amendment is a *new* signed instrument appended to the
+chain. Neither edits what was signed.
+
+**Being able to rebuild a contract is not the same as having the one that was
+signed**, and the difference is why `cw.executed_document` stores the bytes:
+
+1. **A signed contract can contain language that is not in the library.**
+   Conceded vendor wording is quarantined by design (ADR-0009) — deliberately
+   never selectable — so no regeneration will ever produce it.
+2. **Signature adds what assembly never saw**: signature blocks, counterparts,
+   initials, exhibits attached during negotiation.
+3. **A reconstruction is evidence of what we believe. The file is evidence of
+   what was agreed.** Only one of those survives a dispute.
+
+So the executed document is stored with its SHA-256 and is authoritative. The
+assembly provenance — run, snapshot, rule set, decision set — *explains* the
+contract; it does not constitute it. If a regeneration and the stored file ever
+disagree, the file wins and the disagreement is an incident.
+
+`UPDATE` on `cw.executed_agreement` or `cw.executed_document` raises for every
+role including `legal_admin`; `DELETE` is a silent no-op. `cw.agreement_drift`
+reports how far the library has moved from what a contract carries — input to a
+renewal conversation, and nothing more. Tests assert that superseding and
+retiring the very clauses a contract used leave it byte-identical.
+
 ## Why there is a mutation check
 
 A test suite that has never failed proves nothing. `mutation-check.mjs`
@@ -291,12 +323,8 @@ It has already earned its place seven times:
 
 1. **Document service** — Python, `python-docx`, generation and tracked-change
    parsing. The last piece of the assembly path, and the one that finally emits
-   a contract.
-2. **Agreement record** — `cw.agreement` is currently the minimal subset needed
-   by concessions. [LCMA](../LIFECYCLE-ARCHITECTURE.md) §5 extends it with the
-   executed run, term and status machine. The snapshot pin it calls for already
-   exists on `cw.run`.
-3. **Obligation templates** — [LCMA](../LIFECYCLE-ARCHITECTURE.md) §5, declared
+   a contract. It also computes the SHA-256 that `cw.executed_document` stores.
+2. **Obligation templates** — [LCMA](../LIFECYCLE-ARCHITECTURE.md) §5, declared
    on the clause so registration is a lookup rather than an interpretation.
 
 Deferred deliberately: a rule-authoring surface for non-developers. The grammar
