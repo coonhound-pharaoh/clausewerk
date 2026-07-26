@@ -1342,12 +1342,14 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
 
   // THE COUNTERSIGN QUEUE LEAVING LEGAL'S WORKSPACE — the wait the rule costs
   // stops being bounded by anybody looking.
+  // REPOINTED at WP-U11: the review desk moved from workspaces.jsx to
+  // reviewer.jsx, so this entry's old `find` stopped matching and reported SKIP
+  // — the harness catching its own rot rather than quietly proving nothing.
   { target: 'shell', suite: 'shell.test.mjs',
     name: 'the countersign queue is shown only in the admin console',
     find: `          <CountersignQueue
             me={me} rows={queue.rows}
-            onDone={() => { queue.reload(); tickets.reload(); }}
-            onError={setError}
+            onDone={() => queue.reload()} onError={setError}
           />`,
     repl: `          <div />`,
     expect: 'the countersign queue is one component, used in both places' },
@@ -1537,6 +1539,54 @@ where f.decision = 'approved';`,
     repl: `grant insert on cw.override_request, cw.override_finding to cw_requester;
 grant insert on cw.override_socialisation, cw.override_notified to cw_requester;`,
     expect: 'nobody can assert socialisation directly — no role holds the insert' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The reviewer's desk (WP-U11)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // THE PRE-FILLED APPROVAL BOX. The critical anti-pattern for this package,
+  // and the most tempting single line in the whole interface: it looks like a
+  // convenience and it turns "approve" into "confirm".
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the AI candidate is pre-filled into the approval box',
+    find: `  const [approved, setApproved] = useState('');`,
+    repl: `  const [approved, setApproved] = useState(ticket.proposed_text);`,
+    expect: 'the AI candidate is NEVER pre-filled into the approval box' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'verify mints without showing what will be minted',
+    find: `        <PanelHead
+          title="This is what will be minted"`,
+    repl: `        <PanelHead
+          title="Confirm"`,
+    expect: 'verify goes through a confirmation showing what will be minted' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a rejection can be recorded with no note',
+    find: `        <button className="btn" disabled={busy || !note.trim()}`,
+    repl: `        <button className="btn" disabled={busy}`,
+    expect: 'rejection needs a note and minting does not — friction where the irreversibility is' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'an undecided ticket reads as approved-unedited',
+    find: `              {t.edited_before_approval === true &&`,
+    repl: `              {t.edited_before_approval ?`,
+    expect: 'edited-before-approval is shown as the derived fact it is' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a reviewer can approve a finding inside the review window',
+    find: `                        className="btn btn-sm" disabled={!r.window_closed}`,
+    repl: `                        className="btn btn-sm"`,
+    expect: 'the override window state is visible before anybody tries' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the reviewer is offered a hold release that is not theirs',
+    find: `      <div className="caption mt-4">
+        Releasing a hold is a Legal admin's act, not a reviewer's — so there is`,
+    repl: `      <button className="btn" onClick={() => API.releaseHold({})}>release</button>
+      <div className="caption mt-4">
+        Releasing a hold is somebody's act — so there is`,
+    expect: 'the reviewer is not offered acts that are not theirs' },
 
   { suite: 'override.test.mjs',
     name: 'a viewer sees every override request, told about it or not',

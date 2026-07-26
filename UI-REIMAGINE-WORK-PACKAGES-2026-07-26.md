@@ -646,7 +646,22 @@ and the blanket acknowledge button has no descendant.
 
 ---
 
-## WP-U11 · The Legal reviewer's workspace
+## WP-U11 · The Legal reviewer's workspace — **CLOSED 2026-07-26**
+
+*Delivered in [`reviewer.jsx`](prototype/v4/app/reviewer.jsx), nine endpoints, and the guide at
+[`docs/guides/reviewer.md`](docs/guides/reviewer.md) — 10 tests in `shell.test.mjs`, 6 mutations,
+plus a new [`endpoints.test.mjs`](backend/db/test/endpoints.test.mjs).*
+
+**A broken endpoint that had shipped two packages earlier.** `GET /waiting/tickets` selected
+`clause_id`, `version` and `opened_at` from `cw.review_ticket` — three columns that table does not
+have, because a ticket names a *category* and not a clause. It failed outright for anybody with a
+ticket to see, and nobody noticed: the seeded system had none, and an empty result and a failed
+query look identical from a workspace that renders "nothing is waiting on you" either way.
+`endpoints.test.mjs` now runs every endpoint's SQL against the migrated schema.
+
+**Walked in the browser**: Legal admin creates a category (reviewer refused), requester opens a
+ticket, reviewer verifies with *edited* wording — minted `DP-H-020@v1`, and
+`edited_before_approval` derived as `true` without anybody ticking a box.
 
 **Objective.** The review desk: everything waiting on Legal judgement, oldest
 first — tickets, per-finding override decisions, concession approvals, holds —

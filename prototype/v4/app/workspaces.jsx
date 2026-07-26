@@ -121,69 +121,6 @@ function MyDeals() {
   );
 }
 
-// ── Legal reviewer ───────────────────────────────────────────────────────
-function ReviewDesk({ me }) {
-  const tickets = usePane(() => API.waitingTickets());
-  const queue = usePane(() => API.countersignQueue());
-  const [error, setError] = useState(null);
-
-  if (tickets.status === 'loading' || queue.status === 'loading') return <Loading />;
-  if (tickets.status === 'failed') return <LoadFailed reason={tickets.reason} />;
-
-  return (
-    <div>
-      <TileStrip tiles={[
-        { label: 'tickets waiting', n: tickets.rows.length },
-        { label: 'grants to countersign', n: queue.status === 'loaded' ? queue.rows.length : null },
-        { label: 'override requests', n: null },
-        { label: 'concessions to approve', n: null },
-      ]} />
-
-      <div className="mt-6">
-        <PanelHead
-          title="Waiting on Legal"
-          sub="Oldest first. The longest wait is the one this desk exists to show."
-        />
-        <WaitingList
-          items={tickets.rows.map((t) => ({
-            key: t.ticket_id,
-            title: `${t.clause_id ?? t.category_key ?? 'ticket'} · ${t.agreement_id ?? 'no deal'}`,
-            sub: `opened by ${t.opened_by}`,
-            at: t.opened_at,
-            chips: <span className="chip chip-pending">{t.state}</span>,
-          }))}
-          empty={<Empty
-            kicker="review desk"
-            line="Nothing is waiting on Legal."
-            sub="Tickets, override decisions, concession approvals and holds all land here, oldest first."
-          />}
-        />
-      </div>
-
-      {error && (
-        <div className="panel p-3 mt-4" style={{ borderColor: 'var(--danger)' }}>
-          <div className="tag" style={{ color: 'var(--danger)' }}>refused</div>
-          <div className="text-[12.5px] mt-1.5" style={{ color: 'var(--mute)' }}>{error}</div>
-        </div>
-      )}
-
-      {/* The countersign queue lives in Legal's OWN workspace as well as the
-          admin console — the same component, so the two cannot drift. A queue
-          living only where the people who must clear it never look is a queue
-          that does not get cleared, and the countersign rule's entire cost is
-          the wait it adds. */}
-      {queue.status === 'loaded' && queue.rows.length > 0 && (
-        <div className="mt-6">
-          <CountersignQueue
-            me={me} rows={queue.rows}
-            onDone={() => { queue.reload(); tickets.reload(); }}
-            onError={setError}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── The router ───────────────────────────────────────────────────────────
 // Every entry is either a real pane or an honest note about where it lands.
@@ -196,11 +133,11 @@ const PANES = {
   'my-record': () => <NotBuiltYet what="Your own slice of the record is not built." lands="WP-U12" />,
 
   // Legal reviewer
-  'review-desk':  (me) => <ReviewDesk me={me} />,
-  'tickets':      () => <NotBuiltYet what="Ticket adjudication is not built." lands="WP-U11" />,
-  'approvals':    () => <NotBuiltYet what="Concession approvals are not built." lands="WP-U11" />,
-  'negotiations': () => <NotBuiltYet what="Negotiation rounds are not built." lands="WP-U11" />,
-  'holds':        () => <NotBuiltYet what="Opening a hold is not built." lands="WP-U11" />,
+  'review-desk':  (me) => <ReviewDeskPane me={me} />,
+  'tickets':      (me) => <TicketsPane me={me} />,
+  'approvals':    (me) => <OverridesPane me={me} />,
+  'negotiations': () => <NotBuiltYet what="Negotiation rounds are not built." lands="a later package" />,
+  'holds':        (me) => <HoldsPane me={me} />,
 
   // Legal admin
   'library':    () => <NotBuiltYet what="The clause library is not built." lands="WP-U13" />,

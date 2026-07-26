@@ -389,10 +389,15 @@ await test('the countersign queue is one component, used in both places', async 
   // whole cost is the wait it adds. Two copies would drift.
   assert(/function CountersignQueue/.test(consoleSrc()),
     'the countersign queue is not a shared component');
-  const uses = read('workspaces.jsx').match(/<CountersignQueue/g) ?? [];
+  // Looked for across the workspace files rather than in one: the review desk
+  // moved from workspaces.jsx to reviewer.jsx in WP-U11, and a check naming one
+  // file would have reported the queue as gone when it had only moved.
+  const uses = readdirSync(APPDIR)
+    .filter((f) => f.endsWith('.jsx') && f !== 'console-people.jsx')
+    .flatMap((f) => read(f).match(/<CountersignQueue/g) ?? []);
   assert(uses.length >= 1,
-    'the review desk no longer shows the countersign queue, so Legal only sees '
-    + 'it in a console they have no reason to open');
+    'no workspace outside the admin console shows the countersign queue, so '
+    + 'Legal only sees it in a console they have no reason to open');
   const consoleUses = consoleSrc().match(/<CountersignQueue/g) ?? [];
   assert(consoleUses.length >= 1, 'the admin console no longer shows the queue');
 });
@@ -557,6 +562,115 @@ await test('the auditor can export, and the export is of what is on screen', asy
   assert(/replace\(\/"\/g/.test(fn),
     'the export does not escape quotes, so a reason containing one corrupts '
     + 'every column after it');
+});
+
+// ── The reviewer's desk (WP-U11) ────────────────────────────────────────
+console.log('\nthe review desk is a review, not a rubber stamp');
+
+const revSrc = () => read('reviewer.jsx');
+
+await test('the AI candidate is NEVER pre-filled into the approval box', async () => {
+  // The critical rule for this package. A box arriving with the proposal in it
+  // turns "approve" into "confirm", and the measured unedited-approval rate
+  // would then be measuring the form's design rather than Legal's judgement —
+  // the screen would be creating the defect its own metric exists to watch.
+  // Comments stripped, because the file's own header explains the mistake by
+  // writing it out — and a check that cannot tell a warning from the thing it
+  // warns about punishes writing the warning down. Third time this has caught
+  // me; it is worth remembering as a rule about these checks generally.
+  const fn = stripComments(/function TicketDesk[\s\S]*?\n\}/.exec(revSrc())[0]);
+  const init = /const \[approved, setApproved\] = useState\(([^)]*)\)/.exec(fn);
+  assert(init, 'the approval box no longer exists');
+  eq(init[1].trim(), "''",
+    'the approval box is pre-filled — it must start EMPTY, whatever it is '
+    + 'pre-filled with');
+  assert(!/useState\(ticket\.proposed_text/.test(fn),
+    'the approval box is seeded from the proposal');
+});
+
+await test('the screen says why the box is empty', async () => {
+  // An empty box looks like an oversight until somebody explains that it is the
+  // point, and a reviewer who thinks it is a bug will paste the proposal in
+  // every time — which is the pre-filled default arriving by another route.
+  const fn = /function TicketDesk[\s\S]*?\n\}/.exec(revSrc())[0];
+  assert(/Deliberately empty/.test(fn),
+    'nothing explains the empty approval box');
+});
+
+await test('verify goes through a confirmation showing what will be minted', async () => {
+  const fn = /function TicketDesk[\s\S]*?\n\}/.exec(revSrc())[0];
+  assert(/confirming/.test(fn), 'there is no confirmation step before minting');
+  assert(/This is what will be minted/.test(fn),
+    'the confirmation does not show the wording that will exist forever');
+  assert(/cannot be edited once it exists/.test(fn),
+    'the confirmation does not say the minting is irreversible');
+  // The confirmation renders the actual text, on the paper surface, so what is
+  // agreed to is what will exist.
+  assert(/paper/.test(fn) && /\{approved\.trim\(\)\}/.test(fn),
+    'the confirmation does not render the approved wording itself');
+});
+
+await test('rejection needs a note and minting does not — friction where the irreversibility is', async () => {
+  const fn = /function TicketDesk[\s\S]*?\n\}/.exec(revSrc())[0];
+  assert(/disabled=\{busy \|\| !note\.trim\(\)\}/.test(fn),
+    'a rejection can be recorded with no note');
+});
+
+await test('edited-before-approval is shown as the derived fact it is', async () => {
+  const fn = /function TicketsPane[\s\S]*?\n\}/.exec(revSrc())[0];
+  assert(/edited_before_approval === true/.test(fn)
+      && /edited_before_approval === false/.test(fn),
+    'the screen does not distinguish edited from unedited approvals');
+  // Three states, not two: null means "not decided yet", and rendering that as
+  // "unedited" would inflate the figure Legal watches.
+  assert(!/edited_before_approval \?/.test(fn),
+    'the screen treats the flag as a boolean, so an undecided ticket reads as '
+    + 'unedited — which is the figure Legal watches, inflated');
+});
+
+await test('there is no approve-all on the override surface', async () => {
+  // Per finding means the deciding person saw each finding. A single button
+  // would be the blanket acknowledge button with a loop behind it.
+  const fn = /function OverrideDecisions[\s\S]*?\n\}\n/.exec(revSrc())[0];
+  assert(!/approve all|approveAll|decideAll|for \(const f of/i.test(fn),
+    'the override surface offers a way to decide more than one finding at once');
+  assert(/There is no approve-all/.test(fn),
+    'the absence of an approve-all is not explained, so it reads as an omission');
+});
+
+await test('the override window state is visible before anybody tries', async () => {
+  const fn = /function OverrideDecisions[\s\S]*?\n\}\n/.exec(revSrc())[0];
+  assert(/window_closed/.test(fn), 'the window state is not shown');
+  assert(/disabled=\{!r\.window_closed\}/.test(fn),
+    'a reviewer can press approve inside the window and learn the rule from an '
+    + 'error instead of from the screen');
+});
+
+await test('the justification is rendered in the established idiom', async () => {
+  const fn = /function OverrideDecisions[\s\S]*?\n\}\n/.exec(revSrc())[0];
+  assert(/“/.test(fn) && /var\(--accent\)/.test(fn),
+    'the human justification is not wrapped in the oversized teal quotation '
+    + 'marks the visual language uses for exactly this');
+});
+
+await test('the reviewer is not offered acts that are not theirs', async () => {
+  // The reviewer/admin boundary, rendered. A greyed-out release button would be
+  // the disabled-editor pattern the settings pane already refuses: a reviewer
+  // does not merely lack permission today, releasing a hold is somebody else's
+  // decision.
+  const holds = /function HoldsPane[\s\S]*?\n\}/.exec(revSrc())[0];
+  assert(!/releaseHold|API\.release/.test(holds),
+    'the holds pane offers a release, which is legal admin\'s act');
+  assert(/no release button here rather than a greyed-out one/.test(holds),
+    'the pane does not say why release is absent');
+  // And nothing in the reviewer's file reaches for library writes, rule edits,
+  // or retention.
+  const all = stripComments(revSrc());
+  for (const forbidden of ['API.setSetting', 'API.decideSetting', 'API.nudgeRetention',
+                           'API.createAccount', 'API.grant(', 'API.addCategory']) {
+    assert(!all.includes(forbidden),
+      `the reviewer's workspace calls ${forbidden}, which is not a reviewer's act`);
+  }
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

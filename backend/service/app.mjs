@@ -53,11 +53,17 @@ const READS = {
 
   // What is waiting on Legal. Ordered oldest first because the desk exists to
   // make the oldest wait visible — sort order is a control, not a preference.
+  // Columns corrected in WP-U11: this shipped naming `clause_id`, `version` and
+  // `opened_at`, none of which cw.review_ticket has — a ticket names a CATEGORY,
+  // not a clause, because the whole point is that the proposed text has not
+  // become a clause yet. The endpoint failed outright for anybody with a ticket
+  // to see, and nobody noticed because the seeded system had none. Found by a
+  // check that runs every read endpoint's SQL against the migrated schema.
   'GET /waiting/tickets': {
-    sql: `select ticket_id, agreement_id, clause_id, version, state, opened_by,
-                 opened_at
+    sql: `select ticket_id, agreement_id, category_key, severity, reason_code,
+                 provenance_badge, state, opened_by, created_at
           from cw.review_ticket where state = 'pending'
-          order by opened_at`,
+          order by created_at`,
     rule: 'cw.review_ticket read_scoped policy',
   },
 
@@ -153,6 +159,62 @@ const READS = {
     sql: `select request_id, person, reason from cw.override_notified
           order by request_id, person`,
     rule: 'cw.override_notified read_scoped — who was told, and why',
+  },
+
+  // ── The review desk (WP-U11) ────────────────────────────────────────────
+  'GET /tickets': {
+    sql: `select ticket_id, agreement_id, category_key, severity, reason_code,
+                 provenance_badge, proposed_text, state, approved_text,
+                 edited_before_approval, decided_by, decided_on, decision_note,
+                 minted_clause_id, minted_version, opened_by, created_at
+          from cw.review_ticket order by created_at`,
+    rule: 'cw.review_ticket read_scoped policy; oldest first is the desk\'s job',
+  },
+
+  'GET /quality': {
+    sql: `select * from cw.review_quality`,
+    rule: 'cw.review_quality — the unedited-approval rate, measured and shown',
+  },
+
+  'GET /origin-mix': {
+    sql: `select * from cw.library_origin_mix`,
+    rule: 'cw.library_origin_mix — where the library actually came from',
+  },
+
+  // ── The library (WP-U13) ────────────────────────────────────────────────
+  'GET /clauses': {
+    sql: `select clause_id, category_key, severity from cw.clause order by clause_id`,
+    rule: 'cw.clause read_all policy — reading clause text is not the risk',
+  },
+
+  'GET /clause-versions': {
+    sql: `select clause_id, version, title, body, rationale, reviewer,
+                 approved_on, expires_on, retired, provenance, origin,
+                 source_ticket_id
+          from cw.clause_version order by clause_id, version`,
+    rule: 'cw.clause_version read_all policy',
+  },
+
+  'GET /entrance': {
+    sql: `select clause_id, version, provenance, source_ticket_id, reviewer,
+                 entrance from cw.clause_entrance order by clause_id, version`,
+    rule: 'cw.clause_entrance — where every version came from, including UNACCOUNTED',
+  },
+
+  'GET /concessions': {
+    sql: `select s.concession_id, s.agreement_id, s.category_key, s.proposer_kind,
+                 s.state, s.settled_by, s.settled_on,
+                 c.standard_clause_id, c.standard_version, c.conceded_rung, c.reason
+          from cw.concession_state s
+          join cw.concession c using (concession_id)
+          order by s.concession_id`,
+    rule: 'cw.concession read_scoped policy; the state is derived, never stored',
+  },
+
+  'GET /holds': {
+    sql: `select hold_id, agreement_id, matter_ref, opened_by, opened_on,
+                 released_on, released_by from cw.legal_hold order by hold_id`,
+    rule: 'cw.legal_hold policies',
   },
 
   'GET /retention/due': {

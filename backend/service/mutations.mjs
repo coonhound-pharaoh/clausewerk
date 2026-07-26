@@ -55,6 +55,25 @@ export const MUTATIONS = {
     // name on every scoping decision that follows from it.
   },
 
+  // ── The library's skeleton ──────────────────────────────────────────────
+  // A category is the library's structure rather than its content: it says the
+  // company has a position on data privacy, not what that position is. It is
+  // still Legal admin's to create, because deciding which risks the library
+  // covers is a judgement about the library.
+  //
+  // This endpoint exists because a system with no categories can do nothing at
+  // all — no ticket, no clause, no run — and the seeded walkthrough deliberately
+  // creates none. Somebody has to make the first one, and that somebody is a
+  // named person performing a recorded act rather than a migration inventing a
+  // starting library on their behalf.
+  'POST /categories': {
+    rule: 'cw.category admin_writes policy — legal_admin only',
+    run: (query, body) => query(
+      `insert into cw.category (key, label, short) values ($1,$2,$3)
+       returning key, label, short`,
+      [required(body, 'key'), required(body, 'label'), required(body, 'short')]),
+  },
+
   // ── The review queue ────────────────────────────────────────────────────
   'POST /tickets': {
     rule: 'cw.review_ticket draft_writes/write_scoped policies; opened_by defaults '
