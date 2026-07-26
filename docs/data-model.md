@@ -154,6 +154,52 @@ a grant cannot also accept it — one signature wearing two hats is the rule not
 > session* ends is WP-U05's problem: the promise there is revocation honoured at next request, not
 > next sign-in, and the console's copy must not promise more than that.
 
+### The settings split — `0013` part 3
+
+`cw.governance_setting` gains `kind`, which is **who may write this row**, and `purpose`, which is
+what the knob does (distinct from `rationale`, which is why a choice was made).
+
+| Kind | Written by | Read by | Examples |
+|---|---|---|---|
+| `owner_decision` | Legal admin only | everyone | `sow_may_contradict_master`, `renewal_default_baseline`, `unedited_approval_threshold`, and `U5`–`U8` |
+| `operational` | Administrator only | everyone | `override_review_window`, `ticket_expiry`, `notification_digest`, `session_length` |
+
+**The split cuts both ways.** A Legal admin is refused on operational rows, not merely un-preferred:
+Legal setting the session length is machine stewardship inside the content role, which is the mixing
+the sixth role exists to end. Every existing row became `owner_decision`, the safe direction.
+
+**Where the line is.** A setting is operational when changing it cannot change a contract outcome.
+An auto-approve threshold is *not* operational however much it looks like a tuning knob — it decides
+what counts as adequate review, which is content. `operational_is_never_an_owner_decision` refuses
+that mislabelling in its most likely form, and `kind` itself is immutable, because otherwise the
+split is one `UPDATE` from meaningless.
+
+> **A refusal here has to be loud, and that shapes the policy.** Written the natural way — one policy
+> per role with `kind` in its `USING` clause — the rule is enforced correctly and the refusal is
+> *silent*: the row is invisible to the `UPDATE`, zero rows are affected, nothing raises, and a
+> console renders it as a successful save while screen and database disagree. That is finding D1. So
+> `USING` admits both writing roles and the rule is enforced twice underneath — a trigger that raises
+> naming the rule and the role, and `WITH CHECK` as the second layer.
+
+### Watcher lists — `0013` part 3
+
+`cw.override_watcher` is who is told when an override is requested, and the Administrator's to
+maintain. It is the sharpest illustration of the sixth role's boundary: the Administrator decides
+**who is told** and never **who decides**. A null `category_key` is an *always-watcher*.
+
+`cw.watcher_coverage` answers how many people would be told in each category. **A zero is a visible
+gap for somebody to close, never a silent "nobody to tell"** — the product boundary as a view.
+
+The **deal owner is deliberately not a row here**: the requester's own deal always socialises to
+them, which follows structurally from the request, so putting them in a maintainable list would only
+create the possibility of removing them. A watcher is *removed*, never deleted, and both adding and
+removing land on the chain — somebody quietly dropped off a notification list is silence about who
+was silenced, and it is the failure nobody notices because nothing visibly happens afterwards.
+
+**Audit events added:** `setting_changed` (both kinds — an operational setting is not a lesser
+record; "who shortened the window to one hour, and when" is exactly what an auditor asks),
+`watcher_added`, `watcher_removed`.
+
 ---
 
 ## 3. The clause library — `0002`, `0009`

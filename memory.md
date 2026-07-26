@@ -715,3 +715,44 @@ restyling — no budget is spent on tokens, type, chips or buttons.
 (the sixteen packages), and a clickable concept at `prototype/v4-concept/`.
 U5–U8 are also rows in `cw.governance_setting`, marked decided and naming the
 decider, so whoever next touches the thing they govern meets them there.
+
+---
+
+## 2026-07-26 · Signing in lasts hours; the identity stamp lasts one click
+
+**Decision.** Two different clocks, and we had been calling both of them
+"sessions", which caused real confusion.
+
+**Signing in** works the way anyone expects: you sign in once and stay signed in
+for hours. How long is a setting the Administrator controls.
+
+**The identity stamp** that travels with each individual click down to the
+database expires the instant that click finishes. Nobody sees it. It is the
+difference between a building pass that lasts the day and a visitor badge handed
+back at every interior door.
+
+**Why we chose the disappearing badge.** Most companies put a sharing layer in
+front of a database so many users take turns on a few connections — it saves
+real money. The danger is that your identity lingers after your turn and gets
+mistaken for the next person's. If the badge is surrendered automatically at
+every door, there is nothing left to linger.
+
+**What it buys us commercially.** We can run on ordinary infrastructure. The
+earlier plan said we could not, and would have had us telling customers to
+configure their systems specially. That was wrong.
+
+**What it buys us technically.** There is no clean-up step that anybody could
+forget to write, because the database removes the stamp itself. The earlier plan
+proposed six separate sets of connections purely to avoid that forgettable
+step — no longer needed, so there is less to build and less to run.
+
+**The one discipline it requires.** Every click must be handled as a single unit
+of work. That is ordinary practice, and it is checked by a test that deliberately
+reproduces the leak: use a connection as one person, hand it back, take it out
+again, and prove it has forgotten who that was.
+
+**A correction worth keeping.** Two of our own documents still say this system is
+"incompatible with transaction-mode connection pooling". That was an
+overstatement — it described the setting we happened to use in our test harness,
+where it is the right setting, not a limit of the design. Both should be
+corrected to say the system assumes one identity per unit of work.

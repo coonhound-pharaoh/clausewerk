@@ -157,6 +157,17 @@ const ADMIN_MAY_WRITE = {
   // everybody including the owner, so a countersign is a new row naming the
   // grant rather than an update filling in a column. See 0013 part 2.
   'role_grant':  ['INSERT'],
+  // The settings registry. UPDATE only, and only the OPERATIONAL rows — that
+  // narrowing is a policy and a trigger, not a privilege, so it cannot be
+  // expressed here. The both-ways refusal is proved in settings-split.test.mjs;
+  // what this entry records is that the administrator may write this table at
+  // all. No insert: the four operational rows are seeded by the migration, and
+  // a fifth is a proposal with a reason, not a row somebody adds at runtime.
+  'governance_setting': ['UPDATE'],
+  // The watcher lists. Insert to add somebody, update to record their removal —
+  // a watcher is removed, never deleted, because being taken off a notification
+  // list is exactly the change that has to stay on the record.
+  'override_watcher':   ['INSERT','UPDATE'],
 };
 
 console.log('\ndecision U5: contract content is WRITABLE by the administrator NOWHERE');

@@ -5,8 +5,47 @@
 in-flight `0013` work it depends on.**
 
 Written 2026-07-26. This does not replace the UI plan — that plan sets the phases and the value
-order, and it is right. This is the layer underneath it: exactly how a person becomes a session,
-how a session becomes a database role, and where each of those steps can go wrong.
+order, and it is right. This is the layer underneath it: exactly how a person becomes a signed-in
+user, how each of their clicks reaches the database as that person, and where each step can go
+wrong.
+
+---
+
+## Read this first — what is being built, in plain terms
+
+**The problem.** The system records who did what, but it currently believes whatever name it is
+given — like a visitor book you sign yourself, with nobody checking identification. That is
+tolerable today because nothing is running and nobody can reach it. It stops being tolerable the
+moment real people can.
+
+**What we are building.** The front door. It does one job: establish who you really are, and hand
+that to the database. It does *not* decide what you are allowed to do — thirteen migrations of rules
+already decide that, and they have been tested by attacking them. If the front door started making
+those decisions too, we would have two sets of rules that could disagree, and the disagreement is
+the hole.
+
+**The two clocks, because one word was doing two jobs.**
+
+| | How long it lasts | Who notices |
+|---|---|---|
+| **Signing in** | Hours. You sign in once and stay signed in, as you would expect. The length is a setting the Administrator controls | Everyone |
+| **The identity stamp on the database** | One click. It is attached when a click reaches the database and removed the moment that click finishes | Nobody |
+
+A building pass and a visitor badge. The pass lasts the day; the badge is handed over at each
+interior door and taken back as you walk through. Users keep the pass and never see the badge.
+
+**Why the badge is surrendered every time.** Most companies run a sharing layer in front of a
+database so many users take turns on a small number of connections, rather than each holding one.
+It saves real money. The risk is that your identity lingers on a connection after your turn and gets
+mistaken for the next person's. If the badge is surrendered automatically at every door, there is
+nothing left to linger — so we can run on ordinary infrastructure without weakening anything.
+
+**What a user actually experiences.** They sign in. They see one workspace — the one for their job,
+and no way to reach anybody else's. Everything on screen is something their role is genuinely
+allowed to see, because the database refused to hand over anything else.
+
+**What is deliberately not in this plan:** e-signature and document-store connections, obligations,
+and any change to how contracts are assembled or how the audit trail works.
 
 ---
 
@@ -101,6 +140,11 @@ performance fix.
 
 Four steps, and each one is a place this can go wrong.
 
+> **Terminology, fixed here because one word was doing two jobs.** A **sign-in** lasts hours and is
+> what a user would call being logged in. A **request identity** lasts one click: it is attached
+> when that click reaches the database and removed when the click finishes. Wherever this plan says
+> "session" unqualified, it means the sign-in.
+
 ### Step 1 — Authenticate the person
 
 Two supported sources, decided per deployment:
@@ -132,7 +176,8 @@ guarantee.
 
 ### Step 3 — Bind the connection
 
-The session executes as one of six database roles. Two viable mechanisms:
+Each **request** executes as one of six database roles — not each sign-in. A person signed in for
+eight hours produces hundreds of separately-stamped requests. Three mechanisms:
 
 | | **A · Role-per-pool** | **B · `SET ROLE` per request** | **C · `SET LOCAL ROLE` inside one transaction** |
 |---|---|---|---|
@@ -164,32 +209,56 @@ and **nothing the browser sends can influence it**. This is what closes the resi
 Concretely: the request handler never reads an actor from the body, the headers, or a cookie
 claim — only from the server-side session record.
 
-## B.3 The deployment constraint nobody can design around
+## B.3 Connection sharing — resolved, not a constraint
 
-**Transaction-mode connection pooling is incompatible with this model**, and the schema says so.
-Session settings and `SET ROLE` do not survive a transaction-mode pooler handing the connection to
-the next client — they leak, which is worse than not working.
+**An earlier draft of this plan said transaction-mode connection pooling was incompatible with this
+model and would force a redesign. That was wrong, and the correction is worth keeping** because the
+same overstatement appears in the schema (`0001_foundation.sql`, the note above `cw.app_role()`) and
+in `ARCHITECTURE.md` §5.
 
-This must be stated to any customer before deployment, not discovered during it:
+The leak those notes describe is real, but it comes from *how long the identity stamp lasts*, not
+from the design. Session-scoped state (`SET ROLE`, and `set_config(..., false)` — the `false` means
+session) survives a transaction-mode pooler handing the connection to the next client, and that is
+exactly the leak.
 
-- **Session-mode pooling only** (PgBouncer session mode, or the pooler disabled).
-- Connection limits must be planned accordingly — session mode holds a backend per client.
-- If a customer's platform mandates transaction-mode pooling, **the identity model has to change**,
-  and that is a design conversation, not a configuration flag.
+Their transaction-scoped equivalents — `SET LOCAL ROLE` and `set_config(..., true)` — are unwound at
+`COMMIT`, **before** the pooler releases the connection. Nothing survives to leak.
 
-Put this in the deployment documentation and in the health console's own checks. A system that
-silently degrades its identity guarantees under a pooler is exactly the "protection that worked by
-accident" pattern this project already knows.
+So the requirement is not "session-mode pooling only". It is:
 
-## B.4 Sessions, revocation, and expiry
+- Every request is one unit of work (one transaction).
+- Every identity setting uses the transaction-scoped form.
 
-- **Session length** comes from the operational settings (`session_length`), not from a constant.
-- **Revocation is honoured at the next request, not the next sign-in.** A revoked person holding a
-  live session must be locked out immediately. The work package for `0013` already flags this; the
-  implementation is: re-check `cw.effective_role` on every request, cheaply (cached for seconds, not
-  hours, and the cache invalidated by a revocation).
-- **A role change mid-session** re-binds the connection to the new role on the next request. If the
-  new role is `null` (a pending countersign left them with nothing), the session ends.
+Both are checkable, and B.8 test 7 checks them. The test suite's own helper deliberately uses the
+session-scoped form, which is correct *there* — a test process is one client and never shares a
+connection — and that is precisely how the assumption came to look like a law.
+
+**Still worth stating to customers:** which form we use, and that the guarantee depends on it. Not
+as a restriction on their infrastructure, but so nobody later "optimises" a request out of its
+transaction and quietly removes the property.
+
+**Follow-up:** the notes in `0001_foundation.sql` and `ARCHITECTURE.md` §5 should be corrected to
+say "assumes one authenticated identity per unit of work" rather than "incompatible with
+transaction-mode pooling". Both are the sister agent's files at time of writing; flagged, not
+edited.
+
+## B.4 Sign-ins, revocation, and expiry
+
+**Decided 2026-07-26 by the owner: the per-request identity expires automatically** rather than
+being cleared by the service layer. Mechanism C in B.2 step 3.
+
+- **How long a sign-in lasts** comes from the operational settings (`session_length`), not from a
+  constant in the code. The Administrator controls it.
+- **Revocation is honoured at the next click, not the next sign-in.** Somebody whose access is
+  withdrawn while they are working must be stopped on their very next action — not whenever they
+  next happen to sign in, which could be never. The implementation: re-check `cw.effective_role`
+  every request, cached for seconds rather than hours, and the cache dropped on any revocation.
+- **A role change while somebody is signed in** takes effect on their next click. If the change
+  leaves them with no effective role — a Legal grant awaiting countersign confers nothing — they
+  are signed out rather than left in a workspace they no longer hold.
+- **The per-request identity needs no clean-up path**, and that is the point of choosing it: there
+  is no code that could fail to run, because the database removes the stamp when the request's unit
+  of work closes. Nothing to remember, nothing to leak.
 
 ## B.5 What the service layer must never do
 
@@ -248,6 +317,12 @@ The same bar the database already meets, extended to two-party tests the databas
    configuration and fails if any pool connects as owner or superuser. Cheap, and it is the one that
    catches the "just for this endpoint" shortcut in review rather than in production.
 6. **A silent no-op is a failure**, mirroring `mustNotWrite`.
+7. **The identity stamp does not outlive its request.** Two parts, and both matter:
+   (a) a static check that no identity setting uses the session-scoped form and no request runs
+   outside a transaction — this is the one that catches an "optimisation" removing the property;
+   (b) a live check that runs a request as one role, returns the connection to the pool, takes it
+   back out, and asserts it now carries **no** role and **no** actor. That is the leak itself,
+   reproduced deliberately, and it must come back clean.
 
 Mutation checks apply to the service layer too: remove the effective-role join and test 4 must fail;
 remove the server-side actor binding and the attribution test must fail.
@@ -269,6 +344,13 @@ remove the server-side actor binding and the attribution test must fail.
 S3–S6 are the doorway and should be treated as one unit: none of them is safe alone.
 
 ## B.10 Decisions this plan needs and does not make
+
+0. **Settled 2026-07-26 — how the identity stamp is removed.** Automatically, when each request's
+   unit of work closes, rather than by service-layer code that clears it. Chosen because there is
+   no clean-up step that can be forgotten, and because it lets the system run behind ordinary
+   connection-sharing infrastructure without weakening attribution. This also retires the earlier
+   recommendation of six separate connection pools, which existed only to avoid a clean-up step
+   that no longer exists.
 
 1. **The service stack.** The engine is Python; the database tests are Node. A third runtime is a
    third thing to keep in step. The honest options are Python (shares the engine's language and can

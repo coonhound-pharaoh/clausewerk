@@ -858,6 +858,77 @@ grant insert, update on cw.clause_version to cw_administrator;`,
     find: "where a.state = 'active'",
     repl: 'where true',
     expect: 'a revoked ACCOUNT confers nothing, however live its grants' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The settings split and watcher lists (WP-U03, migration 0013 part 3)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // The split, one direction at a time. Two mutations rather than one, because
+  // "legal_admin may write everything and the administrator may also write the
+  // operational rows" is a plausible half-implementation that passes any test
+  // checking only the administrator's side.
+  { suite: 'settings-split.test.mjs',
+    name: 'the administrator can edit owner decisions after all',
+    find: `    if old.kind = 'owner_decision' and cw.app_role() <> 'legal_admin' then`,
+    repl: '    if false then',
+    expect: 'an administrator cannot change an owner decision, and is TOLD why' },
+
+  { suite: 'settings-split.test.mjs',
+    name: 'the split cuts one way only — Legal keeps the operational rows',
+    find: `    if old.kind = 'operational' and cw.app_role() <> 'administrator' then`,
+    repl: '    if false then',
+    expect: 'a legal admin cannot change an operational setting — the other direction' },
+
+  // The refusal going quiet. This is the D1 shape restored deliberately: the
+  // narrow USING clause enforces the rule correctly AND makes the refusal a
+  // zero-row no-op that raises nothing, which a console renders as a save.
+  { suite: 'settings-split.test.mjs',
+    name: 'the settings refusal goes silent (finding D1 shape restored)',
+    find: `  using       (cw.app_role() in ('legal_admin','administrator'))`,
+    repl: `  using       ((cw.app_role() = 'legal_admin'   and kind = 'owner_decision')
+            or (cw.app_role() = 'administrator' and kind = 'operational'))`,
+    expect: 'an administrator cannot change an owner decision, and is TOLD why' },
+
+  { suite: 'settings-split.test.mjs',
+    name: 'a setting can be moved to the other side of the split',
+    find: '  if new.kind is distinct from old.kind then',
+    repl: '  if false then',
+    expect: 'a row cannot change sides to make itself writable' },
+
+  { suite: 'settings-split.test.mjs',
+    name: 'an operational row may also be an owner decision',
+    find: `  add constraint operational_is_never_an_owner_decision check (
+    not (kind = 'operational' and is_owner_decision));`,
+    repl: '  add column unused_marker boolean;',
+    expect: 'a row cannot be both operational and an owner decision' },
+
+  { suite: 'settings-split.test.mjs',
+    name: 'changing a setting leaves no record',
+    find: `    perform cw.audit('setting_changed', new.key,`,
+    repl: `    perform 1; perform cw.audit('setting_not_recorded', new.key,`,
+    expect: 'an administrator changes an operational setting, and it is audited' },
+
+  { suite: 'settings-split.test.mjs',
+    name: 'taking somebody off a watcher list leaves no record',
+    find: `    perform cw.audit('watcher_removed', coalesce(new.category_key, '*'),`,
+    repl: `    perform 1; perform cw.audit('watcher_quietly_removed', coalesce(new.category_key, '*'),`,
+    expect: 'removing a watcher lands on the chain — who was silenced, and by whom' },
+
+  { suite: 'settings-split.test.mjs',
+    name: 'an uncovered category is treated as nobody to tell',
+    find: `           and (w.category_key = c.key or w.category_key is null))::int`,
+    repl: `           and (w.category_key = c.key or w.category_key is null))::int + 1`,
+    expect: 'a category with nobody watching it is a visible gap, not a silence' },
+
+  { suite: 'settings-split.test.mjs',
+    name: 'anybody can maintain the watcher lists',
+    find: `create policy administrator_maintains on cw.override_watcher for insert
+  with check (cw.app_role() = 'administrator');`,
+    repl: `create policy administrator_maintains on cw.override_watcher for insert
+  with check (cw.app_role() is not null);
+grant insert on cw.override_watcher to cw_legal_reviewer;
+grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_reviewer;`,
+    expect: 'nobody but the administrator maintains the list' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();

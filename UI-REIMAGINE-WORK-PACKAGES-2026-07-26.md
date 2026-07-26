@@ -202,7 +202,18 @@ if the owner amended the rule in U00); `docs/data-model.md` updated.
 
 ---
 
-## WP-U03 · The settings split and watcher lists
+## WP-U03 · The settings split and watcher lists — **CLOSED 2026-07-26**
+
+*Delivered in [`0013_administrator.sql`](backend/db/migrations/0013_administrator.sql) part 3 and
+[`settings-split.test.mjs`](backend/db/test/settings-split.test.mjs) — 24 tests, 9 mutations. The
+four `U5`–`U8` decision rows deferred from WP-U00 land here too, decided, naming the decider.*
+
+**One thing this package taught, worth carrying forward.** Written the natural way — one policy per
+role with `kind` in its `USING` clause — the settings refusal is *silent*: the row is invisible to
+the `UPDATE`, zero rows are affected, nothing raises, and a console renders it as a successful save.
+That is finding D1 wearing a new hat. `USING` now admits both writing roles and the rule is enforced
+twice underneath, by a trigger that raises naming the rule and by `WITH CHECK`. The tests assert the
+*message*, not merely the refusal, because WP-U06 passes it straight through to the person.
 
 **Objective.** Settings divide into owner decisions (Legal admin's, unchanged)
 and operational settings (the Administrator's); the watcher lists that override
