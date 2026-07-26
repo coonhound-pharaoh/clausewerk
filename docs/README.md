@@ -47,6 +47,7 @@ bug.
 | [`glossary.md`](glossary.md) | Terms of art, in the specific sense Clausewerk uses them |
 | [`spec-vs-implementation.md`](spec-vs-implementation.md) | Seven verified places the v3 code and the spec disagree |
 | [`open-questions.md`](open-questions.md) | Gaps, tensions, and deferred scope in the current specification |
+| [`handoffs/`](handoffs/) | **Start here if you are new** — one self-contained report per workstream |
 
 The code these documents describe is ingested verbatim at [`../prototype/`](../prototype) — see
 [`../prototype/README.md`](../prototype/README.md) for what each version is and how to run it.

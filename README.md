@@ -53,7 +53,9 @@ inference side to the deterministic side.
 | [`docs/`](docs) | Data model, diagrams, decision records, glossary, and the spec-vs-code drift list |
 | [`prototype/`](prototype) | The working prototype, ingested verbatim — v3 (current), v2, the pitch deck, and a single-file build |
 
-Start at [`docs/README.md`](docs/README.md) for a reading order.
+**New to this project?** Start at [`docs/handoffs/`](docs/handoffs) — one
+self-contained report per workstream, written for someone arriving with no
+context. Otherwise [`docs/README.md`](docs/README.md) has the reading order.
 
 ## Running the prototype
 
