@@ -361,12 +361,84 @@ It has already earned its place nine times:
   parser, but not a real vendor file, and it hid the fact that an independent
   reader could not open it at all.
 
+## Operations — what runs nightly, and what to do when it fails
+
+Four integrity checks. All four run as the **Administrator**, the role that owns
+machine stewardship since owner decision `U7`
+([ADR-0011](../docs/decisions/ADR-0011-the-administrator-is-a-steward.md)), and
+every one of them **records that it ran** in `cw.integrity_check`. That table is
+append-only, and the health pane counts rows in it and nothing else.
+
+That last point is the design, not an implementation detail. The failure to
+guard against is not a tile saying BROKEN when things are fine — somebody
+investigates that within the hour. It is a tile saying VERIFIED because a query
+counted rows that *exist* rather than checks that *ran*. So `documents_stored`
+and `documents_verified` are different numbers, the difference is
+`documents_never_checked`, and it is shown rather than hidden. **`never_ran` is
+its own state everywhere** — "we looked and it is fine" and "we have not looked"
+are different answers.
+
+| # | Check | Call | What it proves | Cadence |
+|---|---|---|---|---|
+| 1 | **Checkpoint** | `cw.audit_checkpoint_take()` | Records how tall the log is and what its last row hashes to, so later removal of the *newest* rows becomes visible | nightly |
+| 2 | **Anchor** | `cw.run_anchor_check()` | The newest checkpoint still describes the log | nightly, after 1 |
+| 3 | **Chain** | `cw.run_chain_check()` | Every row's hash still links to its parent — catches edits and removals in the *middle* | nightly |
+| 4 | **Document hash** | `cw.record_document_hash_check(agreement_id, doc_seq, observed_sha256)` | A stored signed file still hashes to what was recorded at execution | nightly, sampled |
+| 5 | **Rebuild spot-check** | `cw.record_rebuild_spot_check(run_id, observed_hash)` | A past run, re-run, still produces the hash on record | nightly, one run |
+
+Checks 4 and 5 cannot happen inside the database. A document hash needs the
+stored *bytes*, which live in a document store the database has no reach into —
+`cw.executed_document` holds a `storage_uri`, not a file. A rebuild needs the
+Python engine. So the caller reads the bytes (or re-runs the engine) and supplies
+what it observed; **the database performs the comparison** against what it
+recorded. Deliberately not "the caller tells us whether it matched" — a boolean
+supplied by the thing being checked is not a check.
+
+The scheduler itself is not built. Each check is runnable on demand today, and
+wiring them to a nightly trigger lands with the service layer's runtime
+(WP-U05). The 24-hour cadence the checkpoint tile reports against is a constant
+in `cw.health_checkpoint`, not a settings row: `WP-U03` fixed the operational
+settings at four, and a fifth is a proposal with a reason rather than something
+added while a file happened to be open.
+
+### When one fails
+
+Read `cw.health_summary` first — one row per tile, each `pass`, `fail` or
+`never_ran`, with a sentence to act on.
+
+- **Anchor `fail`, detail "no checkpoint"** — nothing is anchored, because none
+  has ever been taken. Take one. This is recorded as a *failure* rather than a
+  pass-with-a-caveat, deliberately: there is no anchor, so the pane must not be
+  green.
+- **Anchor `fail`, detail "anchor broken"** — the log is shorter than the
+  checkpoint recorded, or the row at the recorded sequence hashes differently.
+  Newest events have been removed or edited. This is an incident. Do not take a
+  new checkpoint, which would anchor the damaged state and destroy the evidence.
+- **Chain `fail`** — the detail names the first sequence number that no longer
+  verifies. Everything before it is intact; everything from there on is suspect.
+- **Document hash `fail`** — a signed file no longer matches what was recorded at
+  execution. **The bytes are the authority.** This is an incident to investigate
+  and never something to resolve by preferring our own regeneration.
+- **Rebuild `fail`** — check `engine_version` on the run first. A hash that no
+  longer reproduces looks exactly like tampering *and* exactly like an engine
+  change, and the detail names the version that produced the original for that
+  reason.
+- **Retention `due`** — not a fault. Due-ness is a fact, and acting on it is
+  Legal admin's: the Administrator sees what is due and nudges, and holds no
+  privilege to destroy anything. That boundary is a grant, not a convention.
+
+The database owner is outside all of this, as it has been since `0007`: it holds
+DELETE on `cw.audit_event` and can rewrite the checkpoints too. Against that
+actor these checks raise the bar; they do not close the door. Notarising
+checkpoints outside the database is the next phase's job.
+
 ## Mapping to the specifications
 
 | Guarantee | Source |
 |---|---|
 | Versions immutable, validity computed | [ADR-0006](../docs/decisions/ADR-0006-clause-expiry-is-computed-not-stored.md) |
 | Five roles, recorded overrides | [ADR-0008](../docs/decisions/ADR-0008-governance-roles-and-recorded-overrides.md) |
+| A sixth role that runs the machine and changes no content | [ADR-0011](../docs/decisions/ADR-0011-the-administrator-is-a-steward.md) |
 | Four states, supersession is a deliberate act | [ADR-0009](../docs/decisions/ADR-0009-concession-is-not-supersession.md) |
 | Unique category short codes; expired clauses unselectable | [spec-vs-implementation](../docs/spec-vs-implementation.md) findings #1, #4, #8 |
 | Append-only, tamper-evident audit | [ARCHITECTURE.md](../ARCHITECTURE.md) §5 |

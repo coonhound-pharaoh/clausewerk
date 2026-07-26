@@ -15,10 +15,26 @@ handoff.
 | **Negotiation** | Specified, not built | [`03-negotiation.md`](03-negotiation.md) |
 | **Lifecycle (post-signature)** | Specified, one piece built | [`04-lifecycle.md`](04-lifecycle.md) |
 | **Frontend** | Specified; a working prototype exists | [`05-frontend.md`](05-frontend.md) |
+| **Service layer & identity** | Not started; everything it needs exists | [`06-service-layer-and-identity.md`](06-service-layer-and-identity.md) |
 
-**Repository state at handoff:** `main` @ `dd0b396`, pushed to
-`github.com/coonhound-pharaoh/clausewerk`. 224 tests passing (120 SQL, 104
-Python) and 39 mutation checks.
+**Repository state.** Substantially further along than when reports 01–05 were
+written, and moving — so **do not trust a number in this file. Run
+`cd backend && npm run verify` and read what it says.**
+
+As of 2026-07-26: thirteen migrations, twelve database suites, the Python engine
+suite, and both mutation harnesses. A full verification takes about five minutes,
+because every deliberate breakage re-applies a broken copy of the schema and
+re-runs a whole suite against it.
+
+Two things a new arrival should know:
+
+- **Phases 0–3 of the 2026-07-25 improvement proposal are complete.** All
+  eighteen review findings are closed, plus one nobody had found. See
+  [`../spec-vs-implementation.md`](../spec-vs-implementation.md) Part 2 — including
+  the three places the review itself turned out to be wrong.
+- **Work may be in flight.** Migration `0013` and the role-based UI were being
+  written as this report was added. If `verify` is red, that is somebody else's
+  work mid-edit — find out before building on it.
 
 ## The one thing to know before touching anything
 

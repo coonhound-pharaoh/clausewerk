@@ -168,6 +168,10 @@ const ADMIN_MAY_WRITE = {
   // a watcher is removed, never deleted, because being taken off a notification
   // list is exactly the change that has to stay on the record.
   'override_watcher':   ['INSERT','UPDATE'],
+  // The record of integrity checks that actually ran. INSERT only, append-only
+  // for everybody: a check that found something cannot be un-found, and
+  // re-running it is a new row. See 0013 part 4.
+  'integrity_check':    ['INSERT'],
 };
 
 console.log('\ndecision U5: contract content is WRITABLE by the administrator NOWHERE');
@@ -243,9 +247,16 @@ for (const [label, sql] of [
   });
 }
 
-await test('administrator cannot take a checkpoint — that arrives with U7, in part 4', async () => {
-  await throws(() => queryAs('administrator', `select cw.audit_checkpoint_take()`, [], ADMIN),
-    'permission denied');
+await test('administrator CAN take a checkpoint — decision U7 moved the duty here', async () => {
+  // This assertion is inverted from what WP-U01 shipped, deliberately and with
+  // the reason recorded. In part 1 the administrator held no checkpoint right
+  // and this test asserted the refusal; part 4 moved the duty per decision U7,
+  // so the refusal became the wrong expectation. The move's other half — that
+  // legal_admin is now refused where it previously succeeded — is proved in
+  // health.test.mjs, which is where the whole of U7 lives.
+  const r = await queryAs('administrator', `select cw.audit_checkpoint_take() as id`,
+    [], ADMIN);
+  assert(r[0].id > 0, 'the administrator cannot discharge the duty it was given');
 });
 
 await test('administrator cannot destroy a retained record — destruction stays legal admin\'s', async () => {

@@ -5,8 +5,8 @@
 --
 --   part 1  WP-U01 · the cw_administrator role and cw.account
 --   part 2  WP-U02 · cw.role_grant and the countersign rule
---   part 3  WP-U03 · the settings split and the watcher lists  ← this commit
---   part 4  WP-U04 · checkpoint duty moves, and health evidence
+--   part 3  WP-U03 · the settings split and the watcher lists
+--   part 4  WP-U04 · checkpoint duty moves, and health evidence ← this commit
 --
 -- WHY A SIXTH ROLE AT ALL. Settled decision U3 says the database owner maps to
 -- no application role — "the owner is nobody" — so that every governed act has
@@ -1179,3 +1179,376 @@ grant select on cw.override_watcher, cw.watcher_coverage to
 grant insert, update on cw.override_watcher to cw_administrator;
 grant usage, select on sequence cw.override_watcher_watcher_id_seq
   to cw_administrator;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- PART 4 · CHECKPOINT DUTY, AND SYSTEM-HEALTH EVIDENCE (WP-U04)
+-- ════════════════════════════════════════════════════════════════════════════
+-- Owner decision U7: taking an audit checkpoint MOVES from legal_admin to the
+-- administrator. Checkpointing proves the record has not been tampered with and
+-- says nothing about any contract, so it is machine stewardship.
+--
+-- A move, not a shared right. Two roles holding one duty means neither owns it,
+-- and there is nobody to hold to account for a checkpoint that was never taken.
+-- So legal_admin's execute privilege is REVOKED in the same statement block that
+-- grants the administrator's, and a test proves legal_admin is now refused where
+-- it previously succeeded.
+grant  execute on function cw.audit_checkpoint_take() to cw_administrator;
+revoke execute on function cw.audit_checkpoint_take() from cw_legal_admin;
+
+-- The comment on the function said "so a legal_admin can take a checkpoint";
+-- leaving that in place would be a document promising what the code no longer
+-- does, which is the failure class this whole effort is paying down.
+comment on function cw.audit_checkpoint_take() is
+  'Record how tall the audit log is and what its last row hashes to. The '
+  'ADMINISTRATOR''s duty since owner decision U7 — machine stewardship, not a '
+  'contract judgement. legal_admin''s right was revoked in the same migration, '
+  'because two roles holding one duty means neither owns it.';
+
+grant select on cw.audit_checkpoint to cw_administrator;
+grant select on cw.retention_due to cw_administrator;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- EVIDENCE, NOT DECORATION
+-- ════════════════════════════════════════════════════════════════════════════
+-- The health pane shows six facts, and every one of them has a way of being
+-- comfortably wrong. The failure to design against is not a tile that says
+-- BROKEN when things are fine — somebody investigates that within the hour. It
+-- is a tile that says VERIFIED because a query counted rows that exist rather
+-- than checks that ran.
+--
+--   "documents stored"    is a count of rows. It proves nothing about bytes.
+--   "documents verified"  must count verifications that actually happened.
+--
+-- Those are different numbers and the pane shows both, plus the difference. The
+-- gap between them is the interesting figure and it is never hidden.
+--
+-- NEVER-RAN IS ITS OWN STATE, everywhere below. "We looked and it is fine" and
+-- "we have not looked" are different answers, and rendering the second as the
+-- first is how a system reassures its operator into an incident. 0007 already
+-- established the pattern — cw.audit_anchor_check() returns 'no checkpoint'
+-- rather than 'ok' before the first one is taken — and this part follows it.
+
+-- ── cw.integrity_check · the checks that actually ran ─────────────────────
+-- Append-only. This table is the difference between evidence and decoration:
+-- nothing in the health views counts anything that is not a row here.
+--
+-- WHY THE CHECKS ARE RECORDED RATHER THAN COMPUTED ON READ. Two of the four
+-- cannot be computed inside the database at all. A document hash check requires
+-- reading the stored bytes, which live in a document store the database has no
+-- reach into (cw.executed_document holds a storage_uri, not the file). A rebuild
+-- spot-check requires running the Python engine. Both are performed outside and
+-- their RESULT is recorded here — so the honest thing is for the anchor and
+-- chain checks to be recorded the same way, rather than having two kinds of
+-- health fact with two different meanings behind one row of tiles.
+create table cw.integrity_check (
+  check_id   bigserial primary key,
+  check_name text not null check (check_name in
+    ('anchor',            -- the newest checkpoint still describes the log
+     'chain',             -- every row's hash still links to its parent
+     'document_hash',     -- a stored signed file still hashes to what we recorded
+     'rebuild_spot_check' -- a past run rebuilt and compared, byte for byte
+    )),
+  -- Which thing was checked, where that makes sense: an agreement/doc_seq for a
+  -- document hash, a run_id for a rebuild. Null for the whole-log checks.
+  subject    text,
+  ran_at     timestamptz not null default now(),
+  ran_by     text not null,
+  outcome    text not null check (outcome in ('pass','fail')),
+  -- What was seen. Mandatory on a failure: a failed check whose detail is null
+  -- tells the person on call that something is wrong and nothing about what.
+  detail     text,
+  constraint a_failure_says_what_went_wrong check (
+    outcome <> 'fail' or (detail is not null and btrim(detail) <> '')),
+  constraint a_check_names_who_ran_it check (btrim(ran_by) <> '')
+);
+
+create index integrity_check_recent
+  on cw.integrity_check (check_name, ran_at desc);
+
+comment on table cw.integrity_check is
+  'Every integrity check that actually ran, and what it found. Append-only. '
+  'The health views count rows here and nothing else — a tile that says '
+  'verified must be counting verifications, not records.';
+
+create or replace function cw.integrity_check_append_only() returns trigger
+language plpgsql as $$
+begin
+  raise exception 'cw.integrity_check is append-only — a check that found '
+    'something cannot be un-found, and re-running it is a new row';
+end $$;
+
+create trigger integrity_check_no_update
+  before update on cw.integrity_check
+  for each row execute function cw.integrity_check_append_only();
+create trigger integrity_check_no_delete
+  before delete on cw.integrity_check
+  for each row execute function cw.integrity_check_append_only();
+
+-- ── The two checks the database can perform for itself ────────────────────
+-- Both SECURITY DEFINER for the reason 0007 established: under row-level
+-- security a scoped role sees a filtered log and would be told an honest
+-- database had been truncated.
+create or replace function cw.run_anchor_check() returns text
+language plpgsql
+security definer set search_path = cw, pg_temp as $$
+declare r text;
+begin
+  r := cw.audit_anchor_check();
+  insert into cw.integrity_check (check_name, ran_by, outcome, detail)
+  values ('anchor', cw.app_actor(),
+          case when r = 'ok' then 'pass' else 'fail' end,
+          -- 'no checkpoint' is a FAILURE of the anchor check, not a pass with a
+          -- caveat. There is no anchor, so nothing is anchored, and the pane
+          -- must not render that green.
+          case when r = 'ok' then null else r end);
+  return r;
+end $$;
+
+create or replace function cw.run_chain_check() returns bigint
+language plpgsql
+security definer set search_path = cw, pg_temp as $$
+declare broken bigint;
+begin
+  broken := cw.audit_verify();
+  insert into cw.integrity_check (check_name, ran_by, outcome, detail)
+  values ('chain', cw.app_actor(),
+          case when broken is null then 'pass' else 'fail' end,
+          case when broken is null then null
+               else format('the chain first fails to verify at seq %s', broken) end);
+  return broken;
+end $$;
+
+-- ── The two the database can only adjudicate ──────────────────────────────
+-- The caller reads the bytes and supplies what they hash to; the DATABASE says
+-- whether that matches what was recorded. Deliberately not "the caller tells us
+-- whether it matched" — a boolean supplied by the thing being checked is not a
+-- check, and the comparison has to happen where the recorded value lives.
+create or replace function cw.record_document_hash_check(
+  p_agreement_id text, p_doc_seq int, p_observed_sha256 text
+) returns text
+language plpgsql
+security definer set search_path = cw, pg_temp as $$
+declare recorded text; matched boolean;
+begin
+  select sha256 into recorded from cw.executed_document
+   where agreement_id = p_agreement_id and doc_seq = p_doc_seq;
+  if recorded is null then
+    raise exception 'there is no executed document %/% to check',
+      p_agreement_id, p_doc_seq using errcode = 'no_data_found';
+  end if;
+  matched := (recorded = p_observed_sha256);
+  insert into cw.integrity_check (check_name, subject, ran_by, outcome, detail)
+  values ('document_hash', p_agreement_id || '/' || p_doc_seq, cw.app_actor(),
+          case when matched then 'pass' else 'fail' end,
+          case when matched then null else format(
+            'the stored file no longer hashes to what was recorded at execution: '
+            'recorded %s, read %s. The BYTES are the authority — this is an '
+            'incident to investigate, never something to resolve by preferring '
+            'a regeneration', recorded, p_observed_sha256) end);
+  return case when matched then 'pass' else 'fail' end;
+end $$;
+
+create or replace function cw.record_rebuild_spot_check(
+  p_run_id text, p_observed_hash text
+) returns text
+language plpgsql
+security definer set search_path = cw, pg_temp as $$
+declare recorded text; engine text; matched boolean;
+begin
+  select result_hash, engine_version into recorded, engine
+    from cw.run where run_id = p_run_id;
+  if recorded is null then
+    raise exception 'there is no run % to rebuild', p_run_id
+      using errcode = 'no_data_found';
+  end if;
+  matched := (recorded = p_observed_hash);
+  insert into cw.integrity_check (check_name, subject, ran_by, outcome, detail)
+  values ('rebuild_spot_check', p_run_id, cw.app_actor(),
+          case when matched then 'pass' else 'fail' end,
+          case when matched then null else format(
+            'rebuilding run %s produced %s; the record says %s. The run was '
+            'produced by engine %s — a hash that no longer reproduces looks '
+            'exactly like tampering AND exactly like an engine change, so check '
+            'the engine version before raising an incident',
+            p_run_id, p_observed_hash, recorded, engine) end);
+  return case when matched then 'pass' else 'fail' end;
+end $$;
+
+revoke all on function cw.run_anchor_check() from public;
+revoke all on function cw.run_chain_check() from public;
+revoke all on function cw.record_document_hash_check(text,int,text) from public;
+revoke all on function cw.record_rebuild_spot_check(text,text) from public;
+
+grant execute on function cw.run_anchor_check() to cw_administrator;
+grant execute on function cw.run_chain_check() to cw_administrator;
+grant execute on function cw.record_document_hash_check(text,int,text)
+  to cw_administrator;
+grant execute on function cw.record_rebuild_spot_check(text,text)
+  to cw_administrator;
+
+alter table cw.integrity_check enable row level security;
+
+-- Read: the administrator, whose pane this is, and the auditor, who reads
+-- everything. Deliberately not the world — an unauthenticated view of which
+-- integrity checks are failing is a map for somebody deciding when to tamper.
+create policy health_read on cw.integrity_check for select
+  using (cw.app_role() in ('administrator','auditor'));
+create policy administrator_records on cw.integrity_check for insert
+  with check (cw.app_role() = 'administrator');
+
+revoke all on cw.integrity_check from public;
+grant select on cw.integrity_check to cw_administrator, cw_auditor;
+grant insert on cw.integrity_check to cw_administrator;
+grant usage, select on sequence cw.integrity_check_check_id_seq to cw_administrator;
+
+-- ── The health read models ────────────────────────────────────────────────
+-- One row per tile, and every one of them can say never_ran.
+
+-- Chain and anchor. Height comes from the log itself because it is a count, not
+-- a verification, and it is labelled as such.
+create or replace view cw.health_chain as
+select
+  (select count(*) from cw.audit_event)::bigint as chain_height,
+  (select count(*) from cw.audit_checkpoint)::int as checkpoints_taken,
+  (select taken_at from cw.audit_checkpoint
+    order by checkpoint_id desc limit 1) as last_checkpoint_at,
+  coalesce((select c.outcome from cw.integrity_check c
+             where c.check_name = 'anchor' order by c.ran_at desc limit 1),
+           'never_ran') as anchor_state,
+  (select c.ran_at from cw.integrity_check c
+    where c.check_name = 'anchor' order by c.ran_at desc limit 1) as anchor_ran_at,
+  (select c.detail from cw.integrity_check c
+    where c.check_name = 'anchor' order by c.ran_at desc limit 1) as anchor_detail,
+  coalesce((select c.outcome from cw.integrity_check c
+             where c.check_name = 'chain' order by c.ran_at desc limit 1),
+           'never_ran') as chain_state,
+  (select c.ran_at from cw.integrity_check c
+    where c.check_name = 'chain' order by c.ran_at desc limit 1) as chain_ran_at,
+  (select c.detail from cw.integrity_check c
+    where c.check_name = 'chain' order by c.ran_at desc limit 1) as chain_detail;
+
+comment on view cw.health_chain is
+  'Chain height and the state of the two whole-log checks. anchor_state and '
+  'chain_state are pass, fail, or never_ran — the third is not a variety of '
+  'the first.';
+
+-- Checkpoints: history and when the next one is due.
+--
+-- THE CADENCE IS A CONSTANT HERE AND NOT A SETTINGS ROW, deliberately. WP-U03
+-- fixed the operational settings at four, and a fifth is a proposal with a
+-- reason attached rather than something added while a file happened to be open.
+-- The nightly job's schedule is documented in backend/README.md and this view
+-- reports against the same 24 hours.
+create or replace view cw.health_checkpoint as
+select c.checkpoint_id, c.taken_at, c.height, c.last_seq,
+       c.taken_at + interval '24 hours' as next_due_at,
+       (c.taken_at + interval '24 hours') < now() as overdue
+from cw.audit_checkpoint c
+order by c.checkpoint_id desc;
+
+comment on view cw.health_checkpoint is
+  'Checkpoint history, newest first, with the next due time on a nightly '
+  'cadence. Empty means none has ever been taken, which is never-ran and not '
+  'up-to-date.';
+
+-- Executed documents: stored versus actually verified. The gap is the point.
+create or replace view cw.health_document as
+with latest as (
+  select distinct on (c.subject) c.subject, c.outcome, c.ran_at
+  from cw.integrity_check c
+  where c.check_name = 'document_hash'
+  order by c.subject, c.ran_at desc
+)
+select
+  (select count(*) from cw.executed_document)::int as documents_stored,
+  (select count(*) from latest where outcome = 'pass')::int as documents_verified,
+  (select count(*) from latest where outcome = 'fail')::int as documents_mismatched,
+  -- The honest residual, computed rather than assumed. A document nobody has
+  -- ever checked is not a verified document.
+  ((select count(*) from cw.executed_document)
+   - (select count(*) from latest))::int as documents_never_checked,
+  (select max(ran_at) from latest) as last_checked_at;
+
+comment on view cw.health_document is
+  'Signed files stored, versus signed files whose bytes have actually been '
+  'checked against the hash recorded at execution. documents_stored is a count '
+  'of rows and proves nothing about bytes; the difference between it and '
+  'documents_verified is documents_never_checked, and it is never hidden.';
+
+create or replace view cw.health_rebuild as
+select coalesce((select c.outcome from cw.integrity_check c
+                  where c.check_name = 'rebuild_spot_check'
+                  order by c.ran_at desc limit 1), 'never_ran') as state,
+       (select c.subject from cw.integrity_check c
+         where c.check_name = 'rebuild_spot_check'
+         order by c.ran_at desc limit 1) as run_id,
+       (select c.ran_at from cw.integrity_check c
+         where c.check_name = 'rebuild_spot_check'
+         order by c.ran_at desc limit 1) as ran_at,
+       (select c.detail from cw.integrity_check c
+         where c.check_name = 'rebuild_spot_check'
+         order by c.ran_at desc limit 1) as detail;
+
+comment on view cw.health_rebuild is
+  'The most recent rebuild spot-check: a past run re-run and compared against '
+  'the hash on record. never_ran until one has been.';
+
+-- One row per tile, so the pane is one query and cannot render a state the
+-- database did not produce.
+create or replace view cw.health_summary as
+select 'audit chain'      as tile,
+       (select chain_state from cw.health_chain) as state,
+       (select chain_ran_at from cw.health_chain) as as_of,
+       (select chain_detail from cw.health_chain) as detail
+union all
+select 'anchor',
+       (select anchor_state from cw.health_chain),
+       (select anchor_ran_at from cw.health_chain),
+       (select anchor_detail from cw.health_chain)
+union all
+select 'checkpoints',
+       case when not exists (select 1 from cw.audit_checkpoint) then 'never_ran'
+            when exists (select 1 from cw.health_checkpoint where overdue
+                          and checkpoint_id = (select max(checkpoint_id)
+                                               from cw.audit_checkpoint))
+              then 'fail' else 'pass' end,
+       (select max(taken_at) from cw.audit_checkpoint),
+       case when not exists (select 1 from cw.audit_checkpoint)
+            then 'no checkpoint has ever been taken' end
+union all
+select 'signed documents',
+       case when (select documents_stored from cw.health_document) = 0 then 'never_ran'
+            when (select documents_mismatched from cw.health_document) > 0 then 'fail'
+            when (select documents_never_checked from cw.health_document) > 0 then 'never_ran'
+            else 'pass' end,
+       (select last_checked_at from cw.health_document),
+       case when (select documents_never_checked from cw.health_document) > 0
+            then format('%s of %s stored documents have never been checked',
+                        (select documents_never_checked from cw.health_document),
+                        (select documents_stored from cw.health_document)) end
+union all
+select 'rebuild spot-check',
+       (select state from cw.health_rebuild),
+       (select ran_at from cw.health_rebuild),
+       (select detail from cw.health_rebuild)
+union all
+select 'retention due',
+       -- Not a check that passes or fails: due-ness is a fact, not a fault, and
+       -- acting on it is Legal's. 'pass' would be wrong and 'fail' would be
+       -- worse — it would read as the system accusing itself of a defect for
+       -- doing exactly what it is meant to do.
+       case when (select count(*) from cw.retention_due) = 0 then 'none due'
+            else 'due' end,
+       now(),
+       case when (select count(*) from cw.retention_due) > 0
+            then format('%s agreement(s) past their retention date. Visible '
+                        'here; actioned by Legal admin, who alone may destroy',
+                        (select count(*) from cw.retention_due)) end;
+
+comment on view cw.health_summary is
+  'One row per health tile. Every state is pass, fail or never_ran, except '
+  'retention, which is due or none due — due-ness is a fact, not a fault.';
+
+grant select on cw.health_chain, cw.health_checkpoint, cw.health_document,
+                cw.health_rebuild, cw.health_summary
+  to cw_administrator, cw_auditor;

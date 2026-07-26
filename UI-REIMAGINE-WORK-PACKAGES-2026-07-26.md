@@ -254,7 +254,17 @@ architecture trued to the seeded rows.
 
 ---
 
-## WP-U04 · Checkpoint duty and system-health evidence
+## WP-U04 · Checkpoint duty and system-health evidence — **CLOSED 2026-07-26**
+
+*Delivered in [`0013_administrator.sql`](backend/db/migrations/0013_administrator.sql) part 4,
+[`health.test.mjs`](backend/db/test/health.test.mjs) — 24 tests, 10 mutations — and the operations
+section of [`backend/README.md`](backend/README.md).*
+
+**The shape of the evidence.** `cw.integrity_check` records the checks that actually ran, and the
+health views count rows there and nothing else. Two of the four checks cannot happen inside the
+database at all — a document hash needs the stored bytes, a rebuild needs the Python engine — so the
+caller supplies what it observed and the *database performs the comparison*. A boolean supplied by
+the thing being checked is not a check.
 
 **Objective.** The health facts the console will show exist as queryable
 evidence: chain status, checkpoints on schedule, executed-document hash checks,

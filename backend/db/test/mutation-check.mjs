@@ -929,6 +929,97 @@ grant insert, update on cw.clause_version to cw_administrator;`,
 grant insert on cw.override_watcher to cw_legal_reviewer;
 grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_reviewer;`,
     expect: 'nobody but the administrator maintains the list' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Checkpoint duty and health evidence (WP-U04, migration 0013 part 4)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // The HALF OF THE MOVE THAT IS EASY TO FORGET. Decision U7 moves checkpoint
+  // duty; a change that grants the administrator and leaves legal_admin holding
+  // it looks complete and leaves two roles holding one duty, which is the state
+  // where neither owns it and nobody can be held to account.
+  { suite: 'health.test.mjs',
+    name: 'checkpoint duty is shared rather than moved',
+    find: 'revoke execute on function cw.audit_checkpoint_take() from cw_legal_admin;',
+    repl: 'select 1;',
+    expect: 'a legal admin can no longer take a checkpoint — where it used to work' },
+
+  // Absence of evidence rendered as evidence, in each of the three places it
+  // could be. These are the tiles that would reassure an operator into an
+  // incident, so each gets its own mutation.
+  { suite: 'health.test.mjs',
+    name: 'a check that never ran renders as a pass',
+    find: `  coalesce((select c.outcome from cw.integrity_check c
+             where c.check_name = 'anchor' order by c.ran_at desc limit 1),
+           'never_ran') as anchor_state,`,
+    repl: `  coalesce((select c.outcome from cw.integrity_check c
+             where c.check_name = 'anchor' order by c.ran_at desc limit 1),
+           'pass') as anchor_state,`,
+    expect: 'on a fresh system every check tile says never_ran, not pass' },
+
+  { suite: 'health.test.mjs',
+    name: 'stored documents are counted as verified documents',
+    find: `            when (select documents_never_checked from cw.health_document) > 0 then 'never_ran'`,
+    repl: `            when false then 'never_ran'`,
+    expect: 'a stored document nobody has checked is NOT a verified document' },
+
+  { suite: 'health.test.mjs',
+    name: 'a document check counts rows that exist rather than checks that ran',
+    find: `  ((select count(*) from cw.executed_document)
+   - (select count(*) from latest))::int as documents_never_checked,`,
+    repl: `  0 as documents_never_checked,`,
+    expect: 'a stored document nobody has checked is NOT a verified document' },
+
+  { suite: 'health.test.mjs',
+    name: 'an unanchored log is reported as fine',
+    find: `          case when r = 'ok' then 'pass' else 'fail' end,`,
+    repl: `          case when r = 'ok' or r = 'no checkpoint' then 'pass' else 'fail' end,`,
+    expect: '"no checkpoint" is recorded as a FAILURE of the anchor check' },
+
+  // The hash comparison moved to the caller's word for it. A boolean supplied
+  // by the thing being checked is not a check.
+  { suite: 'health.test.mjs',
+    name: 'a broken document hash is reported as matching',
+    find: '  matched := (recorded = p_observed_sha256);',
+    repl: '  matched := true;',
+    expect: 'a broken stored hash makes the health model report the mismatch' },
+
+  { suite: 'health.test.mjs',
+    name: 'a rebuild that does not reproduce is reported as reproducing',
+    find: '  matched := (recorded = p_observed_hash);',
+    repl: '  matched := true;',
+    expect: 'one that does not reproduce fails, and names the engine version' },
+
+  { suite: 'health.test.mjs',
+    name: 'the record of checks becomes editable',
+    find: `create trigger integrity_check_no_update
+  before update on cw.integrity_check
+  for each row execute function cw.integrity_check_append_only();`,
+    repl: 'select 1;',
+    expect: 'a recorded check cannot be edited or removed, by anyone' },
+
+  { suite: 'health.test.mjs',
+    name: 'a failing check need not say what went wrong',
+    find: `  constraint a_failure_says_what_went_wrong check (
+    outcome <> 'fail' or (detail is not null and btrim(detail) <> '')),`,
+    repl: '',
+    expect: 'a failing check must say what went wrong' },
+
+  // An unauthenticated view of which integrity checks are failing is a map for
+  // somebody deciding when to tamper. Note this keys on the GRANT rather than
+  // on the policy: the health tiles are VIEWS, and a view runs with its owner's
+  // rights, so the policy on cw.integrity_check never sees the caller at all —
+  // the grant is the only thing standing between a requester and the pane. An
+  // earlier attempt at this entry mutated the policy instead and proved nothing.
+  { suite: 'health.test.mjs',
+    name: 'anybody can read which integrity checks are failing',
+    find: `grant select on cw.health_chain, cw.health_checkpoint, cw.health_document,
+                cw.health_rebuild, cw.health_summary
+  to cw_administrator, cw_auditor;`,
+    repl: `grant select on cw.health_chain, cw.health_checkpoint, cw.health_document,
+                cw.health_rebuild, cw.health_summary
+  to cw_administrator, cw_auditor, cw_requester, cw_viewer, cw_legal_reviewer;`,
+    expect: 'a requester or viewer can reach none of them' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();
