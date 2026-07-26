@@ -450,6 +450,77 @@ await test('but only the administrator grants and revokes', async () => {
   }
 });
 
+// ── The console's read models (WP-U08, migration 0014) ───────────────────
+console.log('\ndormancy is measured from recorded acts, never from sign-ins');
+
+await test('somebody who has never acted is flagged, however present they are', async () => {
+  // The whole point of measuring acts rather than sign-ins: somebody who signs
+  // in every morning and does nothing is dormant WHERE IT COUNTS. There is no
+  // sign-in data anywhere in this system to be tempted by, and that is
+  // deliberate — a sign-in log would be a second, weaker activity record beside
+  // the real one, and somebody would eventually join to the wrong one.
+  const r = await one(`select activity_state, acts_recorded from cw.person_activity
+                       where person=$1`, [PAT]);
+  eq(r.acts_recorded, 0);
+  eq(r.activity_state, 'never acted',
+    'an account that has done nothing is not flagged as unused');
+});
+
+await test('"never acted" and "dormant" are kept apart', async () => {
+  // Different situations with different answers: the first is usually a joiner
+  // given the wrong role or never told they had it; the second is somebody who
+  // has moved on. One amber flag for both hides which.
+  const states = await rows(
+    `select distinct activity_state from cw.person_activity order by 1`);
+  const known = ['active','dormant','never acted','no effective role','revoked'];
+  for (const s of states)
+    assert(known.includes(s.activity_state), `unexpected state ${s.activity_state}`);
+  assert(states.length >= 2, 'every person is in the same state, so nothing is distinguished');
+});
+
+await test('acting shows up immediately, and the last act is named', async () => {
+  const r = await one(`select acts_recorded, last_act, activity_state
+                       from cw.person_activity where person=$1`, [ADMIN]);
+  assert(r.acts_recorded > 0, 'the administrator has acted many times in this suite');
+  assert(r.last_act, 'the last act is not named, so the console can only show a date');
+  eq(r.activity_state, 'active');
+});
+
+await test('a revoked account reads as revoked, not as merely inactive', async () => {
+  const r = await one(`select activity_state from cw.person_activity
+                       where person=$1`, [SAM]);
+  eq(r.activity_state, 'revoked',
+    'a revoked person shown as merely inactive invites somebody to re-enable them');
+});
+
+await test('shared accounts is structurally zero, and reported as a fact', async () => {
+  // ADR-0008's residual, paid off. One row per named person is cw.account's
+  // primary key, so this is zero by construction rather than by discipline —
+  // and it is measured rather than assumed, because a stated goal nobody
+  // measures is a hope.
+  const s = await one(`select * from cw.access_summary`);
+  eq(s.shared_accounts, 0);
+  assert(s.people_with_access > 0, 'the summary found nobody at all');
+});
+
+await test('a requester cannot read the activity view at all', async () => {
+  // It reads the audit chain, whose policy scopes a requester to their own
+  // rows — so an unrestricted grant would show everybody's names with a null
+  // last act beside them, which is a misleading answer rather than a refused
+  // one. A clean permission error is the honest outcome.
+  for (const role of ['requester','viewer','legal_reviewer']) {
+    await throws(() => queryAs(role, `select * from cw.person_activity`),
+      'permission denied', `${role} can read cw.person_activity`);
+  }
+});
+
+await test('the administrator, auditor and legal admin can', async () => {
+  for (const role of ['administrator','auditor','legal_admin']) {
+    const r = await queryAs(role, `select count(*)::int n from cw.person_activity`);
+    assert(r[0].n > 0, `${role} cannot read cw.person_activity`);
+  }
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) {
   console.log('\nfailures:');

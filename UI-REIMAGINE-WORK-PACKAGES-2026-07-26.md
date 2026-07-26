@@ -477,7 +477,25 @@ mockup is marked as concept, superseded by the shell.
 
 ---
 
-## WP-U08 · Administrator console I: people & access
+## WP-U08 · Administrator console I: people & access — **CLOSED 2026-07-26**
+
+*Delivered in [`console-people.jsx`](prototype/v4/app/console-people.jsx),
+[`0014_access_console.sql`](backend/db/migrations/0014_access_console.sql), and the
+administrator's guide at [`docs/guides/administrator.md`](docs/guides/administrator.md).
+Tests: 7 in `role-grant.test.mjs` for the read models, 9 in `shell.test.mjs` for the screen's
+rules, 9 mutations.*
+
+**One real bug, found by using it.** The first version reasoned "a Legal role with no effective
+grant must be awaiting a countersign" — so a **revoked** reviewer rendered as *awaiting
+countersign*, which reads as "almost there, somebody just needs to approve it" when the truth is
+the exact opposite. Pending-ness now comes from `cw.countersign_pending` rather than being inferred
+from the role, and there is a third state (`no access`) for revoked-or-never-granted. Its mutation
+restores the inference.
+
+**The full lifecycle was walked in the browser**: viewer granted alone and signing in at once; Legal
+reviewer pending and refused at the door; administrator's countersign refused; Legal admin's
+accepted, and the same person signing in immediately after; self-grant refused in the database's own
+words; revoke followed by a refusal on the very next request.
 
 **Objective.** The countersigned grant lifecycle works end to end through the
 UI: grant, countersign, revoke, dormancy flag — every act visible on the chain.

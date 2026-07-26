@@ -139,7 +139,10 @@ await test('no role can reach another role\'s tab', async () => {
 console.log('\nevery tab has a pane, and every pane has a tab');
 
 const panesSrc = read('workspaces.jsx');
-const paneKeys = [...panesSrc.matchAll(/^\s*'([a-z-]+)':\s*\(\)\s*=>/gm)].map((m) => m[1]);
+// Panes take an optional identity argument — the people console shows a
+// countersign button only to a Legal admin — so the pattern allows a parameter
+// list. It did not at first, and two real panes were reported as missing.
+const paneKeys = [...panesSrc.matchAll(/^\s*'([a-z-]+)':\s*\(\w*\)\s*=>/gm)].map((m) => m[1]);
 
 await test('the pane table was actually found (guards a vacuous pass)', async () => {
   assert(paneKeys.length >= 20,
@@ -314,6 +317,119 @@ await test('the stage is derived, never stored', async () => {
   assert(!/deal\.stage\b/.test(src),
     'a pane reads a stored stage; a stored stage starts drifting the moment '
     + 'anything else changes');
+});
+
+// ── The people console (WP-U08) ─────────────────────────────────────────
+console.log('\nthe people console keeps its three rules');
+
+const consoleSrc = () => read('console-people.jsx');
+
+await test('pending is decided by the queue, never inferred from the role', async () => {
+  // The bug this test exists for, found by revoking a reviewer and looking at
+  // the screen: reasoning "a Legal role with no effective grant must be
+  // awaiting a countersign" renders a REVOKED person as awaiting a second name.
+  // That reads as "almost there, somebody just needs to approve it" when the
+  // truth is the exact opposite.
+  const fn = /function accessChip[\s\S]*?\n\}/.exec(consoleSrc())[0];
+  assert(/pendingPeople/.test(fn),
+    'accessChip no longer consults the countersign queue, so it is inferring '
+    + 'pending-ness from the role again');
+  assert(!/LEGAL_ROLES\.has\(p\.declared_role\)/.test(fn),
+    'accessChip infers pending-ness from whether the role is a Legal one');
+  assert(/no access/.test(fn),
+    'there is no state for "revoked or never granted", so those collapse into '
+    + 'one of the others');
+});
+
+await test('a pending grant is amber and never green', async () => {
+  const fn = /function accessChip[\s\S]*?\n\}/.exec(consoleSrc())[0];
+  const pendingBranch = /awaiting countersign/.exec(fn);
+  assert(pendingBranch, 'the pending state is gone');
+  const around = fn.slice(Math.max(0, pendingBranch.index - 120), pendingBranch.index + 40);
+  assert(/chip-pending/.test(around),
+    'the awaiting-countersign chip is not chip-pending — a grant that looks '
+    + 'effective before its countersign is the countersign rule undone in pixels');
+  assert(!/chip-ok[^\n]*awaiting countersign/.test(fn));
+});
+
+await test('revoke says next request, and does not promise instant lockout', async () => {
+  // WP-U05 delivers revocation at the next request; a request already in flight
+  // completes. The screen must say exactly that and no more.
+  const src = consoleSrc();
+  assert(/at their next request/i.test(src),
+    'the revoke dialog no longer says when the revocation bites');
+  assert(!/immediately|at once|instantly/i.test(
+    /function RevokeDialog[\s\S]*?\n\}/.exec(src)[0]),
+    'the revoke dialog promises an immediate lockout the service does not deliver');
+});
+
+await test('the revoke reason is required by the screen, not just by the database', async () => {
+  const dialog = /function RevokeDialog[\s\S]*?\n\}/.exec(consoleSrc())[0];
+  assert(/disabled=\{busy \|\| !reason\.trim\(\)\}/.test(dialog),
+    'revoke can be pressed with no reason — the reason is the whole value of '
+    + 'the record');
+});
+
+await test('dormancy is never re-described as a sign-in', async () => {
+  // Comments stripped first. The file's own header explains why "last seen" is
+  // the wrong phrase, and the first version of this test failed on that
+  // explanation — a check that cannot tell a warning from the thing it warns
+  // about is a check that punishes writing the warning down.
+  const src = stripComments(consoleSrc());
+  assert(!/last seen|last sign-?in|last login/i.test(src),
+    'the console describes dormancy as a sign-in, which is the measure the read '
+    + 'model deliberately does not use');
+  assert(/recorded act/i.test(src),
+    'the console does not say what dormancy is actually measured from');
+});
+
+await test('the countersign queue is one component, used in both places', async () => {
+  // A queue that lives only in the admin console — a screen Legal has no reason
+  // to open — is a queue that does not get cleared, and the countersign rule's
+  // whole cost is the wait it adds. Two copies would drift.
+  assert(/function CountersignQueue/.test(consoleSrc()),
+    'the countersign queue is not a shared component');
+  const uses = read('workspaces.jsx').match(/<CountersignQueue/g) ?? [];
+  assert(uses.length >= 1,
+    'the review desk no longer shows the countersign queue, so Legal only sees '
+    + 'it in a console they have no reason to open');
+  const consoleUses = consoleSrc().match(/<CountersignQueue/g) ?? [];
+  assert(consoleUses.length >= 1, 'the admin console no longer shows the queue');
+});
+
+await test('only a Legal admin is offered the countersign button', async () => {
+  const fn = /function CountersignQueue[\s\S]*?\n\}/.exec(consoleSrc())[0];
+  assert(/me\.role === 'legal_admin'/.test(fn),
+    'the countersign button is offered to whoever is looking');
+  // And the row shows BOTH names — a countersign is a second person's judgement
+  // about a first person's proposal and cannot be given without seeing both.
+  assert(/proposed by/.test(fn), 'the queue does not say who proposed the grant');
+});
+
+await test('creating an account and granting a role stay two acts', async () => {
+  // Each recorded act is one act. Bundling blurs what was approved, and if the
+  // grant is refused the account still exists — the screen has to be able to
+  // say so rather than reporting one outcome for two things.
+  const form = /function GrantForm[\s\S]*?\n\}/.exec(consoleSrc())[0];
+  assert(/API\.createAccount/.test(form) && /API\.grant/.test(form),
+    'the grant form no longer performs both acts');
+  // Not merely that the refusal is NOTICED — that it STOPS. The first version
+  // of this check looked for `if (!made.ok)` and passed happily against a body
+  // that noticed the refusal and carried on to grant a role against an account
+  // that was never created.
+  assert(/if \(!made\.ok\)\s*\{[^}]*\breturn\b[^}]*\}/.test(form),
+    'the grant form notices a refused account creation but does not stop, so it '
+    + 'goes on to grant a role against an account that does not exist');
+  assert(/onError\(made\.reason\)/.test(form),
+    'a refused account creation is swallowed rather than shown');
+});
+
+await test('a Legal grant warns before the button, not after the fact', async () => {
+  const form = /function GrantForm[\s\S]*?\n\}/.exec(consoleSrc())[0];
+  assert(/LEGAL_ROLES\.has\(role\)/.test(form) && /confer/.test(form),
+    'nothing warns that a Legal grant will confer nothing until countersigned — '
+    + 'so the administrator tells the joiner they are set up, and they cannot '
+    + 'sign in');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

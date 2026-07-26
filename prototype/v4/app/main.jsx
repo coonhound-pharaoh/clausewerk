@@ -60,7 +60,7 @@ function App() {
       <Masthead identity={identity} onSignOut={onSignOut} />
       <Tabs role={identity.role} active={active} onSelect={go} />
       <div className="flex-1 overflow-auto px-6 py-6" data-testid="workspace">
-        <Workspace role={identity.role} tab={active} />
+        <Workspace me={identity} tab={active} />
       </div>
       <Footer
         identity={identity}

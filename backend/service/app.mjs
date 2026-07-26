@@ -81,6 +81,25 @@ const READS = {
     rule: 'cw.account read_all policy; effectiveness from cw.effective_role',
   },
 
+  // The people pane. Distinct from /people, which is the plain list everyone may
+  // read: this carries activity, and activity comes from the audit chain, whose
+  // policy scopes a requester to their own rows. Granted to the three roles that
+  // already read the whole chain, so a requester asking gets an honest refusal
+  // rather than everybody's names with a null last act beside them.
+  'GET /people/activity': {
+    sql: `select person, display_name, unit, declared_role, state, created_by,
+                 created_at, effective_role, granted_by, granted_at,
+                 countersigned_by, last_act_at, last_act, acts_recorded,
+                 activity_state
+          from cw.person_activity order by person`,
+    rule: 'granted to administrator, auditor and legal_admin — it reads the chain',
+  },
+
+  'GET /people/summary': {
+    sql: `select * from cw.access_summary`,
+    rule: 'cw.access_summary; shared_accounts is structurally zero',
+  },
+
   'GET /access-history': {
     sql: `select grant_id, action, person, role, grant_ref, acted_by, acted_at,
                  reason, is_bootstrap

@@ -1291,6 +1291,82 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     find: `.acting-role {`,
     repl: `.acting-role { color: #7dd3fc;`,
     expect: 'v4.css adds no new colour and no new typeface' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The people console (WP-U08)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // PENDING-NESS INFERRED FROM THE ROLE AGAIN. This is the bug the package
+  // actually shipped with for an hour, found by revoking a reviewer and looking
+  // at the screen: a REVOKED person rendered as "awaiting countersign", which
+  // reads as "almost there" when the truth is the opposite.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'pending-ness is inferred from the role instead of the queue',
+    find: `  if (pendingPeople.has(p.person))`,
+    repl: `  if (LEGAL_ROLES.has(p.declared_role))`,
+    expect: 'pending is decided by the queue, never inferred from the role' },
+
+  // A PENDING GRANT RENDERED GREEN — the countersign rule undone in pixels.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a pending grant is shown as effective',
+    find: `    return <span className="chip chip-pending">awaiting countersign</span>;`,
+    repl: `    return <span className="chip chip-ok">awaiting countersign</span>;`,
+    expect: 'a pending grant is amber and never green' },
+
+  // THE REVOKE COPY OVER-PROMISING. WP-U05 delivers next-request revocation;
+  // a screen saying "immediately" is a document promising what no code does.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the revoke dialog promises an instant lockout',
+    find: `          Their role stops applying <strong>at their next request</strong>. A`,
+    repl: `          Their role stops applying immediately. A`,
+    expect: 'revoke says next request, and does not promise instant lockout' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a revocation can be recorded with no reason',
+    find: `          disabled={busy || !reason.trim()}`,
+    repl: `          disabled={busy}`,
+    expect: 'the revoke reason is required by the screen, not just by the database' },
+
+  // DORMANCY RE-DESCRIBED AS A SIGN-IN. The read model deliberately measures
+  // acts; a screen calling it "last seen" undoes that in the only place anybody
+  // reads it.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the console calls dormancy a sign-in',
+    find: `                    ? 'no recorded acts'`,
+    repl: `                    ? 'never signed in, last seen never'`,
+    expect: 'dormancy is never re-described as a sign-in' },
+
+  // THE COUNTERSIGN QUEUE LEAVING LEGAL'S WORKSPACE — the wait the rule costs
+  // stops being bounded by anybody looking.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the countersign queue is shown only in the admin console',
+    find: `          <CountersignQueue
+            me={me} rows={queue.rows}
+            onDone={() => { queue.reload(); tickets.reload(); }}
+            onError={setError}
+          />`,
+    repl: `          <div />`,
+    expect: 'the countersign queue is one component, used in both places' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'anybody looking at the queue is offered the countersign button',
+    find: `              {me.role === 'legal_admin' && (`,
+    repl: `              {true && (`,
+    expect: 'only a Legal admin is offered the countersign button' },
+
+  // ACCOUNT-CREATION AND GRANT BUNDLED, so one refusal reports one outcome for
+  // two acts and the screen cannot say which happened.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a refused account creation does not stop the grant',
+    find: `      if (!made.ok) { setBusy(false); onError(made.reason); return; }`,
+    repl: `      if (!made.ok) { /* carry on regardless */ }`,
+    expect: 'creating an account and granting a role stay two acts' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'nothing warns that a Legal grant confers nothing yet',
+    find: `      {LEGAL_ROLES.has(role) && (`,
+    repl: `      {false && (`,
+    expect: 'a Legal grant warns before the button, not after the fact' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();

@@ -86,6 +86,8 @@ const API = (() => {
     waitingTickets:   () => call('GET', '/waiting/tickets'),
     countersignQueue: () => call('GET', '/waiting/countersign'),
     people:           () => call('GET', '/people'),
+    peopleActivity:   () => call('GET', '/people/activity'),
+    accessSummary:    () => call('GET', '/people/summary'),
     accessHistory:    () => call('GET', '/access-history'),
     settings:         () => call('GET', '/settings'),
     health:           () => call('GET', '/health'),

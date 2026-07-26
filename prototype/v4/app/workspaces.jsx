@@ -122,9 +122,10 @@ function MyDeals() {
 }
 
 // ── Legal reviewer ───────────────────────────────────────────────────────
-function ReviewDesk() {
+function ReviewDesk({ me }) {
   const tickets = usePane(() => API.waitingTickets());
   const queue = usePane(() => API.countersignQueue());
+  const [error, setError] = useState(null);
 
   if (tickets.status === 'loading' || queue.status === 'loading') return <Loading />;
   if (tickets.status === 'failed') return <LoadFailed reason={tickets.reason} />;
@@ -159,29 +160,25 @@ function ReviewDesk() {
         />
       </div>
 
+      {error && (
+        <div className="panel p-3 mt-4" style={{ borderColor: 'var(--danger)' }}>
+          <div className="tag" style={{ color: 'var(--danger)' }}>refused</div>
+          <div className="text-[12.5px] mt-1.5" style={{ color: 'var(--mute)' }}>{error}</div>
+        </div>
+      )}
+
       {/* The countersign queue lives in Legal's OWN workspace as well as the
-          admin console. A queue that lives only where the people who must clear
-          it never look is a queue that does not get cleared — WP-U08 makes this
-          explicit and it is honoured here. */}
+          admin console — the same component, so the two cannot drift. A queue
+          living only where the people who must clear it never look is a queue
+          that does not get cleared, and the countersign rule's entire cost is
+          the wait it adds. */}
       {queue.status === 'loaded' && queue.rows.length > 0 && (
         <div className="mt-6">
-          <PanelHead
-            title="Waiting for your countersign"
-            sub="These grants confer nothing at all while they sit here."
+          <CountersignQueue
+            me={me} rows={queue.rows}
+            onDone={() => { queue.reload(); tickets.reload(); }}
+            onError={setError}
           />
-          <WaitingList
-            items={queue.rows.map((g) => ({
-              key: g.grant_id,
-              title: `${g.display_name || g.person} → ${g.role}`,
-              sub: `proposed by ${g.proposed_by}${g.reason ? ` · ${g.reason}` : ''}`,
-              at: g.proposed_at,
-              chips: <span className="chip chip-pending">pending</span>,
-            }))}
-            empty={null}
-          />
-          <div className="caption mt-2">
-            Accepting one is built in <span className="font-mono">WP-U08</span>.
-          </div>
         </div>
       )}
     </div>
@@ -189,64 +186,9 @@ function ReviewDesk() {
 }
 
 // ── Administrator ────────────────────────────────────────────────────────
-function PeopleAndAccess() {
-  const people = usePane(() => API.people());
-  const queue = usePane(() => API.countersignQueue());
-
-  if (people.status === 'loading') return <Loading />;
-  if (people.status === 'failed') return <LoadFailed reason={people.reason} />;
-
-  const rows = people.rows;
-  const active = rows.filter((p) => p.state === 'active');
-  const pending = rows.filter((p) => p.state === 'active' && !p.effective_role);
-
-  return (
-    <div>
-      <TileStrip tiles={[
-        { label: 'people with access', n: active.filter((p) => p.effective_role).length },
-        { label: 'awaiting countersign', n: pending.length },
-        { label: 'revoked', n: rows.filter((p) => p.state === 'revoked').length },
-        // The ADR-0008 residual, made a visible goal rather than a note in a
-        // document. Every account is one named person by construction.
-        { label: 'shared accounts', n: 0 },
-      ]} />
-
-      <div className="mt-6">
-        <PanelHead
-          title="People and access"
-          sub="One person, one role. A second role is a revoke and a grant, both recorded."
-        />
-        <WaitingList
-          items={rows.map((p) => ({
-            key: p.person,
-            title: p.display_name || p.person,
-            sub: `${p.person}${p.unit ? ` · ${p.unit}` : ''} · granted by ${p.created_by}`,
-            at: p.created_at,
-            chips: (
-              <>
-                <span className="chip chip-std">{p.declared_role}</span>
-                {p.state === 'revoked'
-                  ? <span className="chip chip-err">revoked</span>
-                  : p.effective_role
-                    ? <span className="chip chip-ok">effective</span>
-                    // AMBER, never green. A grant that looks effective before
-                    // its countersign is the countersign rule undone in pixels.
-                    : <span className="chip chip-pending">awaiting countersign</span>}
-              </>
-            ),
-          }))}
-          empty={<Empty kicker="people" line="Nobody has an account yet."
-                        sub="The bootstrap ceremony creates the first two." />}
-        />
-      </div>
-
-      <div className="mt-6 caption">
-        Granting, countersigning and revoking through this screen land in{' '}
-        <span className="font-mono">WP-U08</span>. The list above is real.
-      </div>
-    </div>
-  );
-}
+// The people pane itself is in console-people.jsx — it is the largest surface
+// in the console and the one with the most rules to keep, so it gets its own
+// file rather than crowding the router.
 
 function SystemHealth() {
   const pane = usePane(() => API.health());
@@ -332,7 +274,7 @@ const PANES = {
   'my-record': () => <NotBuiltYet what="Your own slice of the record is not built." lands="WP-U12" />,
 
   // Legal reviewer
-  'review-desk':  () => <ReviewDesk />,
+  'review-desk':  (me) => <ReviewDesk me={me} />,
   'tickets':      () => <NotBuiltYet what="Ticket adjudication is not built." lands="WP-U11" />,
   'approvals':    () => <NotBuiltYet what="Concession approvals are not built." lands="WP-U11" />,
   'negotiations': () => <NotBuiltYet what="Negotiation rounds are not built." lands="WP-U11" />,
@@ -354,7 +296,7 @@ const PANES = {
   'reading-room': () => <NotBuiltYet what="The reading room is not built." lands="WP-U14" />,
 
   // Administrator
-  'people':   () => <PeopleAndAccess />,
+  'people':   (me) => <PeopleAndAccessConsole me={me} />,
   'settings': () => <NotBuiltYet what="The settings panes are not built." lands="WP-U09" />,
   'health':   () => <SystemHealth />,
   'watchers': () => <NotBuiltYet what="Watchers and notices are not built." lands="WP-U09" />,
@@ -367,15 +309,20 @@ const PANES = {
 // having fetched nothing at all. Note what it does NOT do: it does not call the
 // endpoint and render the refusal that comes back. There is no request, so
 // there is no possibility of data arriving and being hidden on screen.
-function Workspace({ role, tab }) {
-  const allowed = WORKSPACES[role].tabs.some((t) => t.key === tab);
+function Workspace({ me, tab }) {
+  const allowed = WORKSPACES[me.role].tabs.some((t) => t.key === tab);
   if (!allowed) {
     return <Refused
       what={`“${tab}” is not part of your workspace.`}
-      role={role}
+      role={me.role}
     />;
   }
   const pane = PANES[tab];
   if (!pane) return <NotBuiltYet what="This pane does not exist." />;
-  return pane();
+  // The identity is passed to panes that need to know WHO is looking — the
+  // people console shows a countersign button only to a Legal admin, and no
+  // revoke button against the viewer's own row. Those are affordances, not
+  // permissions: the database refuses the acts regardless, and a pane that got
+  // this wrong would offer a button that fails rather than leak anything.
+  return pane(me);
 }
