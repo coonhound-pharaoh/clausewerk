@@ -60,6 +60,17 @@ class Snapshot:
         # regardless of the order rows came back from the database.
         cl = tuple(sorted(clauses, key=lambda c: (c.clause_id, c.version)))
         ld = tuple(sorted(ladders, key=lambda l: (l.category, l.severity)))
+        # The hash covers exactly what determines the OUTCOME, and nothing else.
+        #
+        # `state` is deliberately absent. It is descriptive — active, superseded,
+        # retired, expired — and resolution never reads it; only `selectable`
+        # decides anything. It is also mutable: retiring or superseding a clause
+        # changes it. Hashing a mutable field that changes no outcome would make
+        # a stored run un-reproducible the first time Legal tidied the library,
+        # for no benefit at all.
+        #
+        # `provenance_gap` IS included: it drives the warning on a decision, and
+        # it derives from dates on an immutable version, so it cannot drift.
         payload = {
             "clauses": [
                 {
@@ -67,8 +78,8 @@ class Snapshot:
                     "category": c.category,
                     "severity": c.severity,
                     "body": c.body,
-                    "state": c.state,
                     "selectable": c.selectable,
+                    "provenance_gap": c.provenance_gap,
                     "always_include": c.always_include,
                     "framework_section": c.framework_section,
                     # Pinned because conflict rules match on tags: retagging a

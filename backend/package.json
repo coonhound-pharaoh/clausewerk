@@ -5,7 +5,7 @@
   "description": "Clausewerk backend — deterministic core. Clause registry, resolution, audit.",
   "type": "module",
   "scripts": {
-    "test": "node db/test/registry.test.mjs && node db/test/ladder.test.mjs && node db/test/loader-sql.test.mjs",
+    "test": "node db/test/registry.test.mjs && node db/test/ladder.test.mjs && node db/test/loader-sql.test.mjs && node db/test/run-store.test.mjs",
     "test:mutation": "node db/test/mutation-check.mjs && python engine/mutation_check.py",
     "verify": "npm run test && npm run test:engine && npm run test:mutation",
     "test:engine": "python -m pytest engine -q"

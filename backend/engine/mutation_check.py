@@ -119,6 +119,38 @@ MUTATIONS = [
         '"tags": [],',
         "test_retagging_a_clause_changes_the_snapshot_id",
     ),
+    (
+        "the frozen selectable flag is ignored on rebuild",
+        "run.py",
+        "selectable=frozen[key],          # the frozen flag wins, not today's",
+        "selectable=bool(row.get('selectable', True)),",
+        "test_a_run_reproduces_years_later",
+    ),
+    (
+        "clauses outside the snapshot are included on rebuild",
+        "run.py",
+        """        if key not in frozen:
+            continue  # not part of this snapshot""",
+        "        pass",
+        "test_rebuilding_ignores_clauses_outside_the_snapshot",
+    ),
+    (
+        "mutable clause state is hashed into the snapshot",
+        "snapshot.py",
+        """"selectable": c.selectable,
+                    "provenance_gap": c.provenance_gap,""",
+        """"selectable": c.selectable,
+                    "state": c.state,
+                    "provenance_gap": c.provenance_gap,""",
+        "test_retiring_a_clause_does_not_change_the_snapshot_id",
+    ),
+    (
+        "snapshot ladders lose their floor when stored",
+        "run.py",
+        '"is_floor": rung == ladder.floor_rung,',
+        '"is_floor": False,',
+        "test_snapshot_rows_pin_the_ladder_with_its_floor",
+    ),
 ]
 
 

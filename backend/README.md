@@ -4,8 +4,8 @@ The deterministic core. This is the half of the system that must be provably
 correct and uses no AI at all.
 
 **Status:** clause registry, fallback ladders, the concession record, the
-resolution engine and the validation engine built and verified. Document service
-not yet started.
+resolution engine, the validation engine and the run store built and verified.
+Document service not yet started.
 
 ## Running it
 
@@ -30,21 +30,25 @@ db/migrations/
   0002_clause_registry.sql        categories, clauses, immutable versions, supersession
   0003_ladders_and_concessions.sql  fallback ladders, concessions, promotion, analytics
   0004_conflict_rules.sql   clause tags and attorney-authored conflict rules
+  0005_run_store.sql        stored snapshots, rule sets, and immutable runs
 db/test/
-  registry.test.mjs         35 tests
+  registry.test.mjs         36 tests
   ladder.test.mjs           29 tests
   loader-sql.test.mjs       16 tests — the engine's SQL against the real schema
+  run-store.test.mjs        22 tests
   mutation-check.mjs        12 mutations — proves those tests can fail
 engine/
   model.py                  frozen value types
   snapshot.py               content-addressed library snapshots
   resolution.py             the pure function, and ladder descent
   validation.py             conflict rules as data, and the gate
+  run.py                    recording a run, and rebuilding one
   loader.py                 the only module that knows both layers
   test_resolution.py        27 tests
   test_validation.py        21 tests
+  test_run.py               16 tests
   test_loader.py            14 tests
-  mutation_check.py         14 mutations
+  mutation_check.py         18 mutations
 ```
 
 ## The design in one page
@@ -202,6 +206,45 @@ Rule sets are content-addressed like snapshots, so a validation result names
 both the library and the rules that produced it. Tags are pinned into the
 snapshot for the same reason: retagging a clause changes which contracts block.
 
+## The run store, and what reproducibility actually costs
+
+`ARCHITECTURE.md` §5 asks that a run be reproducible forever given its manifest
+and library snapshot id. Storing the id is not enough, and the reason is worth
+understanding before anyone tries to simplify this away:
+
+**A snapshot id cannot be recomputed from the live registry later.** The hash
+covers `selectable`, and selectability depends on the date. Tomorrow's registry
+is a different library. Naming a thing nobody can rebuild is not a guarantee.
+
+So snapshots are **stored**, not merely named — membership plus the frozen
+`selectable` flag, which is the one fact that cannot be recovered afterwards.
+They are content-addressed, so a slow-moving library means many runs share one
+row rather than each carrying a copy.
+
+**Clause bodies are not stored with them.** They live in `cw.clause_version`,
+which is immutable and never deleted, so a reference suffices forever. This is
+where ADR-0006 finally pays for itself: a three-year-old run is still readable
+because the wording it points at cannot have changed.
+
+**What the hash covers is a deliberate choice.** It includes everything that
+determines the outcome — body, severity, `selectable`, tags, ladders,
+`provenance_gap` — and excludes `state`. `state` is descriptive, resolution
+never reads it, and it *changes* when Legal retires or supersedes a clause.
+Hashing it would have broken every stored run the first time the library was
+tidied, for no benefit. That flaw was caught by the reproducibility test, not by
+review.
+
+`test_a_run_reproduces_years_later` is the guarantee under test: it stores a run,
+ages the library the way three years of Legal activity would — retiring,
+expiring, superseding, adding new language — and checks the run still rebuilds
+to the same snapshot id and the same decisions. A companion test confirms
+today's library *would* give a different answer, so the first cannot pass by
+coincidence.
+
+Runs, decisions, findings, snapshots and rule sets are all immutable. `UPDATE`
+raises; `DELETE` is a silent no-op rather than an error, so deleting history
+cannot succeed even by accident.
+
 ## Why there is a mutation check
 
 A test suite that has never failed proves nothing. `mutation-check.mjs`
@@ -209,7 +252,7 @@ deliberately breaks one guarantee at a time — removes the unique constraint on
 category short codes, makes clause bodies editable, lets expired clauses be
 selected — and asserts the suite catches each one.
 
-It has already earned its place five times:
+It has already earned its place seven times:
 
 - Two tests referenced clause versions that did not exist, so they failed on a
   foreign key rather than the rule under test — and would have kept passing if
@@ -227,6 +270,12 @@ It has already earned its place five times:
   exhausted". A ladder may legitimately document positions below the floor
   (asks vendors make that we refuse), and reaching one must escalate. Now
   covered by a four-rung ladder with the floor at rung 2.
+- **The frozen `selectable` flag was never load-bearing.** Every clause in the
+  run-store fixture was selectable, so a rebuild that ignored the stored flag
+  still reproduced. The fixture now contains a clause that was already retired
+  when the snapshot was taken.
+- A test asserting the ladder floor survives storage passed while the floor was
+  being written as `false` for every rung.
 
 ## Mapping to the specifications
 
@@ -240,14 +289,15 @@ It has already earned its place five times:
 
 ## Next
 
-1. **Run store** — persisting a resolution and its findings against the snapshot
-   and rule-set ids that produced them. This is what turns reproducibility from
-   a property of the engine into a property of the system.
-2. **Document service** — Python, `python-docx`, generation and tracked-change
-   parsing.
-3. **Agreement record** — `cw.agreement` is currently the minimal subset needed
+1. **Document service** — Python, `python-docx`, generation and tracked-change
+   parsing. The last piece of the assembly path, and the one that finally emits
+   a contract.
+2. **Agreement record** — `cw.agreement` is currently the minimal subset needed
    by concessions. [LCMA](../LIFECYCLE-ARCHITECTURE.md) §5 extends it with the
-   snapshot pin, decision set, term and status machine.
+   executed run, term and status machine. The snapshot pin it calls for already
+   exists on `cw.run`.
+3. **Obligation templates** — [LCMA](../LIFECYCLE-ARCHITECTURE.md) §5, declared
+   on the clause so registration is a lookup rather than an interpretation.
 
 Deferred deliberately: a rule-authoring surface for non-developers. The grammar
 is now small enough to put behind a form, but that is a frontend concern and the

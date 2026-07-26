@@ -229,3 +229,34 @@ language would just be programming with no approval step in front of it.
 **Also decided.** Rules are versioned and cannot be edited once published, and
 every warning names the exact rule version that raised it. Editing a live rule
 would rewrite the record of why past contracts were blocked.
+
+---
+
+## 2026-07-25 · A promise you cannot check is not a promise
+
+**The problem found while building.** Our architecture says any assembled
+contract must be reproducible years later, given a record of which library
+version produced it. We were about to satisfy that by storing a reference number
+for the library version.
+
+That does not work, and the reason is subtle. Whether a clause is usable depends
+on today's date — approved wording expires. So next year's library is a
+genuinely different thing, and the reference number cannot be turned back into
+the library it named. We would have been storing a label for something nobody
+could ever reconstruct.
+
+**Decision.** We now store the library state itself: which clauses were in play
+and, critically, which were usable at that moment. The wording is not copied —
+approved wording can never be edited or deleted, so a reference to it is safe
+forever. This is the first real payoff from that rule.
+
+**How we know it works.** A test stores a contract, then ages the library the
+way three years of legal housekeeping would — retiring clauses, letting others
+expire, adding new ones — and confirms the old contract still rebuilds
+identically. A second test confirms today's library would give a *different*
+answer, so the first cannot pass by luck.
+
+**A flaw this caught.** Our fingerprint of the library included a descriptive
+status field that changes whenever Legal retires a clause — but which has no
+effect on the outcome. Every stored contract would have stopped reproducing the
+first time anyone tidied the library. Removed.
