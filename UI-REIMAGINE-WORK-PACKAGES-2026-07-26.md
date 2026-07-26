@@ -413,7 +413,25 @@ the database rule it defers to.
 
 ---
 
-## WP-U07 · The shell: six workspaces, honest and empty
+## WP-U07 · The shell: six workspaces, honest and empty — **CLOSED 2026-07-26**
+
+*Delivered in [`prototype/v4/`](prototype/v4) and
+[`shell.test.mjs`](backend/db/test/shell.test.mjs) — 23 tests, 10 mutations. Run it with
+`node service/server.mjs --data ./cw-demo-data --static ../prototype/v4`.*
+
+**The URL half of the principle, verified in a browser.** Signed in as the requester and typed
+`#/people` directly: the refusal state renders, and the network log shows `sign-in` and `deals` and
+nothing else. No request for `/people` was ever made — the route is refused before any fetch, so
+there is no possibility of data arriving and being hidden on screen.
+
+**The mutation harness now reaches the shell too** (`target: 'shell'`), because the tab sets, the
+two kinds of empty state and the no-canned-data rule are all JSX that neither of the other harness
+modes could touch.
+
+**One thing this fixed on the way.** Migrations were not idempotent, so the service died on its
+second start against a real data directory. `cw.schema_migration` now records what has been applied
+— a ledger rather than a "does the schema exist" check, because that check stops being the right
+question the moment a fourteenth migration is written.
 
 **Objective.** The v4 chrome exists in the v3 style: sign-in screen, "acting
 as" masthead, per-role tab rows, waiting-lists-first workspaces, deals as the

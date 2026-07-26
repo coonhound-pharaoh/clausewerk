@@ -10,7 +10,9 @@ fixed in [`v3/`](v3), with the fixes verified against the running application.
 
 | Path | What it is | Status |
 |---|---|---|
-| [`v3/`](v3) | The V3 prototype — `Clausewerk V3.html` + 18 `app/*.jsx` | **Current.** What [`ARCHITECTURE.md`](../ARCHITECTURE.md) documents |
+| [`v4/`](v4) | **The shell.** Six workspaces, one per role, talking to the real service | **Current.** Built from WP-U07 onward |
+| [`v4-concept/`](v4-concept) | The clickable concept that argued for v4 | **Concept, superseded by `v4/`.** Its data is invented — see below |
+| [`v3/`](v3) | The V3 prototype — `Clausewerk V3.html` + 18 `app/*.jsx` | **Superseded by `v4/`**, and still the source of the visual language |
 | [`v2/`](v2) | Earlier prototype — `index.html` + 11 `app/*.jsx` | Superseded |
 | [`pitch/`](pitch) | Exec pitch deck — `samples.html` + 12 `components/*.jsx` | Presentation, not product |
 | [`dist/`](dist) | `Clausewerk.html` — self-contained single-file export (1.7 MB) + its thumbnail | Distributable |
@@ -18,6 +20,57 @@ fixed in [`v3/`](v3), with the fixes verified against the running application.
 
 Version lineage is recorded in the `localStorage` keys: `v2/` writes `clausewerk.v2`, `v3/` writes
 `clausewerk.v3.1` and `clausewerk.v3.seen`.
+
+## v4 — the shell, and how it differs from everything above it
+
+**v3 and the concept mockup talk to nothing.** They hold their own data, in the
+browser, and every role can open every tab. That was the right shape for showing
+what the product would feel like, and the wrong shape for a product: the frontend
+handoff already warned that fetching data a role may not see and hiding it on
+screen is a leak, not a control.
+
+**v4 talks to the real service.** You sign in as a named person, the database
+says what role you actually hold, and your workspace is built from only what that
+role's connection can read. Six workspaces, one per role — owner decision `U8`.
+
+```bash
+cd backend
+node service/seed-demo.mjs --data ./cw-demo-data     # six people, one per role
+node service/server.mjs --data ./cw-demo-data --static ../prototype/v4
+# then open http://localhost:8787 and sign in as, say, d.buyer@clausewerk
+```
+
+The seed creates **no deals, tickets or clauses.** Those are acts for the people
+in the system to perform, and an empty workspace showing its honest empty state
+is the correct first impression. A seeded system that looks busy is a demo.
+
+### Three rules this shell keeps, and why they are worth knowing
+
+**Nothing is invented.** The concept mockup in `v4-concept/` has a complete set
+of plausible rows — deals, tickets, findings, people. **None of it is imported.**
+A pane either reads a real endpoint or renders an empty state naming the work
+package it lands in. The 2026-07-25 review found eighteen instances of documents
+promising what code did not do, and a screen full of convincing fiction is that
+same failure with better lighting.
+
+**Hiding a tab is not a control.** Anybody can type a URL. So the tab row decides
+what is *offered*, and the address bar is tested: navigating to another role's
+route reaches a refusal state **having fetched nothing at all**. Not "fetched and
+refused" — no request is made, because there is no call in this app that fetches
+broadly and filters afterwards.
+
+**The visual language is v3's, byte for byte.** `app/base.css` was extracted from
+`Clausewerk V3.html` rather than retyped, and a test asserts it still matches.
+Decision `U8` was explicit that this is a reorganisation and not a restyling, so
+`v4.css` adds only the two idioms v4 needed — the acting-as masthead and the
+waiting list — and introduces no new colour and no fourth typeface.
+
+### What is built, and what is not
+
+The shell, the sign-in, the per-role tab sets, the requester's deal list with the
+pipeline rail as an open deal's header, the administrator's people and health
+panes, and the auditor's access history. Everything else renders an honest
+"not built yet" naming its package — `WP-U08` through `WP-U14`.
 
 ## Running it
 

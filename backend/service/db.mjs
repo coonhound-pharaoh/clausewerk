@@ -64,9 +64,38 @@ export class Db {
 
   // The one privileged entry point, and it runs before the server listens.
   // Anything that needs elevation is a migration, not an endpoint.
+  //
+  // APPLIED ONCE, AND RECORDED. The test suites build a fresh database every
+  // time and apply every file, so nothing there ever needed a ledger. A real
+  // data directory does: the second start-up re-runs `create table
+  // cw.audit_event` and the service dies before it listens. That was found by
+  // starting the server twice, which is a thing operators do.
+  //
+  // Deliberately a table and not a "does schema cw exist" check. That check
+  // answers "has anything ever been applied", which stops being the right
+  // question the moment a fourteenth migration is written — it would be skipped
+  // on every existing installation, silently, and the schema would be a version
+  // behind with nothing saying so.
   async migrate() {
-    for (const f of readdirSync(MIGRATIONS).filter(f => f.endsWith('.sql')).sort())
+    await this.#pg.exec(`
+      create schema if not exists cw;
+      create table if not exists cw.schema_migration (
+        filename   text primary key,
+        applied_at timestamptz not null default now()
+      );`);
+
+    const done = new Set((await this.#pg.query(
+      `select filename from cw.schema_migration`)).rows.map(r => r.filename));
+
+    const applied = [];
+    for (const f of readdirSync(MIGRATIONS).filter(f => f.endsWith('.sql')).sort()) {
+      if (done.has(f)) continue;
       await this.#pg.exec(readFileSync(join(MIGRATIONS, f), 'utf8'));
+      await this.#pg.query(
+        `insert into cw.schema_migration (filename) values ($1)`, [f]);
+      applied.push(f);
+    }
+    return applied;
   }
 
   // Run work as a named person holding a named role. This is the ONLY way a
@@ -132,6 +161,15 @@ export class Db {
   // privilege story.
   async lookUpIdentity(fn) {
     return this.asPerson('__signin__', 'viewer', fn);
+  }
+
+  // The bootstrap ceremony. Installation, not a request — which is why it lives
+  // beside migrate() rather than behind an endpoint. cw.bootstrap() refuses any
+  // caller holding an application role, so this could not be reached from the
+  // serving path even if somebody wired it to one.
+  async bootstrap(by, [admin, adminName, , ], [legal, legalName, unit, ]) {
+    await this.#pg.query(`select cw.bootstrap($1,$2,$3,$4,$5,$6)`,
+      [by, admin, adminName, legal, legalName, unit ?? null]);
   }
 
   async close() { await this.#pg.close(); }

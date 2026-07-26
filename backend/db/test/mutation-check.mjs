@@ -6,7 +6,7 @@
 //
 //   node db/test/mutation-check.mjs
 
-import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir, cpus } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -1203,6 +1203,94 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
             ({ query }) => write.run(query, body ?? {}));
         } catch { rows = []; }`,
     expect: 'a viewer cannot open a deal, and nothing reaches the chain' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The shell (WP-U07) — target: 'shell'
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // THE TAB SET DRIFTING FROM THE ARCHITECTURE. Nobody notices this one: the
+  // screen still works, it just quietly stops being what was agreed.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a role gains a tab the architecture never gave it',
+    find: `      { key: 'my-record', label: 'my record' },`,
+    repl: `      { key: 'my-record', label: 'my record' },
+      { key: 'library',   label: 'the library' },`,
+    expect: "requester's tabs match the architecture exactly" },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a role loses a tab the architecture gave it',
+    find: `      { key: 'holds',        label: 'holds' },`,
+    repl: ``,
+    expect: "legal_reviewer's tabs match the architecture exactly" },
+
+  // A TAB WITH NO PANE. A dead end somebody reaches by clicking.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a tab leads nowhere',
+    find: `  'quality':        () => <NotBuiltYet what="Review quality is not built." lands="WP-U14" />,`,
+    repl: ``,
+    expect: 'every tab in every workspace has a pane behind it' },
+
+  // THE CRITICAL ANTI-PATTERN: the mockup's invented rows carried into the
+  // product "so it demos well". The 2026-07-25 review was eighteen findings of
+  // exactly this.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'canned example rows are carried into a pane',
+    find: `  const pane = usePane(() => API.deals());`,
+    repl: `  const pane = usePane(() => API.deals());
+  const examples = [{ agreement_id: 'AG-001', counterparty: 'Northwind' },
+                    { agreement_id: 'AG-002', counterparty: 'Contoso' }];`,
+    expect: 'no pane holds an array of example rows' },
+
+  // THE NAMED LEAK: a pane fetching for itself, which means it can ask for
+  // anything and hide what it should not have had.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a pane opens its own connection instead of using the endpoint list',
+    find: `function SystemHealth() {
+  const pane = usePane(() => API.health());`,
+    repl: `function SystemHealth() {
+  const pane = usePane(() => fetch('/api/health').then(r => r.json()));`,
+    expect: "every call goes through the API module's fixed endpoint list" },
+
+  // "NOT BUILT" COLLAPSING INTO "NOTHING HERE". Two different facts: one is
+  // about the data, the other about the system. A pane showing the first when
+  // the second is true is a surface claiming a capability.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the two kinds of empty become one',
+    find: `function NotBuiltYet({ what, lands }) {`,
+    repl: `function NotBuiltYetRenamed({ what, lands }) {`,
+    expect: 'the empty states are honest about which kind of empty they are' },
+
+  // A FAILED LOAD RENDERING AS AN EMPTY LIST — how somebody misses a queue.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a pane that cannot load renders as empty',
+    find: `function LoadFailed({ reason }) {`,
+    repl: `function LoadFailedRenamed({ reason }) {`,
+    expect: 'a pane that cannot load says so instead of rendering as empty' },
+
+  // THE RAIL GOING GLOBAL AGAIN. v3's shape: two deals at two stages share one
+  // rail, so the screen can only be telling the truth about one of them. The
+  // regression that matters is the rail no longer saying WHICH deal it is
+  // drawing — at that point two rails are indistinguishable and nothing, test
+  // or person, can tell whether the stage shown belongs to the deal on screen.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the rail no longer says which deal it is drawing',
+    find: `data-deal={deal.agreement_id}`,
+    repl: ``,
+    expect: 'the rail takes its stage from the deal it is drawn for' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the rail takes its stage from somewhere other than its deal',
+    find: `  const at = stageOf(deal);`,
+    repl: `  const at = 3;`,
+    expect: 'the rail takes its stage from the deal it is drawn for' },
+
+  // THE VISUAL LANGUAGE DRIFTING. Decision U8 says reorganisation, not
+  // restyling — a new colour here is out of scope by definition.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a new colour is introduced instead of composing the tokens',
+    find: `.acting-role {`,
+    repl: `.acting-role { color: #7dd3fc;`,
+    expect: 'v4.css adds no new colour and no new typeface' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();
@@ -1233,6 +1321,7 @@ const runOne = (m) => new Promise((resolve) => {
   // could only reach SQL would leave the most dangerous protections in the
   // system as tests nobody had ever seen fail.
   if (m.target === 'service') return resolve(runServiceMutation(m));
+  if (m.target === 'shell')   return resolve(runShellMutation(m));
 
   const dir = mkdtempSync(join(tmpdir(), 'cw-mut-'));
   let applied = false;
@@ -1273,6 +1362,36 @@ const serviceOriginals = Object.fromEntries(
 // reported IMPRECISE, "the named test is unproven", for tests that were fine.
 // Under backend/ the walk finds backend/node_modules on the first step.
 const MUT_ROOT = join(HERE, '..', '..', '.mutation-service');
+
+// The shell's files, for `target: 'shell'`. Same idea again: WP-U07's
+// guarantees — the tab sets, the empty states, the no-canned-data rule — live in
+// JSX that neither of the other two harness modes can reach.
+const SHELL_SRC = join(HERE, '..', '..', '..', 'prototype', 'v4', 'app');
+const shellFiles = existsSync(SHELL_SRC)
+  ? readdirSync(SHELL_SRC).filter(f => f.endsWith('.jsx') || f.endsWith('.css')) : [];
+const shellOriginals = Object.fromEntries(
+  shellFiles.map(f => [f, readFileSync(join(SHELL_SRC, f), 'utf8')]));
+
+const runShellMutation = (m) => new Promise((resolve) => {
+  mkdirSync(MUT_ROOT, { recursive: true });
+  const dir = mkdtempSync(join(MUT_ROOT, 'shell-'));
+  let applied = false;
+  for (const f of shellFiles) {
+    let src = shellOriginals[f];
+    if (src.includes(m.find)) { src = src.replace(m.find, () => m.repl); applied = true; }
+    writeFileSync(join(dir, f), src);
+  }
+  const done = (verdict) => { rmSync(dir, { recursive: true, force: true }); resolve({ m, verdict }); };
+  if (!applied) return done('skip');
+
+  execFile(process.execPath, [join(HERE, m.suite || 'shell.test.mjs')],
+    { env: { ...process.env, CW_SHELL: dir }, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
+    (err, stdout, stderr) => {
+      const out = (stdout || '') + (stderr || '');
+      if (!err) return done('miss');
+      done(out.includes(`FAIL ${m.expect}`) ? 'ok' : 'imprecise');
+    });
+});
 
 const runServiceMutation = (m) => new Promise((resolve) => {
   mkdirSync(MUT_ROOT, { recursive: true });

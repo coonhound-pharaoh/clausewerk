@@ -57,3 +57,6 @@ desktop.ini
 # Mutation harness scratch: mutated copies of backend/service, made and removed
 # per run. Inside backend/ so Node can resolve node_modules from them.
 backend/.mutation-service/
+
+# The demo data directory a walkthrough creates. Regenerate with seed-demo.mjs.
+backend/cw-demo-data/

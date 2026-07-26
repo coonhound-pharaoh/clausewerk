@@ -1,0 +1,121 @@
+/* v4 additions — and only additions.
+ *
+ * base.css is v3's stylesheet, untouched. Everything here exists because v4 has
+ * idioms v3 had no need for: an "acting as" masthead, and the waiting list that
+ * every workspace opens on. Nothing below introduces a new colour or a new
+ * typeface; it all composes the tokens base.css already defines.
+ */
+
+/* ── The waiting list ──────────────────────────────────────────────────────
+ * ONE idiom, used by all six workspaces. The UI inventory found four
+ * near-duplicate tile components in the prototype; this is the consolidation it
+ * recommended, and the reason it matters is not tidiness — four implementations
+ * of "what is waiting on you" drift, and the one nobody looks at is the one
+ * that goes wrong.
+ */
+.waiting-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 16px;
+  padding: 11px 14px; border-bottom: 1px solid var(--line); align-items: center;
+}
+.waiting-row:last-child { border-bottom: 0; }
+.waiting-row:hover { background: rgba(255,255,255,.014); }
+.waiting-age {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--mute-2); font-variant-numeric: tabular-nums;
+}
+/* The oldest wait is the whole point of a desk, so it is MARKED and not merely
+ * sorted first. Sort order is a control, and a control nobody can see reads as
+ * a preference somebody is free to change. */
+.waiting-row.oldest .waiting-age { color: var(--accent-2); }
+
+.tile-strip {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+}
+.tile { padding: 14px 16px; border-right: 1px solid var(--line); background: var(--panel); }
+.tile:last-child { border-right: 0; }
+.tile-n {
+  font-family: 'JetBrains Mono', monospace; font-size: 26px; line-height: 1;
+  color: var(--ink); font-variant-numeric: tabular-nums;
+}
+/* Zero is muted rather than absent. "Nothing is waiting" is a real answer and
+ * deserves to be shown as one — a hidden tile reads as a tile that failed. */
+.tile-n.none { color: var(--mute-2); }
+.tile-l { font-size: 11px; color: var(--mute); margin-top: 6px; }
+
+/* ── Acting as ─────────────────────────────────────────────────────────────
+ * Never decoration. It answers "whose eyes am I looking through", and in a
+ * system where that decides what can be fetched at all, it belongs in the
+ * masthead rather than behind a menu.
+ */
+.acting {
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px;
+  border: 1px solid var(--line-2); border-radius: 3px;
+}
+.acting-role {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--accent);
+}
+
+/* Pending, and unmistakably not effective. AMBER, NEVER GREEN — WP-U08 makes
+ * this a critical rule, and the class exists so that no screen can get it wrong
+ * by reaching for chip-ok out of habit. A grant that looks effective before its
+ * countersign is the countersign rule undone in pixels. */
+.chip-pending {
+  background: color-mix(in oklch, var(--accent-2), transparent 82%);
+  color: var(--accent-2);
+  border-color: color-mix(in oklch, var(--accent-2), transparent 55%);
+}
+
+/* Never-ran. Its own state, visibly distinct from both pass and fail, because
+ * absence of evidence rendered as evidence is the exact failure WP-U04 exists
+ * to prevent. Dashed, so it reads as "not filled in" at a glance. */
+.chip-unknown {
+  background: transparent; color: var(--mute-2);
+  border-color: var(--line-2); border-style: dashed;
+}
+
+/* ── The pipeline rail, now per deal ───────────────────────────────────────
+ * v3 rendered the assembly pipeline as one global state, so two deals at two
+ * stages shared a rail and the screen could only be telling the truth about one
+ * of them. Under decision U8 this is the header of an OPEN DEAL and nothing
+ * else — it takes its stage from the deal it is drawn for.
+ */
+.pipe { display: flex; align-items: center; gap: 0; }
+.pipe-stage {
+  display: flex; align-items: center; gap: 7px; padding: 6px 12px;
+  font-size: 12px; color: var(--mute-2);
+}
+.pipe-stage.done { color: var(--mute); }
+.pipe-stage.here { color: var(--ink); }
+.pipe-stage.here .pipe-dot { background: var(--accent); }
+.pipe-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); }
+.pipe-sep { width: 18px; height: 1px; background: var(--line-2); }
+
+/* ── Honest empty states ───────────────────────────────────────────────────
+ * The existing idiom: a kicker, one serif sentence, and at most one primary
+ * action. An empty pane says what is true — that nothing is here, or that this
+ * part is not built — and never fills the space with something invented.
+ */
+.empty { text-align: center; padding: 48px 24px; max-width: 540px; margin: 0 auto; }
+.empty-kicker {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--mute-2);
+}
+.empty-line {
+  font-family: 'Instrument Serif', serif; font-size: 22px;
+  line-height: 1.25; color: var(--ink); margin-top: 12px;
+}
+.empty-sub { font-size: 12.5px; color: var(--mute); margin-top: 10px; line-height: 1.6; }
+
+/* The refusal state. Reached by typing a URL a role's endpoints would refuse.
+ * Deliberately styled like an empty state and not like an error: nothing has
+ * gone wrong, the system is working. Red means error, never merely "no". */
+.refusal { border: 1px dashed var(--line-2); border-radius: 6px; }
+
+/* Sign-in. The front door, in the same language as everything behind it. */
+.signin-card {
+  width: 400px; padding: 28px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.signin-card input { width: 100%; padding: 9px 11px; font-size: 13px; }

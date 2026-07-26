@@ -14,6 +14,8 @@
 // data.
 
 import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { join, extname, normalize, sep } from 'node:path';
 import { Db } from './db.mjs';
 import { App } from './app.mjs';
 
@@ -39,14 +41,66 @@ const readBody = (req) => new Promise((resolve) => {
   req.on('end', () => { try { resolve(raw ? JSON.parse(raw) : null); } catch { resolve(null); } });
 });
 
+// Optionally serve the shell from the same origin as the API.
+//
+// Same origin is not a convenience here. Served from somewhere else, the browser
+// needs cross-origin permission for every call, and the usual way to make that
+// go away is to relax it until it does — which is how a permissive rule ends up
+// in production because it was easier during development. One origin means no
+// such rule is ever needed.
+const STATIC = args.static ?? null;
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.jsx': 'text/babel; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json', '.svg': 'image/svg+xml',
+};
+
+async function serveStatic(url, res) {
+  // Path traversal, closed by construction. `normalize` collapses `..`, and the
+  // result must still start with the root — a check, not a filter, because a
+  // filter that strips '..' can be defeated by writing it differently.
+  const rel = normalize(decodeURIComponent(url.pathname)).replace(/^[/\\]+/, '');
+  const full = join(STATIC, rel === '' ? 'index.html' : rel);
+  if (!full.startsWith(normalize(STATIC) + sep) && full !== normalize(STATIC)) {
+    res.writeHead(403).end('no'); return true;
+  }
+  try {
+    const body = await readFile(full);
+    res.writeHead(200, { 'content-type': MIME[extname(full)] ?? 'application/octet-stream' });
+    res.end(body);
+    return true;
+  } catch { return false; }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const auth = req.headers.authorization ?? '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
 
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'access-control-allow-origin': process.env.CW_ORIGIN ?? '*',
+      'access-control-allow-headers': 'authorization, content-type',
+      'access-control-allow-methods': 'GET, POST, OPTIONS',
+    });
+    return res.end();
+  }
+
+  // Static first, and only for GET. An API path always wins if it exists,
+  // because App.handle is the thing that knows what an endpoint is.
+  if (STATIC && req.method === 'GET' && !url.pathname.startsWith('/api/')) {
+    if (await serveStatic(url, res)) return;
+  }
+
+  // The shell calls /api/… so that static paths and endpoints can never
+  // collide. The prefix is stripped here and nowhere else: App knows nothing
+  // about it, and the test suites address endpoints by their real names.
+  const path = url.pathname.startsWith('/api/')
+    ? url.pathname.slice(4) : url.pathname;
+
   let result;
   try {
-    result = await app.handle(req.method, url.pathname, {
+    result = await app.handle(req.method, path, {
       token,
       body: ['POST','PUT','PATCH'].includes(req.method) ? await readBody(req) : null,
     });
@@ -76,4 +130,5 @@ server.listen(port, () => {
   console.log(args.data
     ? `data directory: ${args.data}`
     : 'in-memory database — nothing is persisted. Pass --data <dir> for a real one.');
+  if (STATIC) console.log(`serving the shell from ${STATIC} on the same origin`);
 });

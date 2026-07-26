@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clausewerk — one workspace per role</title>
+
+<!-- Served by the service layer on the same origin as the API:
+       cd backend && node service/server.mjs --static ../prototype/v4
+     Same origin is not a convenience. Served from somewhere else, every call
+     needs cross-origin permission, and the usual way to make that go away is to
+     relax it until it does — which is how a permissive rule reaches production
+     because it was easier during development. -->
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif&display=swap" rel="stylesheet">
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+<!-- base.css is v3's stylesheet, extracted verbatim rather than retyped, so
+     that "the same visual language" is a fact about the bytes. v4.css adds only
+     what v4 needs and introduces no new colour or typeface. -->
+<link rel="stylesheet" href="./app/base.css">
+<link rel="stylesheet" href="./app/v4.css">
+</head>
+<body>
+<div id="root" style="height:100vh"></div>
+
+<!-- NO CANNED DATA IS LOADED ANYWHERE ON THIS PAGE.
+     v3 shipped a seeded ledger and a scripted demo; the v4 concept mockup has a
+     full set of invented rows. Neither is imported here, and that is the
+     package's most easily broken rule. A pane with no endpoint behind it yet
+     renders an empty state saying so — the 2026-07-25 review was precisely
+     about surfaces claiming what the system does not do, and a demo that looks
+     good because the rows are fiction is that failure with better lighting. -->
+
+<script type="text/babel" src="./app/api.jsx"></script>
+<script type="text/babel" src="./app/common.jsx"></script>
+<script type="text/babel" src="./app/shell.jsx"></script>
+<script type="text/babel" src="./app/workspaces.jsx"></script>
+<script type="text/babel" src="./app/main.jsx"></script>
+</body>
+</html>
