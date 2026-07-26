@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clausewerk · V4 concept — role-based workspaces</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif&display=swap" rel="stylesheet">
+<style>
+  /* ── Design tokens — identical to v3 ─────────────────────────────── */
+  :root {
+    --bg:        #0B0D10;
+    --surface:   #12151B;
+    --surface-2: #181C24;
+    --line:      #1F2530;
+    --line-2:    #2A3140;
+    --ink:       #ECEEF1;
+    --mute:      #8A93A3;
+    --mute-2:    #5B6272;
+    --accent:    oklch(0.82 0.13 175);
+    --accent-2:  oklch(0.75 0.17 60);
+    --danger:    oklch(0.68 0.19 25);
+    --ok:        oklch(0.78 0.13 150);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: Inter, system-ui, sans-serif; font-size: 13px;
+    overflow: hidden;
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  .font-serif { font-family: "Instrument Serif", Georgia, serif; }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+  .display-sm { font-family: "Instrument Serif", Georgia, serif; font-size: 32px; line-height: 1.06; letter-spacing: -0.01em; font-weight: 400; }
+  .section-label { font-family: Inter, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+  .caption { font-size: 11px; color: var(--mute); }
+  .tabnum { font-variant-numeric: tabular-nums; }
+  .hair { border-color: var(--line) !important; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px; border: 1px solid var(--line-2); border-radius: 4px;
+    font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink);
+    background: transparent; cursor: pointer; text-decoration: none;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn-primary { background: var(--accent); color: #0B0D10; font-weight: 600; border-color: transparent; }
+  .btn-primary:hover { filter: brightness(1.08); background: var(--accent); }
+  .btn-sm { padding: 3px 7px; font-size: 11px; }
+  .btn[disabled] { opacity: .4; cursor: default; }
+  .btn[disabled]:hover { background: transparent; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 7px; border-radius: 2px; border: 1px solid var(--line-2);
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    letter-spacing: .05em; text-transform: uppercase; color: var(--mute);
+  }
+  .chip-std  { color: var(--ink); }
+  .chip-high { background: color-mix(in oklch, var(--accent), transparent 80%); color: var(--accent); border-color: color-mix(in oklch, var(--accent), transparent 55%); font-weight: 600; }
+  .chip-ok   { background: color-mix(in oklch, var(--ok), transparent 85%); color: var(--ok); border-color: color-mix(in oklch, var(--ok), transparent 60%); }
+  .chip-warn { background: color-mix(in oklch, var(--accent-2), transparent 82%); color: var(--accent-2); border-color: color-mix(in oklch, var(--accent-2), transparent 55%); }
+  .chip-err  { background: color-mix(in oklch, var(--danger), transparent 82%); color: var(--danger); border-color: color-mix(in oklch, var(--danger), transparent 55%); }
+
+  .badge {
+    font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: .08em;
+    padding: 1px 6px; color: var(--bg); font-weight: 600; border-radius: 2px;
+  }
+  .badge-amber { background: var(--accent-2); }
+  .badge-ok    { background: var(--ok); }
+  .badge-err   { background: var(--danger); }
+
+  .tile { padding: 20px; border-right: 1px solid var(--line); }
+  .tile:last-child { border-right: 0; }
+  .tile .num { font-family: "Instrument Serif", Georgia, serif; font-size: 32px; line-height: 1.06; margin-top: 8px; font-variant-numeric: tabular-nums; }
+
+  .pulse { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:.4 } 50% { opacity:1 } }
+
+  /* ── Chrome ──────────────────────────────────────────────────────── */
+  #masthead {
+    height: 54px; display: flex; align-items: center; gap: 16px;
+    padding: 0 24px; border-bottom: 1px solid var(--line); background: var(--bg);
+  }
+  #monogram {
+    width: 30px; height: 30px; border: 1px solid var(--line-2);
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Instrument Serif", Georgia, serif; font-size: 16px;
+  }
+  .wordmark { font-family: "Instrument Serif", Georgia, serif; font-size: 22px; letter-spacing: -0.02em; }
+  .vrule { width: 1px; height: 24px; background: var(--line); }
+
+  #identity {
+    margin-left: auto; display: flex; align-items: center; gap: 10px;
+  }
+  #role-switch { display: flex; border: 1px solid var(--line-2); }
+  #role-switch button {
+    padding: 5px 10px; font-family: "JetBrains Mono", monospace; font-size: 10px;
+    letter-spacing: .04em; color: var(--mute); background: transparent;
+    border: 0; border-right: 1px solid var(--line-2); cursor: pointer; text-transform: lowercase;
+  }
+  #role-switch button:last-child { border-right: 0; }
+  #role-switch button.active { background: var(--surface-2); color: var(--ink); }
+  #role-switch button:hover { color: var(--ink); }
+
+  #tabrow {
+    height: 42px; display: flex; align-items: stretch; gap: 24px;
+    padding: 0 24px; border-bottom: 1px solid var(--line);
+  }
+  #tabrow .tab {
+    display: flex; align-items: center; gap: 7px;
+    font-family: "JetBrains Mono", monospace; font-size: 11px; letter-spacing: .03em;
+    color: var(--mute); border-bottom: 1px solid transparent; margin-bottom: -1px;
+    cursor: pointer; background: none; border-top: 0; border-left: 0; border-right: 0;
+  }
+  #tabrow .tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+  #tabrow .tab.concept { opacity: .45; cursor: default; }
+  #tabrow .tab .count {
+    font-size: 9px; padding: 0 5px; border: 1px solid var(--line-2); border-radius: 2px; color: var(--accent-2);
+  }
+  #tabrow .rule { width: 1px; background: var(--line); margin: 10px 0; }
+
+  #view { position: absolute; top: 97px; bottom: 28px; left: 0; right: 0; overflow-y: auto; }
+
+  #footer {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; border-top: 1px solid var(--line); background: var(--surface);
+    font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--mute-2);
+  }
+
+  .panel-head {
+    padding: 24px 32px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; justify-content: space-between;
+  }
+  .panel-sub { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-size: 22px; color: var(--mute); }
+
+  .grid-row { display: grid; gap: 12px; padding: 14px 32px; border-bottom: 1px solid var(--line); align-items: baseline; }
+  .grid-head { position: sticky; top: 0; background: var(--bg); z-index: 2; padding: 10px 32px; }
+  .zebra > div:nth-child(even) { background: rgba(255,255,255,.012); }
+
+  .card { border: 1px solid var(--line); background: var(--surface); }
+  .card-head { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; }
+  .card-body { padding: 16px; }
+
+  .quote { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-size: 15px; line-height: 1.6; }
+  .quote .q { font-size: 20px; color: var(--accent); font-style: normal; }
+
+  .console {
+    background: #0A0C10; font-family: "JetBrains Mono", monospace; font-size: 11px;
+    padding: 14px 16px; line-height: 1.7; border: 1px solid var(--line);
+  }
+
+  .access-strip {
+    display: flex; gap: 24px; padding: 14px 32px; border-bottom: 1px solid var(--line);
+    background: var(--surface); font-size: 12px;
+  }
+  .access-strip .col { flex: 1; }
+  .access-strip ul { list-style: none; margin-top: 6px; }
+  .access-strip li { padding: 2px 0; color: var(--mute); font-size: 12px; }
+  .access-strip li::before { content: "· "; color: var(--mute-2); }
+  .access-strip li.can::before  { content: "✓ "; color: var(--ok); }
+  .access-strip li.cant::before { content: "✕ "; color: var(--mute-2); }
+  .access-strip li.can { color: var(--ink); }
+
+  .setting-row { display: grid; grid-template-columns: 260px 160px 1fr 130px; gap: 12px; padding: 14px 32px; border-bottom: 1px solid var(--line); align-items: baseline; }
+</style>
+</head>
+<body>
+
+<div id="masthead">
+  <div id="monogram">C</div>
+  <div class="wordmark">Clausewerk</div>
+  <div class="section-label" style="font-size:10px;">V4 concept · role-based workspaces</div>
+  <div class="vrule"></div>
+  <div class="caption" id="subject-line">every view below is scoped by the signed-in role</div>
+  <div id="identity">
+    <span class="mono" style="font-size:10px; color:var(--mute);">acting as</span>
+    <span class="mono" style="font-size:11px;" id="persona">—</span>
+    <span style="width:6px; height:6px; border-radius:50%; background:var(--ok);" class="pulse"></span>
+    <div id="role-switch"></div>
+  </div>
+</div>
+
+<div id="tabrow"></div>
+<div id="view"></div>
+
+<div id="footer">
+  <div>Clausewerk · v4 concept</div>
+  <div id="footer-mid">role determines everything on screen — enforced in the database, mirrored here</div>
+  <div>82 clauses · 48 categories · audit chain verified 06:00</div>
+</div>
+
+<script>
+/* ────────────────────────────────────────────────────────────────────
+   Static concept data. Nothing here is live; this file demonstrates
+   the reimagined role-scoped UI and the Administrator's console.
+   ──────────────────────────────────────────────────────────────────── */
+
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+function panelHead(kicker, title, sub, subtitle, actions='') {
+  return `<div class="panel-head">
+    <div>
+      <div class="section-label">${kicker}</div>
+      <h2 class="display-sm" style="margin-top:8px;">${title} ${sub ? `<span class="panel-sub">/ ${sub}</span>`:''}</h2>
+      <div style="color:var(--mute); margin-top:6px;">${subtitle}</div>
+    </div>
+    <div style="display:flex; gap:12px; align-items:center;">${actions}</div>
+  </div>`;
+}
+
+function accessStrip(can, cant) {
+  return `<div class="access-strip">
+    <div class="col">
+      <div class="section-label" style="font-size:10px;">this role can</div>
+      <ul>${can.map(x=>`<li class="can">${x}</li>`).join('')}</ul>
+    </div>
+    <div class="col">
+      <div class="section-label" style="font-size:10px;">this role can never</div>
+      <ul>${cant.map(x=>`<li class="cant">${x}</li>`).join('')}</ul>
+    </div>
+  </div>`;
+}
+
+function tiles(items) {
+  return `<div style="display:grid; grid-template-columns:repeat(${items.length},1fr); border-bottom:1px solid var(--line); background:var(--surface);">
+    ${items.map(t=>`<div class="tile">
+      <div class="section-label" style="font-size:10px;">${t.label}</div>
+      <div class="num" style="color:${t.color||'var(--ink)'};">${t.value}</div>
+      ${t.note?`<div class="caption" style="margin-top:4px;">${t.note}</div>`:''}
+    </div>`).join('')}
+  </div>`;
+}
+
+/* ── Requester ─────────────────────────────────────────────────────── */
+function viewRequester() {
+  const deals = [
+    { name:'Northwind Analytics', value:'$1.4M', stage:'Dossier',   chip:'chip-ok',   note:'ready for signature',            neg:'—' },
+    { name:'Orchid AI',           value:'$620K', stage:'Validate',  chip:'chip-warn', note:'1 High finding · override requested', neg:'—' },
+    { name:'Paydrive HCM',        value:'$2.1M', stage:'Negotiate', chip:'chip-high', note:'round 3 · 2 redlines waiting',   neg:'2 open positions' },
+    { name:'Velocity Logistics',  value:'$480K', stage:'Intake',    chip:'chip-std',  note:'interview in progress',          neg:'—' },
+  ];
+  return panelHead('Workspace · Requester', 'My deals', 'the desk', 'Your engagements only — other requesters’ deals are invisible to you, not merely hidden.',
+      `<button class="btn btn-primary">+ new engagement</button>`)
+    + accessStrip(
+      ['start an engagement and run the pipeline', 'request an override on a blocking finding', 'propose a concession on my own deal', 'see my own acts in the record'],
+      ['approve anything — my own requests included', 'change any clause in the library', 'see other requesters’ deals', 'see the full audit log'])
+    + tiles([
+      { label:'active deals', value:'4' },
+      { label:'awaiting me', value:'2', color:'var(--accent-2)', note:'1 interview · 1 redline review' },
+      { label:'awaiting others', value:'2', note:'1 override with Legal · 1 signature' },
+      { label:'my override requests', value:'1', color:'var(--accent-2)', note:'socialising · window closes in 31h' },
+    ])
+    + `<div class="grid-head grid-row" style="grid-template-columns:2fr 90px 130px 1fr 150px; border-bottom:1px solid var(--line);">
+        <div class="section-label">engagement</div><div class="section-label">value</div>
+        <div class="section-label">stage</div><div class="section-label">status</div><div class="section-label">negotiation</div>
+      </div>
+      <div class="zebra">
+      ${deals.map(d=>`<div class="grid-row" style="grid-template-columns:2fr 90px 130px 1fr 150px;">
+        <div style="font-weight:500;">${d.name}</div>
+        <div class="mono tabnum" style="font-size:12px;">${d.value}</div>
+        <div><span class="chip ${d.chip}">${d.stage}</span></div>
+        <div class="caption">${d.note}</div>
+        <div class="caption">${d.neg}</div>
+      </div>`).join('')}
+      </div>
+      <div style="padding:24px 32px;">
+        <div class="card" style="max-width:720px;">
+          <div class="card-head">
+            <span class="section-label" style="font-size:10px;">my override request · Orchid AI</span>
+            <span class="badge badge-amber">SOCIALISING</span>
+          </div>
+          <div class="card-body">
+            <div class="quote"><span class="q">“</span>Supplier will not accept unlimited liability for data incidents; deal closes Friday and the exposure is capped by their cyber policy.<span class="q">”</span></div>
+            <div class="caption" style="margin-top:12px;">You asked — Legal decides. Watchers notified: K. Park · Security, R. Vaidya · Privacy, deal owner. Review window closes 2026-07-27 18:00. Approval, if given, is per-finding — never blanket.</div>
+          </div>
+        </div>
+      </div>`;
+}
+
+/* ── Legal reviewer ────────────────────────────────────────────────── */
+function viewReviewer() {
+  const queue = [
+    { id:'TKT-118', kind:'AI CANDIDATE',    cat:'DP · Data Protection', from:'Paydrive HCM', age:'2h',  badge:'badge-amber' },
+    { id:'TKT-117', kind:'VENDOR LANGUAGE', cat:'LC · Liability Cap',   from:'Orchid AI',    age:'6h',  badge:'badge-amber' },
+    { id:'TKT-115', kind:'NO AI MATCH',     cat:'ES · Exit Services',   from:'Helix Bio',    age:'1d',  badge:'badge-err' },
+  ];
+  return panelHead('Workspace · Legal reviewer', 'Review desk', 'the queue', 'Everything waiting on Legal judgement, oldest first. You adjudicate decisions — the wording you approve becomes the only wording that exists.')
+    + accessStrip(
+      ['verify or reject a review ticket — with a note', 'approve or reject an override, one finding at a time', 'approve a concession as the assigned attorney', 'open a legal hold'],
+      ['activate or retire a clause directly — only via a verified ticket', 'edit validation rules or ladders', 'release a legal hold — that is Legal admin’s act', 'edit anything already on the record'])
+    + tiles([
+      { label:'tickets pending', value:'7', color:'var(--accent-2)', note:'oldest 3 days' },
+      { label:'override requests', value:'2', color:'var(--accent-2)', note:'1 window closing today' },
+      { label:'concessions awaiting', value:'3', note:'2 waiting on you as attorney' },
+      { label:'verified this month', value:'12', color:'var(--ok)', note:'unedited rate 82%' },
+    ])
+    + `<div class="grid-head grid-row" style="grid-template-columns:100px 150px 1fr 180px 60px 130px;">
+        <div class="section-label">ticket</div><div class="section-label">provenance</div>
+        <div class="section-label">category</div><div class="section-label">deal</div>
+        <div class="section-label">age</div><div class="section-label"></div>
+      </div>
+      <div class="zebra">
+      ${queue.map(t=>`<div class="grid-row" style="grid-template-columns:100px 150px 1fr 180px 60px 130px;">
+        <div class="mono" style="font-size:11px;">${t.id}</div>
+        <div><span class="badge ${t.badge}">${t.kind}</span></div>
+        <div>${t.cat}</div>
+        <div class="caption">${t.from}</div>
+        <div class="mono caption tabnum">${t.age}</div>
+        <div><button class="btn btn-sm">open ticket →</button></div>
+      </div>`).join('')}
+      </div>
+      <div style="padding:24px 32px; display:flex; gap:24px;">
+        <div class="card" style="flex:1;">
+          <div class="card-head"><span class="section-label" style="font-size:10px;">override request · Orchid AI · LC-H-007</span><span class="chip chip-warn">window closes 18:00</span></div>
+          <div class="card-body">
+            <div class="quote"><span class="q">“</span>Supplier will not accept unlimited liability for data incidents…<span class="q">”</span></div>
+            <div style="display:flex; gap:8px; margin-top:14px;">
+              <button class="btn btn-sm">✓ approve this finding</button>
+              <button class="btn btn-sm">✕ reject with note…</button>
+            </div>
+            <div class="caption" style="margin-top:10px;">Per-finding. Your name goes on the record either way.</div>
+          </div>
+        </div>
+        <div class="card" style="flex:1;">
+          <div class="card-head"><span class="section-label" style="font-size:10px;">concessions awaiting approval</span></div>
+          <div class="card-body">
+            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line);"><span>Paydrive HCM · LC rung 2 of 4</span><span class="caption">waiting: you (attorney), CFO office</span></div>
+            <div style="display:flex; justify-content:space-between; padding:6px 0;"><span>Helix Bio · DP notice window 72h→48h</span><span class="caption">waiting: you (attorney)</span></div>
+          </div>
+        </div>
+      </div>`;
+}
+
+/* ── Legal admin ───────────────────────────────────────────────────── */
+function viewLegalAdmin() {
+  return panelHead('Workspace · Legal admin', 'The library', 'the vault', 'The only place new contract language can enter the system — and the settings that are Legal’s to decide.',
+      `<button class="btn">+ new clause</button><button class="btn">ladders & rules</button>`)
+    + accessStrip(
+      ['activate, retire and supersede clauses', 'edit validation rules, ladders and floors', 'decide owner-level settings, with rationale recorded', 'release a legal hold · run retention destruction'],
+      ['edit an executed agreement — signed is frozen', 'edit or delete anything on the audit record', 'grant or revoke anyone’s access — that is the Administrator, countersigned by you', 'bypass the review queue'])
+    + tiles([
+      { label:'active clauses', value:'82' },
+      { label:'categories', value:'48' },
+      { label:'expiring ≤ 30d', value:'4', color:'var(--accent-2)', note:'oldest: DP-H-014 in 9 days' },
+      { label:'coverage gaps', value:'1', color:'var(--danger)', note:'ES · Exit Services has no High rung' },
+      { label:'holds open', value:'2', note:'1 blocks a destruction due today' },
+    ])
+    + `<div style="padding:24px 32px; display:flex; gap:24px;">
+        <div class="card" style="flex:1.2;">
+          <div class="card-head"><span class="section-label" style="font-size:10px;">owner decisions — yours to make, recorded when made</span></div>
+          <div class="card-body" style="padding:0;">
+            <div style="padding:14px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:baseline;">
+              <div><div class="mono" style="font-size:11px;">unedited_approval_threshold</div>
+              <div class="caption" style="margin-top:2px;">The safeguard is measured and shown; it blocks nothing until you set this with counsel.</div></div>
+              <span class="chip chip-warn">undecided</span>
+            </div>
+            <div style="padding:14px 16px; display:flex; justify-content:space-between; align-items:baseline;">
+              <div><div class="mono" style="font-size:11px;">sow_may_contradict_master = with_approval</div>
+              <div class="caption" style="margin-top:2px;">Settled 2026-07-26 · one category at a time, same signatures as a concession.</div></div>
+              <span class="chip chip-ok">settled</span>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="flex:1;">
+          <div class="card-head"><span class="section-label" style="font-size:10px;">waiting on legal admin</span></div>
+          <div class="card-body">
+            <div style="padding:6px 0; border-bottom:1px solid var(--line); display:flex; justify-content:space-between;"><span>Release hold · Meridian matter M-2211</span><button class="btn btn-sm">review →</button></div>
+            <div style="padding:6px 0; border-bottom:1px solid var(--line); display:flex; justify-content:space-between;"><span>Countersign access grant · legal reviewer for T. Alvarez</span><button class="btn btn-sm">review →</button></div>
+            <div style="padding:6px 0; display:flex; justify-content:space-between;"><span>Promote concession · LC rung 2 (used 3× this quarter)</span><button class="btn btn-sm">review →</button></div>
+          </div>
+        </div>
+      </div>`;
+}
+
+/* ── Auditor ───────────────────────────────────────────────────────── */
+function viewAuditor() {
+  const rows = [
+    ['06:00:12','system','audit_anchor_check','chain verified · height 4,182'],
+    ['05:41:03','M. Ostrowski · legal_reviewer','ticket_verified','TKT-114 → DP-H-021 minted'],
+    ['05:38:50','controller','ai_suggest','LC-S-001 · score 0.86 · auto-approve eligible: no'],
+    ['05:12:44','A. Delacroix · requester','human_override_request','Orchid AI · LC-H-007'],
+    ['04:58:01','T. Mercer · administrator','role_granted','viewer → L. Whitfield (socialisation)'],
+  ];
+  return panelHead('Workspace · Auditor', 'The record', 'the chain', 'Every act, by name and role, hash-chained so history cannot be quietly rewritten. Read everything; change nothing.',
+      `<button class="btn">↓ export csv</button>`)
+    + accessStrip(
+      ['read the full log — overrides, rejections, admin acts included', 'verify the chain end-to-end', 'read review quality and origin-mix measures', 'read who granted whom which access, and when'],
+      ['write or change anything at all', 'approve, decide or configure anything', 'take a checkpoint — reading and acting stay separate'])
+    + tiles([
+      { label:'chain status', value:'VERIFIED', color:'var(--ok)', note:'height 4,182 · anchored 06:00' },
+      { label:'events · 30d', value:'1,204' },
+      { label:'human vs controller', value:'71 / 29', note:'% of acts · 30d' },
+      { label:'unedited approval rate', value:'82%', note:'threshold not yet set — advisory' },
+      { label:'AI-origin characters', value:'3.1%', note:'of last run · shown, never printed' },
+    ])
+    + `<div class="grid-head grid-row" style="grid-template-columns:90px 240px 210px 1fr;">
+        <div class="section-label">time</div><div class="section-label">actor · role</div>
+        <div class="section-label">event</div><div class="section-label">subject</div>
+      </div>
+      <div class="zebra">
+      ${rows.map(r=>`<div class="grid-row" style="grid-template-columns:90px 240px 210px 1fr;">
+        <div class="mono caption tabnum">${r[0]}</div>
+        <div style="font-size:12px; color:${r[1]==='controller'?'var(--accent)':r[1]==='system'?'var(--mute-2)':'var(--ink)'}">${r[1]}</div>
+        <div class="mono" style="font-size:11px;">${r[2]}</div>
+        <div class="caption">${r[3]}</div>
+      </div>`).join('')}
+      </div>`;
+}
+
+/* ── Viewer ────────────────────────────────────────────────────────── */
+function viewViewer() {
+  return panelHead('Workspace · Viewer', 'Reading room', 'socialisation', 'You have been shown two agreements so the people affected can read them before Legal decides. Reading only — no export, no log, no library.')
+    + accessStrip(
+      ['read the contracts shared with me', 'read each clause’s origin and approval', 'read a work-order departure and its approvals'],
+      ['see the review queue or any negotiation', 'see the audit log', 'download, export or change anything'])
+    + `<div style="padding:32px; display:flex; gap:24px;">
+        <div class="card" style="flex:1; max-width:520px;">
+          <div class="card-head"><span class="section-label" style="font-size:10px;">shared with you · override socialisation</span><span class="badge badge-amber">WINDOW OPEN</span></div>
+          <div class="card-body">
+            <div class="font-serif" style="font-size:20px;">Orchid AI — Master Services Agreement</div>
+            <div class="caption" style="margin-top:6px;">Override requested on the liability cap. You are a watcher; the review window closes 2026-07-27 18:00.</div>
+            <button class="btn btn-sm" style="margin-top:14px;">read the agreement →</button>
+          </div>
+        </div>
+        <div class="card" style="flex:1; max-width:520px;">
+          <div class="card-head"><span class="section-label" style="font-size:10px;">shared with you</span><span class="badge badge-ok">EXECUTED</span></div>
+          <div class="card-body">
+            <div class="font-serif" style="font-size:20px;">Northwind Analytics — MSA</div>
+            <div class="caption" style="margin-top:6px;">Signed 2026-07-24. Frozen — what you read is exactly what was signed.</div>
+            <button class="btn btn-sm" style="margin-top:14px;">read the agreement →</button>
+          </div>
+        </div>
+      </div>`;
+}
+
+/* ── Administrator — the new console ──────────────────────────────── */
+
+function adminPeople() {
+  const people = [
+    ['A. Delacroix','Procurement','requester','2026-05-02','T. Mercer','today 05:12'],
+    ['M. Ostrowski','Legal','legal reviewer','2026-05-02','T. Mercer · countersigned J. Laurent','today 05:41'],
+    ['J. Laurent','Legal','legal admin','2026-05-02','owner bootstrap · recorded','yesterday'],
+    ['S. Okafor','Internal Audit','auditor','2026-06-11','T. Mercer','today 06:02'],
+    ['L. Whitfield','Finance','viewer','today 04:58','T. Mercer','—'],
+    ['T. Mercer','IT','administrator','2026-05-02','owner bootstrap · recorded','now'],
+  ];
+  return tiles([
+      { label:'named people', value:'14' },
+      { label:'shared accounts', value:'0', color:'var(--ok)', note:'goal state — every act has a name' },
+      { label:'grants awaiting countersign', value:'1', color:'var(--accent-2)', note:'legal reviewer → T. Alvarez' },
+      { label:'dormant ≥ 60d', value:'2', note:'flagged for revocation review' },
+    ])
+    + `<div style="padding:16px 32px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center;">
+        <div class="caption">Granting access is a recorded act. Grants to the two Legal roles take effect only after a Legal admin countersigns — access to judgement is itself a judgement.</div>
+        <button class="btn btn-primary btn-sm">+ grant access</button>
+      </div>
+      <div class="grid-head grid-row" style="grid-template-columns:180px 140px 150px 130px 1fr 120px 90px;">
+        <div class="section-label">person</div><div class="section-label">unit</div>
+        <div class="section-label">role</div><div class="section-label">granted</div>
+        <div class="section-label">granted by</div><div class="section-label">last act</div><div class="section-label"></div>
+      </div>
+      <div class="zebra">
+      ${people.map(p=>`<div class="grid-row" style="grid-template-columns:180px 140px 150px 130px 1fr 120px 90px;">
+        <div style="font-weight:500;">${p[0]}</div>
+        <div class="caption">${p[1]}</div>
+        <div><span class="chip ${p[2].includes('legal')?'chip-high':p[2]==='administrator'?'chip-warn':'chip-std'}">${p[2]}</span></div>
+        <div class="mono caption tabnum">${p[3]}</div>
+        <div class="caption">${p[4]}</div>
+        <div class="mono caption">${p[5]}</div>
+        <div><button class="btn btn-sm">revoke…</button></div>
+      </div>`).join('')}
+      </div>
+      <div style="padding:24px 32px;">
+        <div class="card" style="max-width:760px;">
+          <div class="card-head"><span class="section-label" style="font-size:10px;">awaiting countersign</span><span class="badge badge-amber">1 PENDING</span></div>
+          <div class="card-body">
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+              <div>
+                <div>legal reviewer → <b>T. Alvarez · Legal</b></div>
+                <div class="caption" style="margin-top:4px;">Requested by T. Mercer today 03:10 · reason: “Maternity cover for M. Ostrowski, Aug–Nov.” Waiting on any Legal admin. Takes effect only on countersign; both names go on the record.</div>
+              </div>
+              <span class="chip chip-warn">waiting 5h</span>
+            </div>
+          </div>
+        </div>
+      </div>`;
+}
+
+function adminSettings() {
+  const operational = [
+    ['override_review_window','48 hours','How long watchers get to read a socialised override before Legal may decide.','T. Mercer · 2026-06-02'],
+    ['ticket_expiry','30 days','A review ticket nobody decides lapses rather than lingering as silent permission.','default · unchanged'],
+    ['notification_digest','daily 07:00','When watchers and approvers are told what is waiting on them.','T. Mercer · 2026-05-19'],
+    ['session_length','10 hours','How long a signed-in session lasts before the person must sign in again.','default · unchanged'],
+  ];
+  const owner = [
+    ['sow_may_contradict_master','with_approval','settled','J. Laurent · 2026-07-26'],
+    ['renewal_default_baseline','executed_agreement','settled','J. Laurent · 2026-07-26'],
+    ['unedited_approval_threshold','— not set —','undecided','Legal, with counsel'],
+    ['owner_maps_to_application_role','none','settled','“The owner is nobody.”'],
+  ];
+  return `<div style="padding:16px 32px; border-bottom:1px solid var(--line);" class="caption">
+      Two kinds of settings, deliberately separated. <b style="color:var(--ink);">Operational settings</b> are the Administrator’s — how the machine runs.
+      <b style="color:var(--ink);">Owner decisions</b> are content judgements — the Administrator can read them but only Legal admin can change them. Every change to either is a recorded act.
+    </div>
+    <div class="grid-head grid-row" style="grid-template-columns:260px 160px 1fr 200px;">
+      <div class="section-label">operational setting</div><div class="section-label">value</div>
+      <div class="section-label">what it does</div><div class="section-label">last changed</div>
+    </div>
+    <div class="zebra">
+    ${operational.map(s=>`<div class="setting-row" style="grid-template-columns:260px 160px 1fr 200px;">
+      <div class="mono" style="font-size:11px;">${s[0]}</div>
+      <div style="display:flex; gap:8px; align-items:baseline;"><span class="mono" style="font-size:12px; color:var(--accent);">${s[1]}</span><button class="btn btn-sm">edit</button></div>
+      <div class="caption">${s[2]}</div>
+      <div class="mono caption">${s[3]}</div>
+    </div>`).join('')}
+    </div>
+    <div class="grid-head grid-row" style="grid-template-columns:260px 200px 120px 1fr; margin-top:8px;">
+      <div class="section-label">owner decision · read-only here</div><div class="section-label">value</div>
+      <div class="section-label">state</div><div class="section-label">decided by</div>
+    </div>
+    <div class="zebra">
+    ${owner.map(s=>`<div class="setting-row" style="grid-template-columns:260px 200px 120px 1fr;">
+      <div class="mono" style="font-size:11px; color:var(--mute);">${s[0]}</div>
+      <div class="mono" style="font-size:12px;">${s[1]}</div>
+      <div><span class="chip ${s[2]==='settled'?'chip-ok':'chip-warn'}">${s[2]}</span></div>
+      <div class="caption">${s[3]}</div>
+    </div>`).join('')}
+    </div>`;
+}
+
+function adminHealth() {
+  return tiles([
+      { label:'audit chain', value:'VERIFIED', color:'var(--ok)', note:'height 4,182 · anchor check 06:00' },
+      { label:'last checkpoint', value:'25 Jul', note:'height 4,140 · daily schedule' },
+      { label:'executed documents', value:'37 / 37', color:'var(--ok)', note:'stored hashes all match' },
+      { label:'rebuild spot-check', value:'PASS', color:'var(--ok)', note:'run #r-2214 rebuilt byte-identical' },
+      { label:'retention due', value:'3', color:'var(--accent-2)', note:'1 blocked by legal hold' },
+    ])
+    + `<div style="padding:24px 32px; display:flex; gap:24px;">
+        <div style="flex:1.2;">
+          <div class="section-label" style="margin-bottom:10px;">integrations</div>
+          <div class="card">
+            <div class="card-body" style="padding:0;">
+              ${[
+                ['identity provider','connected · 14 accounts mapped to named people','chip-ok','connected'],
+                ['model endpoint (controller)','reachable · manifest-only, drafts quarantined','chip-ok','reachable'],
+                ['e-signature','not connected — signature certificates filed manually','chip-warn','not connected'],
+                ['document store sync','not connected','chip-warn','not connected'],
+              ].map(i=>`<div style="padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:baseline;">
+                <div><div>${i[0]}</div><div class="caption" style="margin-top:2px;">${i[1]}</div></div>
+                <span class="chip ${i[2]}">${i[3]}</span>
+              </div>`).join('')}
+            </div>
+          </div>
+          <div class="caption" style="margin-top:10px;">Connecting or changing an integration is a recorded act, and never grants the integration a content role.</div>
+        </div>
+        <div style="flex:1;">
+          <div class="section-label" style="margin-bottom:10px;">retention monitor — visible here, actioned by Legal</div>
+          <div class="card">
+            <div class="card-body" style="padding:0;">
+              <div style="padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between;"><div>Meridian MSA · due 2026-07-26</div><span class="chip chip-err">under hold M-2211</span></div>
+              <div style="padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between;"><div>Cobalt SOW-2 · due 2026-07-30</div><span class="chip chip-warn">due in 4d</span></div>
+              <div style="padding:12px 16px; display:flex; justify-content:space-between;"><div>Atlas NDA · due 2026-08-02</div><span class="chip chip-std">due in 7d</span></div>
+            </div>
+          </div>
+          <div class="caption" style="margin-top:10px;">The Administrator sees what is due and nudges Legal. Destruction itself is Legal admin’s act — the system keeps operation and judgement apart.</div>
+          <div class="section-label" style="margin:20px 0 10px;">system events</div>
+          <div class="console">
+            <div style="color:var(--mute-2);">    ~ 06:00:12  anchor check · chain verified to height 4,182</div>
+            <div style="color:var(--ok);">    ─ 06:00:14  checkpoint schedule ok · next 27 Jul 06:00</div>
+            <div style="color:var(--accent);">    ← 05:58:40  nightly rebuild spot-check · run r-2214 byte-identical</div>
+            <div style="color:var(--accent-2);">[exec] 04:58:01  role_granted · viewer → L. Whitfield · by T. Mercer</div>
+            <div style="color:var(--mute-2);">    ~ 03:10:22  role grant requested · awaiting Legal countersign</div>
+          </div>
+        </div>
+      </div>`;
+}
+
+function adminWatchers() {
+  return `<div style="padding:16px 32px; border-bottom:1px solid var(--line);" class="caption">
+      When a requester asks to override a blocking finding, the system tells the people affected and holds a review window before Legal may decide.
+      The Administrator maintains <b style="color:var(--ink);">who gets told</b> — never the decision itself.
+    </div>
+    <div style="padding:24px 32px; display:flex; gap:24px;">
+      <div class="card" style="flex:1;">
+        <div class="card-head"><span class="section-label" style="font-size:10px;">watchers by category</span><button class="btn btn-sm">+ add watcher</button></div>
+        <div class="card-body" style="padding:0;">
+          ${[
+            ['DP · Data Protection','R. Vaidya · Privacy, E. Chen · Privacy'],
+            ['SC · Security','K. Park · Security'],
+            ['LC · Liability Cap','B. Iqbal · Risk'],
+            ['all overrides','deal owner (always) · S. Okafor · Audit (fyi)'],
+          ].map(w=>`<div style="padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between;">
+            <div class="mono" style="font-size:11px;">${w[0]}</div><div class="caption">${w[1]}</div>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div class="card" style="flex:1;">
+        <div class="card-head"><span class="section-label" style="font-size:10px;">notification rules</span></div>
+        <div class="card-body" style="padding:0;">
+          ${[
+            ['override socialised','immediately, to watchers of every affected clause'],
+            ['review window closing','6 hours before, to the deciding reviewer'],
+            ['ticket nearing expiry','5 days before, to the review desk'],
+            ['clause expiring','30 days before, to Legal admin'],
+            ['grant awaiting countersign','daily until decided, to all Legal admins'],
+          ].map(r=>`<div style="padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between;">
+            <div>${r[0]}</div><div class="caption">${r[1]}</div>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+function viewAdmin(sub) {
+  const bodies = { people: adminPeople, settings: adminSettings, health: adminHealth, watchers: adminWatchers };
+  const subtitles = {
+    people:  'Who may act, as what, granted by whom — every grant and revocation a recorded, countersigned act.',
+    settings:'How the machine runs. Operational settings are yours; owner decisions are Legal’s and read-only here.',
+    health:  'Is the record intact, are the copies faithful, is anything overdue. Evidence, not dashboards for their own sake.',
+    watchers:'Who is told when someone asks to go around a safeguard. You maintain the telling, never the deciding.',
+  };
+  return panelHead('Workspace · Administrator', 'Administration', 'the steward', subtitles[sub])
+    + accessStrip(
+      ['grant and revoke access — Legal roles need Legal’s countersign', 'change operational settings', 'take and verify audit checkpoints', 'connect integrations · monitor health and retention'],
+      ['read, write or approve any contract content', 'decide a ticket, override or concession', 'change an owner decision', 'edit or delete anything on the record — including their own acts'])
+    + bodies[sub]();
+}
+
+/* ── Role registry ─────────────────────────────────────────────────── */
+
+const ROLES = {
+  requester:      { label:'requester',      persona:'A. Delacroix · Procurement',
+                    tabs:[['my deals',true],['intake'],['negotiate','2'],['my record']], view:viewRequester },
+  legal_reviewer: { label:'legal reviewer', persona:'M. Ostrowski · Legal',
+                    tabs:[['review desk',true,'7'],['tickets'],['approvals','5'],['negotiations'],['holds']], view:viewReviewer },
+  legal_admin:    { label:'legal admin',    persona:'J. Laurent · Legal',
+                    tabs:[['the library',true],['ladders & rules'],['governance'],['holds & retention'],['review desk']], view:viewLegalAdmin },
+  auditor:        { label:'auditor',        persona:'S. Okafor · Internal Audit',
+                    tabs:[['the record',true],['quality'],['origin mix'],['access history']], view:viewAuditor },
+  viewer:         { label:'viewer',         persona:'L. Whitfield · Finance',
+                    tabs:[['reading room',true]], view:viewViewer },
+  administrator:  { label:'administrator',  persona:'T. Mercer · IT',
+                    tabs:[['people & access',true,'1'],['settings'],['system health'],['watchers & notices']],
+                    admin:true, subs:['people','settings','health','watchers'] },
+};
+
+let currentRole = 'administrator';
+let adminSub = 'people';
+
+function render() {
+  const r = ROLES[currentRole];
+  document.getElementById('persona').textContent = r.persona;
+
+  const sw = document.getElementById('role-switch');
+  sw.innerHTML = Object.entries(ROLES).map(([k,v]) =>
+    `<button class="${k===currentRole?'active':''}" data-role="${k}">${v.label}</button>`).join('');
+  sw.querySelectorAll('button').forEach(b => b.onclick = () => { currentRole = b.dataset.role; adminSub = 'people'; render(); });
+
+  const tr = document.getElementById('tabrow');
+  if (r.admin) {
+    tr.innerHTML = r.tabs.map((t,i) =>
+      `<button class="tab ${r.subs[i]===adminSub?'active':''}" data-sub="${r.subs[i]}">${t[0]}${t[2]?` <span class="count">${t[2]}</span>`:''}</button>`).join('');
+    tr.querySelectorAll('.tab').forEach(b => b.onclick = () => { adminSub = b.dataset.sub; render(); });
+    document.getElementById('view').innerHTML = viewAdmin(adminSub);
+  } else {
+    tr.innerHTML = r.tabs.map((t,i) =>
+      `<button class="tab ${i===0?'active':'concept'}" ${i>0?'title="concept — this workspace tab is specified but not mocked here"':''}>${t[0]}${t[2]?` <span class="count">${t[2]}</span>`:''}</button>`).join('');
+    document.getElementById('view').innerHTML = r.view();
+  }
+  document.getElementById('footer-mid').textContent =
+    `signed in as ${r.persona} · role: ${r.label} · what you cannot see does not load — the database refuses it, not the screen`;
+}
+
+render();
+</script>
+</body>
+</html>

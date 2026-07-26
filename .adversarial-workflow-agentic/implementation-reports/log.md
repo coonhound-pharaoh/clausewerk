@@ -266,3 +266,81 @@ keep `security invoker` still stands, but now for the better reason (a caller-ri
 exceed the caller, so privileges and RLS stay in force underneath it).
 
 **Verify:** 8/8 suites (215 assertions), 146 Python tests, **43/43** and **43/43**, exit 0.
+
+---
+
+## WP-23/24/25 · The sweep — **COMPLETE** (report: `wp-sweep.md`)
+
+Coherence constraints, the rule-grammar CHECK, engine smalls, indexes/TRUNCATE/loud DELETE. The
+implementing agent was interrupted mid-write-up; the **code was complete**, the record was not. The
+report was finished on 2026-07-26 by re-verifying every claim against the tree rather than
+reconstructing from the packet.
+
+**Three fixture sites corrected, not two** — Gate 3's correction C-2 was right. The third
+(`ladder.test.mjs:213`, a Liability ladder built from Data Privacy clauses) would have thrown for
+the *wrong reason* under the new constraint and reported green. A false green found on the way out
+of a project whose entire subject is false greens.
+
+**No assertion weakened:** none of the three tests asserted rung severity or category. New seed
+clauses were required, not ID swaps.
+
+## Owner decisions settled — 2026-07-26 (migration `0012`)
+
+The user answered all four. Three matched what shipped and became settled records. **`U2` changed
+the design:** a work order may now depart from its master **with the same approval a concession
+needs**, granted one category at a time, with the departure still reported.
+
+`0012_sow_override.sql` — proposal, append-only approvals, gated settlement, and
+`cw.sow_override_in_force` as the only thing that authorises anything. A machine may propose a
+departure; it may never approve one. Fails closed with no attorney assigned.
+
+**Orchestrator error, caught by the tests:** my first version of the guard rewrote logic that
+already lived in a table CHECK constraint and changed two error messages asserted by name. Four
+tests failed immediately. Restored `0006`'s logic byte-for-byte and added only the new branch.
+
+Three new mutations attack the decision specifically: the gate opening for everyone; a merely
+*proposed* departure treated as authorised; settlement proceeding with signatures missing.
+
+## Harness parallelised — 2026-07-26
+
+`npm run verify` had outgrown the 10-minute tool ceiling, and I was working around it rather than
+fixing it. Both mutation harnesses now run their breakages concurrently (7 lanes); every mutation
+was already fully independent, so serialising bought nothing but wall-clock. Output stays in fixed
+order so runs remain diffable.
+
+**> 10 min (killed) → 5m08s, exit 0.**
+
+Running it end to end immediately surfaced **two `SKIP`s** — mutations orphaned by the sweep's SQL
+edits, meaning two protections had no working check behind them. Exactly Gate 3's correction C-1,
+and invisible for as long as the full harness was being worked around.
+
+---
+
+# Final state
+
+| | Baseline (2026-07-25) | Now |
+|---|---|---|
+| Database suites | 5 | **11** |
+| Database assertions | 120 | **366** |
+| Engine tests | 104 | **161** |
+| Database mutations | 15 | **72** |
+| Engine mutations | 24 | **49** |
+| Mutations scored by the *wrong* test | counted as passes | **fatal** |
+| `npm run verify` | exit 0 | **exit 0** |
+
+**Findings:** D1–D9 and E1–E8 all closed, plus one HIGH nobody had found (`cw.audit_event` had no
+row-level security at all). E3b deliberately deferred and recorded.
+
+**Where the review was wrong, recorded rather than quietly followed:** E6's entity-expansion threat
+was already blocked by the parser, so building that guard would have added a check that could never
+fail; E5 was overstated and the zero-authored-characters claim was never at risk; E2 named nine seam
+mismatches and there was one plus its mirror image. Two "missing document" findings were simply
+stale.
+
+**Residuals, stated in the migrations and in `docs/spec-vs-implementation.md`:** unsigned audit
+checkpoint; untested advisory lock; the actor's *name* still self-asserted; identity incompatible
+with transaction-mode pooling; `check_manifest` has no production caller; redline fixtures are
+hand-built, not Word output; retention gates the destruction decision but does not destroy bytes;
+master/SOW is structure only, because obligations do not exist.
+
+**Gates:** 1 pass · 2 pass · 3 **fail → remediated → pass** · 4 pass · 5 pass · 6 pass.

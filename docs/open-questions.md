@@ -50,8 +50,9 @@ gets read once; a decision in the schema is met by whoever next touches the thin
   hidden.
 - **`U3`** — administrative work is less convenient, by design. That inconvenience is what makes the
   test suite able to see permission faults at all.
-- **`U4`** — a measurement nobody is accountable for tends to get ignored. The system cannot fix
-  that; naming an owner for the number is a business act, and it is the obvious next one.
+- **`U4`** — the system measures the rate and shows it. What the number should be, and who watches
+  it, belongs to the organisation using the system. If a customer wants to set rules around it, the
+  measurement is already there to build on.
 
 ---
 

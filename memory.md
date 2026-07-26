@@ -622,3 +622,28 @@ is content, and content is not ours.
 attached — not only in this file. A decision in a document gets read once. A
 decision in the schema is encountered by whoever next touches the thing it
 governs.
+
+---
+
+## 2026-07-26 · The Administrator is a steward, not a superuser (PROPOSED)
+
+**Proposal, awaiting owner acceptance.** The UI is being reimagined as one
+workspace per role instead of nine tabs everyone can open, and that work
+surfaced a job with no chair: someone must grant access, keep settings, watch
+the health of the record, and connect integrations. We are proposing a sixth
+role — the Administrator — designed so that it **runs the machine and can never
+touch what the machine holds**: no contract content, no deciding of tickets,
+overrides or concessions, no owner decisions, no editing of history.
+
+**Why this shape.** "The owner is nobody" is already settled — administration
+done as the database owner would be an act with no name on it. And
+administration done as Legal admin would mix machine stewardship into content
+judgement. A named, recorded, content-blind role is the only shape that
+respects both boundaries. Grants of the two Legal roles take two names — the
+Administrator proposes, a Legal admin countersigns — because access to Legal
+judgement is itself a judgement.
+
+**Where it lives.** [`UI-AND-ADMINISTRATION-ARCHITECTURE.md`](UI-AND-ADMINISTRATION-ARCHITECTURE.md)
+(the design and the four decisions it asks of the owner),
+[`UI-REIMAGINE-PLAN-2026-07-26.md`](UI-REIMAGINE-PLAN-2026-07-26.md) (the plan),
+and a clickable concept at `prototype/v4-concept/`.
