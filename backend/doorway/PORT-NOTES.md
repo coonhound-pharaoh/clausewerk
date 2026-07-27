@@ -367,5 +367,53 @@ everybody to ignore it. What is in the suite is the promise that still holds:
 under concurrent writes by two people, **everything that lands is attributed to
 whoever actually did it**. A refused write recorded nothing, which is correct.
 
+**DIAGNOSED, 2026-07-26.** The first reading of this was wrong and is corrected
+here rather than quietly edited.
+
+There IS an advisory lock. `cw.audit_chain()` takes
+`pg_advisory_xact_lock(4771290311)` before it reads the tail, and 0001 reasons
+that a duplicate key therefore means the lock was not held. Measured, on eight
+concurrent writers:
+
+    isolation level            read committed  (all eight)
+    advisory lock held         yes             (every writer that got that far)
+    audit_no_fork duplicates   5 of 8
+
+So the lock is working and the index is working. **The tail-read is what is
+wrong**, and the reason is a detail of ordering:
+
+  · `seq` is a `bigserial`. PostgreSQL evaluates a column DEFAULT **before**
+    firing BEFORE-ROW triggers — so `seq` is allocated OUTSIDE the lock, in the
+    order transactions reach the INSERT.
+  · The lock then serialises the trigger bodies in a DIFFERENT order.
+  · `select hash into prev from cw.audit_event order by seq desc limit 1` finds
+    the highest seq committed so far, which under concurrency is **not the row
+    that was appended last**.
+
+Two consequences, both observed:
+
+1. **An honest act is refused.** A lower-seq transaction appending after a
+   higher-seq one has committed reads that higher row as its parent; the next
+   one reads the same parent, and `audit_no_fork` refuses it.
+
+2. **The verifier accuses an honest chain of tampering** — the worse of the two.
+   When the duplicate does not happen, the chain still links backwards in seq
+   order. A row with seq 13 whose parent is seq 15 is legitimate; but
+   `cw.audit_verify()` walks by seq and reports:
+
+       cw.audit_verify() first broken seq: 13
+
+   A chain built correctly by two people working at the same time is declared
+   tampered with. That is the exact failure this project already has a decision
+   record about — the audit trail accusing an honest system.
+
+**Reproduction:** six concurrent writers through `db.as_person`, each inserting
+one account. Roughly half collide; the survivors chain out of seq order and fail
+verification.
+
 **Whose it is:** the database's. The doorway must not retry — that is WP-P3's
-rule 2, and a retry here would be a governed act quietly performed twice.
+rule 2, and a retry here would be a governed act quietly performed twice. Nor
+should the index be loosened: it is the only thing standing between an
+unexplained duplicate and two futures for the chain. The fix belongs in the
+tail-read and the verifier, which both currently assume sequence order is append
+order.
