@@ -234,17 +234,21 @@ function HealthPane() {
               key: r.agreement_id,
               title: r.agreement_id,
               sub: r.under_hold
-                ? `due ${r.retention_until} · held: ${r.matters}`
+                ? `due ${r.retention_until} · held`
                 : `due ${r.retention_until}`,
               at: null,
               chips: (
                 <>
-                  {/* Under hold renders as BLOCKED BECAUSE HELD, naming the
-                      matter. "Cannot be destroyed" and "cannot be destroyed
-                      while this litigation is open" are different sentences,
-                      and only the second tells anybody what to do. */}
+                  {/* Held and due are different states and must never render
+                      alike — that distinction is what stops a destruction
+                      being attempted on something frozen.
+                      THE MATTER IS NOT SHOWN, and that is owner decision U13
+                      (0024): the Administrator is told that a record is held,
+                      not why. Asking Legal is the intended next step, and the
+                      refusal itself names the matter to whoever attempts the
+                      act. Do not add it back here as a convenience. */}
                   {r.under_hold
-                    ? <span className="chip chip-err" title={r.matters}>held</span>
+                    ? <span className="chip chip-err">held</span>
                     : <span className="chip chip-pending">due</span>}
                   <button
                     className="btn btn-sm"

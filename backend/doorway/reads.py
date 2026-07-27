@@ -256,11 +256,18 @@ READS: dict[str, Read] = {
     ),
 
     "GET /retention/due": Read(
-        sql="""select agreement_id, retention_until, under_hold, matters
+        # `matters` is deliberately NOT selected. Owner decision U13 (0024): the
+        # Administrator is told THAT a record is held, never why — the matter
+        # reference is Legal's. The refusal from cw.retention_destroy() still
+        # names the matters to the person attempting the act, so the reason is
+        # there at the moment it decides something.
+        sql="""select agreement_id, retention_until, under_hold
           from cw.retention_due order by retention_until""",
-        rule="cw.retention_due, granted to administrator — due-ness and identity, "
+        rule="cw.retention_due — due-ness and the hold FLAG, never the matter and "
              "never agreement bodies. Destruction is the administrator's own act "
-             "(owner decision U9, 0022; revoked from legal_admin, not shared)",
+             "(U9, 0022; revoked from legal_admin, not shared). The view runs with "
+             "owner rights, which is what answers the flag to a role that may read "
+             "neither table underneath it (U13, 0024)",
     ),
 
     # The auditor's chain explorer. Scoped by cw.audit_event's own policy: an

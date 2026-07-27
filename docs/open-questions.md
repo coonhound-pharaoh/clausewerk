@@ -340,7 +340,31 @@ that skipped redaction, and a table constraint refuses a *row* that records one.
   decisions, positions and overrides survive. Extending it there would cascade
   through half the schema and is a decision, not a detail.
 
-## 9c. The Administrator's grant on holds and retention is inert — needs a decision
+## 9c. The Administrator's grant on holds and retention — **SETTLED 2026-07-27 (U13)** ✅
+
+**SETTLED: the flag is enough.** The owner's words: *"The Administrator will just
+need to be someone who has that level of confidence. It just needs to be
+flagged, it doesn't need to explain why."*
+
+Neither option below was taken, and the answer is smaller than both. The
+Administrator is told **that** a record is held, never **why**. So nothing is
+widened: the inert grant is **revoked** in `0024`, the endpoint stops selecting
+the matter references, and the screen stops showing them. `cw.retention_due`
+runs with owner rights, which is what lets it answer the flag to a role that may
+read neither table underneath it.
+
+**The cost, stated:** an Administrator refused a destruction must ask Legal which
+matter blocked it. Deliberate. Note the refusal `cw.retention_destroy()` raises
+*does* name the matters to the person attempting the act, so the reason is
+available at the moment it decides something — what is withdrawn is browsing the
+holds at leisure. The trust the role carries is a question of who is appointed to
+it, not something the schema should compensate for.
+
+**Everything below is the original finding, kept because the failure shape is
+worth remembering: a grant without a matching policy FILTERS instead of
+REFUSING, and an empty list is a worse answer than a refusal.**
+
+---
 
 Found 2026-07-27 by a defect sweep, and left unfixed deliberately, because the
 fix widens who may read something.
@@ -373,6 +397,8 @@ these. Confirm that, and it is a ten-minute change. The alternative — revoking
 the inert grant so the Administrator gets an honest refusal instead of a
 misleading empty list — is also coherent, and is the safer default if the answer
 is not obvious.
+
+*(Answered above: neither. The flag, not the reason — U13, built in `0024`.)*
 
 ## 10. Smaller gaps — deferred
 
