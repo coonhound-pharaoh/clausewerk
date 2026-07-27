@@ -270,6 +270,61 @@ READS: dict[str, Read] = {
           from cw.audit_event order by seq desc limit 500""",
         rule="cw.audit_event audit_read_scoped policy",
     ),
+
+    # ── The reading room (WP-U14, migration 0017) ───────────────────────────
+    #
+    # NO PARAMETERS, ON EITHER OF THESE, AND THAT IS THE CONTROL.
+    #
+    # The scoping is "this share, this person", and it comes from the identity
+    # already bound to the connection. An `agreement_id` parameter is exactly how
+    # the viewer's render ends up fetched through something broader than the one
+    # share they were given, which is WP-U14's critical anti-pattern.
+    #
+    # AND THERE IS NO EXPORT ENDPOINT. ADR-0008 gave the viewer none, deliberately:
+    # the reading room shows a contract to somebody outside the deal, and letting
+    # them take a copy away is a different act that nobody has decided. 0017 leaves
+    # nothing for a future export button to call. If a screen seems to need one,
+    # that is a decision for the owner and not an endpoint.
+    "GET /reading-room": Read(
+        sql="""select share_id, agreement_id, shared_with, shared_by, shared_at, purpose,
+                 counterparty, executed_on, effective_on, term_end
+          from cw.reading_room order by shared_at desc""",
+        rule="cw.reading_room scopes itself in its own WHERE clause — a view does "
+             "not inherit the policy underneath it (0017)",
+    ),
+
+    # The paper render, and the one place a viewer sees an approval.
+    "GET /reading-room/clauses": Read(
+        sql="""select agreement_id, clause_id, version, title, body, reviewer,
+                 approved_on, origin, provenance
+          from cw.reading_room_clause order by agreement_id, clause_id""",
+        rule="cw.reading_room_clause scopes itself in its own WHERE clause, in the "
+             "same words as the share it hangs off (0017)",
+    ),
+
+    # ── The library and the ladders (WP-U13, migration 0018) ────────────────
+    "GET /library": Read(
+        sql="""select * from cw.library_entry
+          order by category_key, severity, clause_id, version""",
+        rule="cw.clause / cw.clause_version read_all policies — reading clause text "
+             "is not the risk. cw.library_entry is classified read-all in "
+             "views-are-not-policies.test.mjs",
+    ),
+
+    # ORDER BY IS THE VIEW'S OWN, AND IS NOT REPEATED HERE.
+    #
+    # cw.ladder_board ends `order by l.category_key, l.severity, r.rung nulls
+    # last`, and the nulls-last matters: a ladder with NO RUNGS appears as one row
+    # with a null rung and ladder_status 'empty'. That row is the whole point of
+    # the view — an inner join would drop exactly the broken ladders, and the
+    # screen would report a configuration fault as a healthy short list.
+    #
+    # So nothing here filters nulls for tidiness, and nothing re-sorts.
+    "GET /ladders": Read(
+        sql="""select * from cw.ladder_board""",
+        rule="cw.ladder / cw.ladder_rung read_all policies; cw.ladder_board's "
+             "empty-ladder row is load-bearing and must not be filtered out",
+    ),
 }
 
 

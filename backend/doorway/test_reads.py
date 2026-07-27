@@ -89,6 +89,20 @@ ADMINISTRATOR = Caller(person="admin@clausewerk", role="administrator")
 REQUESTER = Caller(person="rita@clausewerk", role="requester")
 
 
+def test_the_read_count_moves_only_on_purpose():
+    """Twenty-five came across from the JavaScript service. Four were added
+    afterwards for read models built while this workstream was paused — the
+    reading room (0017) and the library and ladder boards (0018).
+
+    Asserted so the number moves deliberately. An endpoint appearing without
+    anybody noticing is how a surface grows past what was reviewed.
+    """
+    assert len(READS) == 29, (
+        f"{len(READS)} reads are registered; 25 ported plus 4 added on purpose. "
+        "If that changed deliberately, move this number with it."
+    )
+
+
 # ── 2. Every read names the rule that decides who sees it ───────────────────
 
 
@@ -309,6 +323,61 @@ def test_a_viewer_sees_only_the_overrides_they_were_told_about(
         f"GET /overrides handed a viewer who was notified about nothing "
         f"{len(rows)} override request(s), justification text included"
     )
+
+
+# ── The four added after the port ───────────────────────────────────────────
+
+
+def test_the_reading_room_takes_no_parameters(people, db: Database):
+    """The scoping is "this share, this person", and it comes from the connection.
+
+    An `agreement_id` parameter is precisely how a viewer's render ends up
+    fetched through something broader than the one share they were given —
+    WP-U14's critical anti-pattern. The absence is the control, so it is asserted
+    rather than assumed.
+    """
+    for key in ("GET /reading-room", "GET /reading-room/clauses"):
+        statement = READS[key].sql
+        assert "%s" not in statement and "%(" not in statement, (
+            f"{key} takes a parameter. What a viewer may see is not something a "
+            "request gets to ask for.")
+        assert "where" not in statement.lower(), (
+            f"{key} carries its own WHERE clause; the view does the scoping")
+
+
+def test_there_is_no_export_endpoint_on_the_viewer_s_surface():
+    """ADR-0008 gave the viewer no export, deliberately: the reading room shows a
+    contract to somebody outside the deal, and letting them take a copy away is a
+    different act nobody has decided.
+
+    Checked here as well as in the schema's own suite, because this is the layer
+    where a convenience would be added."""
+    suspicious = [key for key in READS
+                  if any(word in key.lower()
+                         for word in ("export", "download", "csv", "pdf", "print"))]
+    assert not suspicious, (
+        f"an export-shaped read endpoint exists: {suspicious}. If a screen needs "
+        "one, that is a decision for the owner rather than an endpoint.")
+
+
+def test_the_empty_ladder_row_is_not_filtered_away(people, db: Database):
+    """A ladder with no rungs appears as ONE row with a null rung and
+    ladder_status 'empty'. That row is the whole point of the view: an inner join
+    would drop exactly the broken ladders, and the screen would report a
+    configuration fault as a healthy short list.
+
+    So the endpoint adds no WHERE and no ordering of its own — the view's
+    `nulls last` is what keeps the empty ladder visible where somebody will see
+    it.
+    """
+    statement = READS["GET /ladders"].sql.lower()
+    assert "where" not in statement, (
+        f"GET /ladders filters rows: {statement!r}. A null rung is a finding, not "
+        "untidiness.")
+    assert "order by" not in statement, (
+        "GET /ladders re-sorts. cw.ladder_board orders itself with `nulls last` "
+        "so the empty ladder lands where it is noticed; a second ordering here "
+        "can undo that.")
 
 
 # ── 6. No permission logic arrived in the Python ────────────────────────────
