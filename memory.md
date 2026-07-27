@@ -1611,3 +1611,33 @@ check, so it can never return unnoticed.
 
 **Seventh time this week** something that looked like protection wasn't. Every
 one found by attacking it rather than reading it.
+
+---
+
+## 2026-07-27 · The sign-in desk could crash under two clicks, and never emptied its drawer
+
+**Found by a deliberate sweep for defects, not by a failure.** All 500 tests were
+green when the sweep started; both problems live in the gap the tests were not
+exercising — two people acting in the same instant, and time passing with nobody
+watching.
+
+**The first problem: two simultaneous requests could crash one of them.** The
+service deliberately handles many people at once, but the ledger of who is
+signed in was written as if requests arrive one at a time. If two requests
+carrying the same just-expired sign-in landed together, both tried to remove the
+same entry; the second found it already gone and failed — and the person saw
+"the service failed" instead of "please sign in again". Fixed so the ledger
+takes one action at a time, and removing something already removed counts as
+done rather than as an error.
+
+**The second problem: abandoned sign-ins were kept forever.** A sign-in that
+expired was only cleared out when that exact person came back — which for a
+closed browser is never. And because signing in currently needs no password
+(the deliberate seam where a real identity provider will plug in), anyone who
+could reach the service could fill its memory one sign-in at a time until it
+fell over. Now every new sign-in first sweeps out the expired ones.
+
+**Both fixes are guarded the way this project guards everything:** each has a
+test that fails on the old code — verified by putting the old code back and
+watching it fail — and the break-it harness now carries two new checks, one per
+guarantee. 20 of 20 caught.

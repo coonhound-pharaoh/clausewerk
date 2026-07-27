@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import re
 import secrets
+import threading
 from dataclasses import dataclass
 from typing import Callable
 
@@ -75,13 +76,27 @@ class Sessions:
 
         self._now = now or time.monotonic
         self._by_token: dict[str, tuple[str, float]] = {}
+        # The server is threaded ON PURPOSE (see server.py), so two requests
+        # really do read and write this dict at the same moment. Every method
+        # holds this lock; without it, two presentations of one expired token
+        # race their removals and the loser crashes the request.
+        self._lock = threading.RLock()
 
     def issue(self, person: str, length_seconds: float) -> Issued:
         # secrets, not a general-purpose random source: this string is the only
         # thing standing between a stranger and somebody else's session.
         token = secrets.token_urlsafe(32)
-        expires_at = self._now() + length_seconds
-        self._by_token[token] = (person, expires_at)
+        with self._lock:
+            now = self._now()
+            # Sweep the dead before admitting the new. An expired session is
+            # otherwise only removed when its exact token is presented again —
+            # which for an abandoned browser is never — and sign-in is the one
+            # unauthenticated door, so unswept growth is a way for a stranger
+            # to fill the process's memory one sign-in at a time.
+            self._by_token = {
+                t: held for t, held in self._by_token.items() if held[1] > now}
+            expires_at = now + length_seconds
+            self._by_token[token] = (person, expires_at)
         return Issued(token=token, expires_at=expires_at)
 
     def person_for(self, token: str | None) -> str | None:
@@ -92,17 +107,23 @@ class Sessions:
         """
         if not token:
             return None
-        found = self._by_token.get(token)
-        if not found:
-            return None
-        person, expires_at = found
-        if self._now() >= expires_at:
-            del self._by_token[token]
-            return None
-        return person
+        with self._lock:
+            found = self._by_token.get(token)
+            if not found:
+                return None
+            person, expires_at = found
+            if self._now() >= expires_at:
+                # pop, not del: the entry may already be gone — removed by a
+                # parallel request holding the same expired token, or by a
+                # revocation — and "already gone" is the outcome we wanted,
+                # not an error.
+                self._by_token.pop(token, None)
+                return None
+            return person
 
     def end(self, token: str) -> None:
-        self._by_token.pop(token, None)
+        with self._lock:
+            self._by_token.pop(token, None)
 
     def end_all_for(self, person: str) -> None:
         """Drop every session a person holds, used when they are revoked.
@@ -112,8 +133,10 @@ class Sessions:
         is still being presented. It is not the control — the per-request lookup
         is the control.
         """
-        for token in [t for t, (p, _) in self._by_token.items() if p == person]:
-            del self._by_token[token]
+        with self._lock:
+            self._by_token = {
+                t: held for t, held in self._by_token.items() if held[0] != person}
 
     def __len__(self) -> int:
-        return len(self._by_token)
+        with self._lock:
+            return len(self._by_token)

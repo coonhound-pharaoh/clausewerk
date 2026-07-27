@@ -110,9 +110,23 @@ MUTATIONS = [
     (
         "sessions never expire",
         "doorway/sessions.py",
-        "        if self._now() >= expires_at:",
-        "        if False:",
+        "            if self._now() >= expires_at:",
+        "            if False:",
         "test_retirement.py::test_a_session_expires_and_re_sign_in_is_required",
+    ),
+    (
+        "expired sessions pile up until each token is presented again",
+        "doorway/sessions.py",
+        "            self._by_token = {\n                t: held for t, held in self._by_token.items() if held[1] > now}",
+        "            pass",
+        "test_sessions.py::test_expired_sessions_are_swept_when_a_new_one_is_issued",
+    ),
+    (
+        "removing an expired session crashes if another request removed it first",
+        "doorway/sessions.py",
+        "                self._by_token.pop(token, None)",
+        "                del self._by_token[token]",
+        "test_sessions.py::test_an_entry_removed_mid_check_is_no_session_not_a_crash",
     ),
 
     # ── Refusals stay legible ────────────────────────────────────────────────
