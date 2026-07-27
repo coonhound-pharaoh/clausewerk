@@ -207,3 +207,64 @@ No behaviour difference was found in the other 24 endpoints, and no permission
 logic was added on either side. There is not one role comparison in
 `reads.py` — checked by a test that strips comments and docstrings first, so the
 sentence explaining the ban cannot trip the check on the ban.
+
+---
+
+## WP-P4 · The web server and the screens
+
+### 11 · No web framework — **Python, deliberate**
+
+The standard library's `ThreadingHTTPServer`, as the JavaScript used Node's
+built-in server. This layer is a router and a JSON encoder; a framework would add
+a dependency, a configuration surface and a set of conventions to the one part of
+the system that has to stay readable in full. The engine has no dependencies at
+all and the doorway has one — the database driver. Worth keeping.
+
+**Threaded is not a performance choice.** The whole identity scheme rests on a
+connection being handed out, used for exactly one unit of work and handed back
+carrying nothing. Served one request at a time, that promise would never be
+exercised.
+
+### 12 · The bootstrap ceremony cannot give its two people different units — **schema, worked around honestly**
+
+`cw.bootstrap` takes one `p_unit` and applies it to both accounts it creates. It
+cannot put the first Administrator in Operations and the first Legal admin in
+Legal.
+
+That is a real limit rather than an oversight: at the moment of the ceremony
+there is no Administrator yet to say where anybody sits. The JavaScript seed
+declared different units for the two and simply did not get them.
+
+The seed now passes the Administrator's unit to the ceremony and has the
+**Administrator correct the Legal admin's** afterwards, as an ordinary recorded
+act through the doorway. Writing it straight in as the owner would have put a row
+in the system that the system could not have reached on its own, which is the one
+thing that file exists not to do.
+
+### 13 · Two services, one port, and a browser that picks the wrong one — **worth knowing**
+
+Both services default to port 8787. On Windows the JavaScript service binds
+`0.0.0.0` and the Python one binds `127.0.0.1`, so both can listen at once
+without either failing — and a browser asking for `localhost` may resolve to IPv6
+and reach the JavaScript one.
+
+This cost real time during the WP-P4 walkthrough: the Administrator's screen
+showed a unit that did not match the database, because the screen was being
+served by the other service against a different database entirely. The tell was
+an audit act (`watcher_added`) that the seed never performs.
+
+Until WP-P5 deletes the JavaScript service, use `--port` and address
+`127.0.0.1` explicitly when it matters. **A screen disagreeing with the database
+is worth checking twice** — the second answer was that both were right and they
+were different systems.
+
+### 14 · What the walkthrough actually proved
+
+All six workspaces opened against the Python service, in a real browser, as the
+six seeded people, each showing the right person, the right role and the right
+workspace. Every API call returned 200; no console errors. The Administrator's
+pane showed Pat Nkemi's grant as countersigned by Rae — the countersign rule
+visible on screen rather than asserted in a test.
+
+The JavaScript service's 30 tests were re-run afterwards and all 30 pass, which
+is the check that the specification did not drift while the Python caught up.

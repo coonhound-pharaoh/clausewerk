@@ -105,6 +105,21 @@ def effective_role(db: Database, person: str) -> str | None:
     return row[0] if row else None
 
 
+def identity_of(db: Database, person: str) -> dict | None:
+    """Who this person is and what they may do right now, or None.
+
+    The same read as `effective_role()`, carrying the display name and unit a
+    masthead needs. Reads cw.effective_role. Never cw.account.role — see the top
+    of this file.
+    """
+    with db.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:
+        rows = request.rows(
+            "select person, role, display_name, unit from cw.effective_role "
+            "where person = %s", (person,)
+        )
+    return rows[0] if rows else None
+
+
 def session_length(db: Database) -> float:
     """How long a sign-in lasts, from the setting an Administrator controls.
 

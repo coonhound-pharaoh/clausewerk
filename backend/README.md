@@ -40,6 +40,50 @@ nothing else. The doorway connects as `cw_app`, which is a member of all six
 application roles and `NOINHERIT`, so it holds none of their privileges until a
 request binds one. An idle connection can do nothing at all.
 
+## Walking the six workspaces
+
+Six people, one per role, and a screen each. Nothing here is canned: every row
+is created through the real path — the bootstrap ceremony, then the
+Administrator's own recorded acts — so the walkthrough cannot show a state the
+system could not reach on its own.
+
+```bash
+docker compose up -d
+python -m doorway.seed_demo
+python -m doorway.server --static ../prototype/v4
+```
+
+Then open <http://127.0.0.1:8787> and sign in as any of:
+
+| role | sign in as | |
+|---|---|---|
+| administrator | `a.okafor@clausewerk` | Ada Okafor |
+| legal_admin | `r.vance@clausewerk` | Rae Vance |
+| legal_reviewer | `p.nkemi@clausewerk` | Pat Nkemi |
+| requester | `d.buyer@clausewerk` | Dana Buyer |
+| auditor | `t.imani@clausewerk` | Tunde Imani |
+| viewer | `s.reed@clausewerk` | Sam Reed |
+
+There is no password. The doorway is labelled a development doorway rather than
+made to look like more than it is — it establishes **which known person** is
+acting and does not yet prove they are that person. What is already real, and
+what the rest of the system rests on, is that the **role is never taken from
+anything the browser sends**: you name yourself, and the database says what you
+may do.
+
+**The workspaces are honestly empty.** No deals, no tickets, no clauses. Those
+are acts for the people above to perform, and a seeded system that looks busy is
+a demo rather than a system.
+
+**Pat Nkemi is the one worth trying first.** Pat holds a Legal role, so their
+grant conferred nothing until Rae countersigned it — which the seed performs as
+Rae, through the doorway. Skip that step and Pat cannot sign in at all, which is
+the countersign rule doing its job rather than a bug.
+
+Point it somewhere else with `CW_DATABASE_URL`, and use `--port` if 8787 is
+taken. The JavaScript service (`node service/server.mjs`) still runs the same
+screens on the same port and is retired in WP-P5.
+
 ## What's here
 
 ```
