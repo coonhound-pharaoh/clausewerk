@@ -38,7 +38,13 @@ ORIGINS = (LEGAL_AUTHORED, AI_DRAFTED, VENDOR_DERIVED, EXTERNAL)
 # fingerprint. Recorded on every run row, because a stored hash that no longer
 # reproduces is indistinguishable from a tampered one unless the record says
 # which code computed it.
-ENGINE_VERSION = "clausewerk-engine/3"
+#
+# /4 (2026-07-27): baseline framework sections sort in numeric order — 1.2
+# before 1.10 — where /3 sorted them as text. Identical on every library with
+# single-digit section counts, which is all of them to date; bumped anyway,
+# because "the order rule changed" is the event the rule names, not "an
+# output was seen to differ".
+ENGINE_VERSION = "clausewerk-engine/4"
 
 
 @dataclass(frozen=True)

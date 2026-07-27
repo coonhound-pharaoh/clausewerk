@@ -44,6 +44,22 @@ def _order(clauses) -> tuple[Clause, ...]:
     return tuple(sorted(clauses, key=lambda c: (c.clause_id, -c.version)))
 
 
+def _section_key(section: str) -> tuple:
+    """Framework sections in the order a reader expects: 1.2 before 1.10.
+
+    Sorted as plain text, "1.10" lands before "1.2" — invisible today because
+    no fixture has ten sections, and wrong on the first library that does,
+    with the document then numbering its sections in that wrong order. Each
+    dot-separated piece is compared as a number when it is one and as text
+    when it is not; the leading flag on each piece keeps numbers and words
+    comparable without ever comparing them to each other.
+    """
+    return tuple(
+        (0, int(piece), "") if piece.isdigit() else (1, 0, piece)
+        for piece in section.split(".")
+    )
+
+
 # DEFERRED, not forgotten (E3b): resolution does not consult ladders for a
 # preferred opening rung. It was split out of this package deliberately — a
 # ladder's rung 0 disagreeing with the severity match is a CONTENT question for
@@ -115,7 +131,8 @@ def _baseline_pass(snapshot: Snapshot) -> tuple[Decision, ...]:
         rows.append((anchor.framework_section or "", clause_id, anchor, selected, len(group)))
 
     out: list[Decision] = []
-    for section, clause_id, anchor, selected, lapsed in sorted(rows, key=lambda r: (r[0], r[1])):
+    for section, clause_id, anchor, selected, lapsed in sorted(
+            rows, key=lambda r: (r[0] != "", _section_key(r[0]), r[1])):
         risk = Risk(category=anchor.category, severity=BASELINE,
                     justification="Always included")
         if selected is not None:

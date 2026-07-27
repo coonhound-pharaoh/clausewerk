@@ -81,6 +81,32 @@ def test_baseline_ordered_by_framework_section(snap):
     assert sections == sorted(sections)
 
 
+def test_section_1_10_follows_1_9_not_1_1():
+    """Sections are numbers a reader counts through, not words. Sorted as
+    text, 1.10 lands between 1.1 and 1.2 — invisible until the first library
+    with ten framework sections, and the document would then number its
+    sections in that wrong order. (The test above cannot catch this: with
+    single-digit fixtures, text order and numeric order agree.)"""
+    snap = Snapshot.build(
+        clauses=[
+            clause("BF-B-010", cat="Notices", sev=STANDARD,
+                   always_include=True, framework_section="1.10"),
+            clause("BF-B-002", cat="Order of Precedence", sev=STANDARD,
+                   always_include=True, framework_section="1.2"),
+            clause("BF-B-009", cat="Assignment", sev=STANDARD,
+                   always_include=True, framework_section="1.9"),
+            clause("BF-B-001", cat="Definitions", sev=STANDARD,
+                   always_include=True, framework_section="1.1"),
+        ],
+        taken_on=date(2026, 7, 25),
+    )
+    r = resolve(Manifest(vendor="N"), snap)
+    sections = [d.selected.framework_section for d in r.decisions if d.baseline]
+    assert sections == ["1.1", "1.2", "1.9", "1.10"], (
+        "framework sections are printing out of order — a reader walking the "
+        "contract meets §1.10 before §1.2")
+
+
 def test_a_lapsed_always_include_clause_gates_it_does_not_vanish(snap):
     """E4. If Definitions expires, the contract must not simply come out one
     section shorter with nothing said. It is a decision record, and a loud one."""

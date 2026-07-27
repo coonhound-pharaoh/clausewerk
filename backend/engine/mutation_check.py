@@ -60,6 +60,13 @@ MUTATIONS = [
         "test_baseline_clauses_are_not_offered_to_risks",
     ),
     (
+        "framework sections sort as text, so 1.10 precedes 1.2",
+        "resolution.py",
+        "            rows, key=lambda r: (r[0] != \"\", _section_key(r[0]), r[1])):",
+        "            rows, key=lambda r: (r[0], r[1])):",
+        "test_section_1_10_follows_1_9_not_1_1",
+    ),
+    (
         "the floor is not absolute",
         "resolution.py",
         "if nxt > ladder.floor_rung:",
