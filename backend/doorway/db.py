@@ -94,6 +94,18 @@ class Request:
         """Every row the person's role is allowed to see."""
         return self._cursor.execute(statement, params).fetchall()
 
+    def rows(self, statement: str, params: Sequence[Any] = ()) -> list[dict]:
+        """Every row the person's role is allowed to see, by column name.
+
+        The same rows as `all()`, labelled. Read endpoints answer an interface
+        rather than a caller who already knows the column order, and a list of
+        unlabelled tuples cannot be rendered without the interface holding a
+        second copy of the SELECT list — which would then drift from the first.
+        """
+        cursor = self._cursor.execute(statement, params)
+        columns = [column.name for column in cursor.description or ()]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
     def one(self, statement: str, params: Sequence[Any] = ()) -> tuple | None:
         """The first row, or None. None means the database returned nothing —
         which is not the same as a refusal, and callers must not render the two
