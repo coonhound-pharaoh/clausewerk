@@ -172,6 +172,31 @@ MUTATIONS = [
         "test_writes.py::test_a_rejection_needs_a_note",
     ),
 
+    # ── The same guarantee, in the other places it lives ─────────────────────
+    #
+    # The role-based-UI session's warning, in mirror image. Theirs was one
+    # pattern appearing several times in one file, so a check silently watched
+    # the wrong copy. Mine is one GUARANTEE living in several files — reads.py,
+    # writes.py and manifests.py each shape a refusal — where mutating only one
+    # leaves the others unwatched while the count still reads full marks.
+    (
+        "a read refusal is softened into an empty list",
+        "doorway/reads.py",
+        "    except psycopg.Error as error:\n"
+        "        refused: Refused = classify(error)\n"
+        "        return Answer(status=refused.status, body=refused.as_body())",
+        "    except psycopg.Error:\n"
+        '        return Answer(status=200, body={"rows": []})',
+        "test_reads.py::test_a_refusal_never_arrives_as_an_empty_list",
+    ),
+    (
+        "the engine's refusal is reworded on the way out",
+        "doorway/manifests.py",
+        '                    "reason": reasons[0],',
+        '                    "reason": "That category is not permitted.",',
+        "test_manifests.py::test_the_refusal_is_the_engine_s_own_words",
+    ),
+
     # ── The one nobody may ever add ──────────────────────────────────────────
     (
         'a refused write is retried "to make the demo work"',
