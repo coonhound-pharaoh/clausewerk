@@ -1641,6 +1641,76 @@ grant insert on cw.override_socialisation, cw.override_notified to cw_requester;
                     });`,
     expect: 'the deal is opened in the session person\'s name, with no field for it' },
 
+  // ════════════════════════════════════════════════════════════════════════
+  // The sharing act and the reading room (WP-U14 read models, 0016)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // THE HOLE THIS CLOSED. Before 0016 a viewer could read every signed contract
+  // in the system. This restores that exactly.
+  { suite: 'reading-room.test.mjs',
+    name: 'a viewer can read every signed agreement again',
+    find: `  or (cw.app_role() = 'viewer'
+      and cw.is_shared_with(agreement_id, cw.app_actor())));
+
+drop policy read_scoped on cw.executed_document;`,
+    repl: `  or cw.app_role() = 'viewer');
+
+drop policy read_scoped on cw.executed_document;`,
+    expect: 'before any share, a viewer sees NO signed agreement at all' },
+
+  // THE VIEW NOT INHERITING THE POLICY. The bug this file actually shipped
+  // with: a view runs with its OWNER's rights, so the scoping has to be in the
+  // view as well, and a comment claiming otherwise is a document promising a
+  // control the code does not enforce.
+  { suite: 'reading-room.test.mjs',
+    name: 'the reading room stops scoping itself and leans on the policy',
+    find: `where s.revoked_at is null
+  and (cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+       or (cw.app_role() = 'viewer' and s.shared_with = cw.app_actor())
+       or (cw.app_role() = 'requester' and cw.owns_agreement(s.agreement_id)));`,
+    repl: `where s.revoked_at is null;`,
+    expect: "an unshared viewer's reading room is empty, not refused" },
+
+  { suite: 'reading-room.test.mjs',
+    name: 'the clause view stops scoping itself',
+    find: `where cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+   or (cw.app_role() = 'viewer'
+       and cw.is_shared_with(e.agreement_id, cw.app_actor()))
+   or (cw.app_role() = 'requester' and cw.owns_agreement(e.agreement_id));`,
+    repl: `;`,
+    expect: "an unshared viewer's reading room is empty, not refused" },
+
+  { suite: 'reading-room.test.mjs',
+    name: 'a revoked share still opens the agreement',
+    find: `       and shared_with = p_person
+       and revoked_at is null)`,
+    repl: `       and shared_with = p_person)`,
+    expect: "revoking a share closes the viewer's access" },
+
+  { suite: 'reading-room.test.mjs',
+    name: 'a requester can share their own deal with anybody',
+    find: `create policy legal_shares on cw.agreement_share for insert
+  with check (cw.app_role() in ('legal_reviewer','legal_admin'));`,
+    repl: `create policy legal_shares on cw.agreement_share for insert
+  with check (cw.app_role() is not null);
+grant insert on cw.agreement_share to cw_requester;
+grant usage, select on sequence cw.agreement_share_share_id_seq to cw_requester;`,
+    expect: 'a requester cannot share their own deal with whoever they like' },
+
+  { suite: 'reading-room.test.mjs',
+    name: 'a share need not say why',
+    find: `  constraint a_purpose_is_not_blank check (length(btrim(purpose)) >= 5),`,
+    repl: `  constraint a_purpose_is_not_blank check (purpose is not null),`,
+    expect: 'a share must say why' },
+
+  { suite: 'reading-room.test.mjs',
+    name: 'a share can be deleted, taking the record with it',
+    find: `create trigger agreement_share_no_delete
+  before delete on cw.agreement_share
+  for each row execute function cw.share_no_delete();`,
+    repl: 'select 1;',
+    expect: 'the row survives — that they COULD see it does not stop being true' },
+
   { suite: 'override.test.mjs',
     name: 'a viewer sees every override request, told about it or not',
     find: `  or (cw.app_role() = 'viewer'

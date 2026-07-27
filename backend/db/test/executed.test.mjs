@@ -297,10 +297,53 @@ await test('a requester cannot declare a deal signed', async () => {
     values ('AG-005','2026-08-01','2026-09-01')`));
 });
 
-await test('a viewer can read a signed contract', async () => {
-  await db.exec(`reset role; select set_config('cw.role','viewer',false); set role cw_viewer;`);
-  const r = await one(`select count(*)::int n from cw.executed_document`);
-  assert(r.n > 0, 'the executed contract is the thing colleagues most need to read');
+await test('a viewer reads a signed contract ONLY once it is shared with them', async () => {
+  // THIS ASSERTION IS INVERTED FROM WHAT IT SHIPPED AS, and the reason is worth
+  // keeping. It used to read:
+  //
+  //     a viewer can read a signed contract
+  //     … assert(r.n > 0, 'the executed contract is the thing colleagues most
+  //                        need to read')
+  //
+  // which was true and was also the whole problem: a viewer could read EVERY
+  // signed contract in the system, not the ones they had been shown. ADR-0008
+  // added the role so a contract could be shown to somebody for socialisation
+  // without letting them change it, and the "shown to" half was never built —
+  // nothing anywhere recorded who had been shown what.
+  //
+  // 0016 builds it. The viewer's reach is now exactly "this share, this
+  // person", enforced in the policy rather than by a careful query.
+  await db.exec(`reset role; select set_config('cw.actor','outsider@cw',false);`);
+  await db.exec(`insert into cw.account (person,display_name,role,created_by)
+                 values ('outsider@cw','Out Sider','viewer','legal@cw')
+                 on conflict do nothing`);
+
+  await db.exec(`reset role; set role cw_viewer;`);
+  const before = await one(`select count(*)::int n from cw.executed_document`);
+  eq(before.n, 0,
+    'a viewer can read a signed contract nobody shared with them — which is '
+    + 'what this test used to assert was correct');
+
+  // Legal shares one, with a stated purpose.
+  await db.exec(`reset role; select set_config('cw.actor','legal@cw',false);
+                 set role cw_legal_admin;`);
+  await db.exec(`insert into cw.agreement_share (agreement_id, shared_with, purpose)
+                 values ('AG-001','outsider@cw','socialising the data-privacy terms')`);
+
+  await db.exec(`reset role; select set_config('cw.actor','outsider@cw',false);
+                 set role cw_viewer;`);
+  const after = await one(`select count(*)::int n from cw.executed_document
+                           where agreement_id = 'AG-001'`);
+  assert(after.n > 0,
+    'a viewer cannot read a contract that WAS shared with them, which makes the '
+    + 'reading room useless');
+
+  // And still nothing else.
+  const others = await one(`select count(*)::int n from cw.executed_document
+                            where agreement_id <> 'AG-001'`);
+  eq(others.n, 0, 'one share opened more than the agreement it named');
+
+  await db.exec(`reset role; select set_config('cw.actor','legal@cw',false);`);
 });
 
 // ════════════════════════════════════════════════════════════════════════════

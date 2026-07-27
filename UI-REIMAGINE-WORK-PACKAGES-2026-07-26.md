@@ -798,7 +798,14 @@ act→role table trued if any surface shifted an act's home.
 
 ---
 
-## WP-U14 · The read-only workspaces: Auditor and Viewer
+## WP-U14 · The read-only workspaces: Auditor and Viewer — **PAUSED; read models built**
+
+*Screens paused by owner decision 2026-07-26: the service is moving to Python and its endpoints do not
+serve HTTP until WP-P4. The database half is built now, because migrations are shared by both
+languages and none of it is wasted whichever way the service goes.*
+
+*Delivered: [](backend/db/migrations/0016_reading_room.sql) and
+[](backend/db/test/reading-room.test.mjs) — 22 tests, 7 mutations.*
 
 **Objective.** The two roles that change nothing get surfaces that prove it:
 the Auditor reads everything; the Viewer reads exactly what was shared.

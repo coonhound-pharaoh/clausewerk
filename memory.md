@@ -812,3 +812,40 @@ again, and prove it has forgotten who that was.
 overstatement — it described the setting we happened to use in our test harness,
 where it is the right setting, not a limit of the design. Both should be
 corrected to say the system assumes one identity per unit of work.
+
+---
+
+## 2026-07-26 · Python is the language the system thinks in
+
+**Decision.** From today, every new piece of the service — every endpoint, every
+rule, every check — is written in Python. JavaScript keeps one job: drawing the
+screens people look at. The database keeps the rules, as it always has.
+
+**Why now.** We had been building the same system twice without meaning to. The
+half that decides things — 4,604 lines of tested contract-checking logic — is
+Python. The half that answers the screens is JavaScript. The two halves cannot
+call each other, so the tested half currently has no caller at all. Every hour
+we kept adding to the JavaScript side, the bill for joining them went up.
+
+**What this costs.** The existing JavaScript service (52 endpoints, roughly 900
+lines) gets rewritten in Python and then deleted. That is real work, and it is
+work we would rather not do. It is still cheaper than the alternative, which is
+maintaining a permanent translation layer between the two halves forever.
+
+**What this does not touch.** The screens (2,701 lines) stay exactly as they
+are — they are already in the right language for their job. The database test
+suites (~4,000 lines) stay in JavaScript and stay green; they test the database,
+which behaves the same whoever is asking.
+
+**What it buys.** The contract engine finally gets a caller. That is the whole
+point: the tested half of the product starts doing its job.
+
+**The one thing that had to happen first.** A second session was still adding
+JavaScript endpoints for the remaining screens. Told, so the redo pile stops
+growing. Database migrations continue unchanged — both languages share them.
+
+**Where the work is written down.**
+[`PYTHON-REVISION-PLAN-2026-07-26.md`](PYTHON-REVISION-PLAN-2026-07-26.md) (the
+reasoning) and
+[`PYTHON-WORK-PACKAGES-2026-07-26.md`](PYTHON-WORK-PACKAGES-2026-07-26.md) (six
+packages, in order).
