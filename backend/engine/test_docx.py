@@ -710,6 +710,28 @@ def test_a_doctype_is_refused():
         parse_redlines(buf.getvalue())
 
 
+def test_a_doctype_in_utf_16_is_still_refused():
+    """The regression that moved the refusal into the parser. The old check
+    scanned the raw bytes for ASCII "<!DOCTYPE"; a document.xml written in
+    UTF-16 — an encoding the parser honours — carried its DOCTYPE straight
+    past that scan and parsed clean (reproduced before fixing). The fixture
+    asserts its own disguise still holds, so this test cannot quietly become
+    the ASCII test again."""
+    document = ('<?xml version="1.0" encoding="UTF-16"?>'
+                '<!DOCTYPE w:document [ <!ENTITY a "x"> ]>'
+                f'<w:document xmlns:w="{W}"><w:body/></w:document>'
+                ).encode("utf-16")
+    assert b"<!DOCTYPE" not in document, (
+        "the fixture no longer hides from an ASCII byte scan — it is not "
+        "testing the bypass any more")
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml", document)
+    with pytest.raises(NotADocx, match="DOCTYPE"):
+        parse_redlines(buf.getvalue())
+
+
 def test_an_ordinary_document_is_not_refused_by_any_of_this(built):
     """The control. Guards that reject real work are worse than no guards."""
     data, _ = built

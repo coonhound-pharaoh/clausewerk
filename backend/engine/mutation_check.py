@@ -348,9 +348,19 @@ MUTATIONS = [
     (
         "a DOCTYPE is accepted",
         "docx.py",
-        'if b"<!DOCTYPE" in raw:',
-        "if False:",
+        '        raise NotADocx("word/document.xml declares a DOCTYPE — refused")',
+        "        pass",
         "test_a_doctype_is_refused",
+    ),
+    # The same guard, attacked through its old blind spot. Two rows on one
+    # line of code is deliberate: the guarantee is "refused in ANY encoding",
+    # and each test must be the one that notices its own half.
+    (
+        "a DOCTYPE hides behind an encoding a byte scan does not speak",
+        "docx.py",
+        '        raise NotADocx("word/document.xml declares a DOCTYPE — refused")',
+        "        pass",
+        "test_a_doctype_in_utf_16_is_still_refused",
     ),
     # ── Real-world Word containers (E5) ──
     (

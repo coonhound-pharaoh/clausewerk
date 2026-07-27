@@ -212,6 +212,15 @@ class _BoundedDepthBuilder(ET.TreeBuilder):
         self._depth -= 1
         return super().end(tag)
 
+    def doctype(self, name, pubid, system):
+        # Refused HERE, after decoding, which is the only place the refusal is
+        # honest. The previous check scanned the raw bytes for b"<!DOCTYPE" —
+        # and a document.xml written in UTF-16, which the parser honours,
+        # carried its DOCTYPE straight past that scan (reproduced). The parser
+        # hands every doctype through this hook whatever the bytes looked
+        # like, so there is no encoding to hide behind.
+        raise NotADocx("word/document.xml declares a DOCTYPE — refused")
+
 
 def _read_member(z: zipfile.ZipFile, name: str) -> bytes:
     """Read one archive member with a hard ceiling on what comes out.
@@ -253,13 +262,14 @@ def _document_xml(data: bytes) -> ET.Element:
     # Defence in depth, not the load-bearing defence. expat 2.5.0 already blocks
     # classic entity expansion — billion-laughs measured at 0.26 s and quadratic
     # blowup at 0.02 s, both refused (Observed). Refusing a DOCTYPE outright
-    # costs nothing, so it stays. The premise "legitimate OOXML never carries a
-    # DOCTYPE" is `Inferred` from the ECMA-376 part definitions and from the
-    # samples to hand — it is NOT `Observed` against a corpus of real Word
-    # output, and should not be cited as though it were.
-    if b"<!DOCTYPE" in raw:
-        raise NotADocx("word/document.xml declares a DOCTYPE — refused")
-
+    # costs nothing, so it stays — but as a parser hook, not a byte scan: the
+    # scan for b"<!DOCTYPE" that used to sit here missed the same declaration
+    # written in UTF-16, which the parser then honoured (reproduced). The
+    # refusal lives in _BoundedDepthBuilder.doctype(), after decoding, where
+    # there is no encoding to hide behind. The premise "legitimate OOXML never
+    # carries a DOCTYPE" is `Inferred` from the ECMA-376 part definitions and
+    # from the samples to hand — it is NOT `Observed` against a corpus of real
+    # Word output, and should not be cited as though it were.
     try:
         return ET.fromstring(raw, ET.XMLParser(target=_BoundedDepthBuilder()))
     except ET.ParseError as exc:
