@@ -37,7 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from doorway import reads, writes
+from doorway import manifests, reads, writes
 from doorway.db import Database
 from doorway.identity import (
     Caller, NoEffectiveRole, NoSession, caller_for, identity_of, session_length,
@@ -122,6 +122,13 @@ class App:
 
         if key in writes.WRITES:
             answered = writes.answer(self._db, caller, key, body or {})
+            return Response(answered.status, answered.body)
+
+        # The contract engine's one connection to the outside, and the pattern
+        # every further one follows: adapt on this side, call the engine
+        # unchanged, pass its own words back out. See manifests.py.
+        if key == "POST /manifests/check":
+            answered = manifests.check(self._db, caller, body)
             return Response(answered.status, answered.body)
 
         return Response(404, {"error": "no such endpoint", "path": path})

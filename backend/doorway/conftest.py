@@ -41,9 +41,21 @@ import pytest
 
 from doorway.setup import OWNER_URL as DEFAULT_OWNER_URL, prepare
 
-# The database this suite owns. Separate from the one the service runs on, for
-# the reason in the docstring above.
-TEST_DATABASE = os.environ.get("CW_TEST_DATABASE", "clausewerk_doorway")
+# The database THIS RUN owns — one per process, not one per suite.
+#
+# Per-suite was the first fix and it was not enough. `npm run verify` runs this
+# very suite (`python -m pytest doorway`), so two people verifying at once are
+# two processes dropping and rebuilding the same schema, and they deadlock. The
+# process id is what makes a run's database its own.
+#
+# It is dropped at the end of the run. A killed run leaves one behind, so stale
+# ones with nobody connected are cleaned up at the start of the next.
+TEST_DATABASE = os.environ.get(
+    "CW_TEST_DATABASE", f"clausewerk_doorway_{os.getpid()}")
+
+# The prefix a stale database can be recognised by. Only ever used to clean up
+# databases this file created.
+TEST_DATABASE_PREFIX = "clausewerk_doorway_"
 
 
 def _with_database(url: str, name: str) -> str:
@@ -86,6 +98,45 @@ def _ensure_database_exists() -> None:
             "Or point CW_TEST_OWNER_URL at another PostgreSQL.",
             pytrace=False,
         )
+
+
+# NO AUTOMATIC CLEANUP OF OTHER RUNS' DATABASES, AND THAT IS THE SECOND ATTEMPT.
+#
+# The first version dropped any `clausewerk_doorway_*` database with nobody
+# connected to it, on the reasoning that a live run always holds a connection.
+# It does not: this suite closes its pool after every single test, so a healthy
+# run is unconnected for a moment between each one. A second run starting in that
+# gap deleted the first run's database out from under it, and the failure looked
+# exactly like the deadlock it was meant to prevent.
+#
+# A run that is killed now leaves its database behind. That is untidy and
+# harmless, and it is much the better failure: `drop database` is not a tidying
+# operation, it is a destructive one, and a guess about whether somebody else is
+# finished is not a good enough reason to run it.
+#
+#   drop the leftovers by hand:
+#     psql -c "select datname from pg_database where datname like 'clausewerk_doorway_%'"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _this_run_s_database():
+    """Build this run's database, and take it away again afterwards."""
+    _ensure_database_exists()
+    yield
+    if os.environ.get("CW_TEST_DATABASE"):
+        # Somebody named it deliberately; it is not ours to remove.
+        return
+    maintenance = _with_database(DEFAULT_OWNER_URL, "postgres")
+    try:
+        with psycopg.connect(maintenance, autocommit=True) as conn:
+            conn.execute(
+                "select pg_terminate_backend(pid) from pg_stat_activity "
+                "where datname = %s and pid <> pg_backend_pid()", (TEST_DATABASE,))
+            conn.execute(f'drop database if exists "{TEST_DATABASE}"')
+    except psycopg.Error:
+        # A database left behind is untidy; a run that fails while tidying up
+        # reports the wrong thing. The next run clears it.
+        pass
 
 
 @pytest.fixture

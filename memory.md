@@ -849,3 +849,149 @@ growing. Database migrations continue unchanged — both languages share them.
 reasoning) and
 [`PYTHON-WORK-PACKAGES-2026-07-26.md`](PYTHON-WORK-PACKAGES-2026-07-26.md) (six
 packages, in order).
+
+---
+
+## 2026-07-26 · The Administrator cannot read the clause library, and should
+
+**What we found.** You settled in decision U5 that the Administrator may *read*
+contract content while writing none of it and deciding nothing — and said in
+terms never to describe the role as content-blind. Against the clause library it
+currently is exactly that. The Administrator can read signed agreements, but has
+never been given the right to read the library of approved wording, the fallback
+ladders, or the health of either.
+
+**Why it happened.** The library was built long before the Administrator role
+existed, and the list of who may read it was never revisited when the role was
+created. Nothing was decided wrongly; a list was simply not updated.
+
+**Why we did not just fix it.** Two new consolidation views for the Legal admin's
+workspace landed today, and adding the Administrator to those would have closed
+the gap in the one place nobody would think to look — and would have made two
+convenience screens the Administrator's only window onto the library. That is a
+new permission wearing a convenience's clothes. The right fix is one line beside
+the original list, and it is a decision about the boundary of a role rather than
+a technical tidy-up, so it is yours.
+
+**What we need from you.** Confirm that "may read contract content" was meant to
+include the clause library and the fallback ladders, not only signed agreements.
+If yes, it is a small change. If no, then U5's wording should be narrowed to say
+so, because as written the two do not agree.
+
+---
+
+## 2026-07-26 · A test that cannot fail is not protection, and we found one
+
+**What happened.** Our rule is that every guarantee gets a deliberate attempt to
+break it, to prove the test guarding it actually notices. Writing those attempts
+for two new views, one of them refused to break: the thing the test claimed to
+protect turned out to be impossible in the first place, prevented by a rule
+written three years' worth of migrations earlier.
+
+**Why it matters more than it sounds.** The test still passed, and would have
+passed forever, looking exactly like protection. The only reason we know it was
+not is that we tried to break it and failed. A test nobody has ever seen fail is
+a claim, not evidence — and this is the second time that discipline has paid for
+itself this week.
+
+**What we did.** Kept the test, because it still tells a reader the right shape
+to expect, and wrote down beside it that the protection comes from somewhere
+else — including the note that if the older rule is ever relaxed, this is the
+place that needs a real guard. A missing safeguard and a forgotten one look
+identical six months later unless somebody says which it is.
+
+---
+
+## 2026-07-26 · A viewer could read every signed contract. Again.
+
+**What we found.** Six places where the system handed people contract
+information they had no right to. The worst two: anyone with a read-only account
+could list every signed contract in the business — counterparty, document name,
+document fingerprint — and could pull the list of which signed contracts are
+missing a signature or a completion certificate. That second one is a map of our
+weakest paperwork, and it was available to the most junior account we issue.
+
+Two others exposed the written justification a person gives when asking to
+override a legal finding. That is the most sensitive free text in the system:
+it is somebody explaining why a commercial deadline should beat a legal
+objection.
+
+**How it happened, in one sentence.** We had correctly locked the underlying
+records, but a "view" — a saved question the system answers — does not inherit
+those locks, and six saved questions had never been given locks of their own.
+
+**Why it recurred.** We closed exactly this hole last week on the reading room
+and wrote a long warning about it. The warning did not stop it, because the
+older saved questions were written years of work earlier and nothing pointed at
+them. We closed the front door and left the side door open.
+
+**What we did beyond fixing it.** Fixing the reported one and stopping would have
+left four. So we asked the database to list every saved question a read-only
+account can reach, and checked each. That is now a permanent test: it lists 21
+today, and it fails if anyone adds a twenty-second without recording why it is
+safe. The point is not the list — it is that adding one now forces somebody to
+ask the question that went unasked three times running.
+
+**The one we deliberately did not lock, and why it matters.** One of the six is
+read by the system itself, to decide whether a statement of work may depart from
+its master agreement. Locking it meant the system could no longer see the
+approval it was looking for, and it started refusing properly authorised work.
+The rule we took from it: a saved question the system consults to make a decision
+must answer the same way for everybody. Locking it turns a privacy control into
+a correctness fault — and it fails by refusing work that was properly approved,
+which is the expensive direction.
+
+**Where it came from.** The other session, porting the service to Python, checked
+what these saved questions returned rather than assuming, and reported the first
+one. Their report was specific enough to reproduce in a single pass. The other
+five were found by asking whether the first had siblings.
+
+**The habit worth keeping:** when you find a fault of this kind, the next move is
+to look for its siblings, not to fix it. One of six is not a fix.
+
+---
+
+## 2026-07-26 · The two halves of the product are now connected
+
+**What changed.** The contract engine — the tested half that actually decides
+things — has a caller for the first time. Until today it was 4,604 lines of
+working Python that nothing in the running system could reach.
+
+**Where the join is.** One check, deliberately: `check_manifest`, which asks
+whether every risk category in a manifest is one the library actually defines.
+A manifest naming a category nobody created is now refused by the engine,
+through the doorway, and the refusal is written into the audit record.
+
+**Why that check first, and why it matters commercially.** A language model asked
+to categorise a contract will occasionally invent a category. If an invented
+category reaches the rest of the engine, the report says "no clause available" —
+which reads, in the one report this product is prized for, as *a gap in our own
+library*. Legal would be sent to write a clause for a risk category that does
+not exist. Two very different faults:
+
+  · the model invented something        — a fault in the model's output
+  · we have no clause for that category — a fault in our library
+
+They go to different people, and one must never be able to wear the other's
+clothes.
+
+**The pattern every further connection follows.** Adapt on the doorway's side;
+never edit the engine. Pass the engine's own sentence back out unchanged, the
+same way the database's refusals are passed through unchanged. Record what
+happened. The engine is tested as it stands, and changing it to fit its first
+caller would move two things at once.
+
+**One decision worth recording on its own.** Every manifest check is written to
+the audit record, not only the refused ones. Recording only refusals made the
+permission model incoherent: reading the category list is open to everybody, so
+a viewer could submit a manifest and be told it was fine, then be refused with an
+unrelated message the moment the model happened to hallucinate. Two different
+answers to "may I use this", chosen by the model. Recording both puts the
+decision back in the database, where the audit chain's write permission settles
+it once. The record is better for it: what crossed the boundary and what the
+engine made of it is exactly what an auditor would want.
+
+**The boundary this does not cross.** The system checks that a category *exists*.
+Whether the library's content is any good — the right categories, the right
+clauses under them — belongs to the people who own the library. The system's job
+ends at making the gap visible and giving the responsible person somewhere to act.

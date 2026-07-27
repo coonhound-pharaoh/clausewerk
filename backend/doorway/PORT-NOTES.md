@@ -268,3 +268,28 @@ visible on screen rather than asserted in a test.
 
 The JavaScript service's 30 tests were re-run afterwards and all 30 pass, which
 is the check that the specification did not drift while the Python caught up.
+
+---
+
+## WP-P6 · Connecting the engine
+
+### 15 · One database per RUN, not per suite — **test harness, second attempt**
+
+Per-suite (note 9) was not enough. `npm run verify` runs this very suite, so two
+people verifying at once are two processes rebuilding the same schema. The
+database name now carries the process id.
+
+The first version of that fix also **deleted other runs' databases** — it looked
+for `clausewerk_doorway_*` with nobody connected, reasoning that a live run
+always holds a connection. It does not: this suite closes its pool after every
+test, so a healthy run is unconnected for a moment between each one. A second run
+starting in that gap destroyed the first one's database, and the failure looked
+exactly like the deadlock it was meant to prevent.
+
+The automatic cleanup is gone. A killed run leaves a database behind, which is
+untidy and harmless. `drop database` is not a tidying operation, and a guess
+about whether somebody else has finished is not a good enough reason to run it.
+
+Worth knowing when reading a failing run: **16 errors that look like broken
+migrations are almost always two suites at once.** A clean single run of this
+suite is 399 tests and about four minutes.
