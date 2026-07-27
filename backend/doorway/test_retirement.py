@@ -411,6 +411,64 @@ def test_concurrent_writes_by_two_people_never_cross_attribute(running):
                for row in record["rows"]), "nothing reached the chain to check"
 
 
+def test_the_chain_survives_people_acting_at_the_same_instant(running):
+    """The audit chain accepts concurrent writers, in order, and still verifies.
+
+    THIS TEST COULD NOT EXIST BEFORE 2026-07-26 and it did not pass when it was
+    first written. The old database allowed one connection, so nothing could hold
+    two writers open; on standard PostgreSQL this reproduced a real defect within
+    an hour — five of eight honest acts refused with a duplicate key, and, worse,
+    a chain built correctly by two people that `cw.audit_verify()` declared
+    tampered with.
+
+    The cause was not the advisory lock, which was held, and not the fork index,
+    which was handed a genuine fork. `seq` was a bigserial, and PostgreSQL fills a
+    column default BEFORE firing a BEFORE-ROW trigger — so sequence numbers were
+    handed out outside the lock while the appends were serialised inside it, and
+    "the highest seq" stopped meaning "the row appended last".
+
+    `0021_append_order_is_seq_order.sql` assigns `seq` inside the lock. This is
+    the test that proves it, because it is the only thing in the repository that
+    can: the JavaScript suites run on a single-connection database and cannot see
+    a race at all.
+    """
+    admin = signed_in(running, ADMIN)
+    rounds = 8
+
+    def act(n: int):
+        return admin.call("POST", "/api/accounts", {
+            "person": f"same-instant-{n}@clausewerk", "display_name": f"S{n}",
+            "unit": "Procurement", "role": "requester"})
+
+    with ThreadPoolExecutor(max_workers=rounds) as pool:
+        outcomes = [f.result() for f in [pool.submit(act, n) for n in range(rounds)]]
+
+    refused = [body for status, body in outcomes if status != 200]
+    assert not refused, (
+        f"{len(refused)} of {rounds} honest acts were refused because somebody "
+        f"else was quick: {refused[0]}"
+    )
+
+    _, record = signed_in(running, "t.imani@clausewerk").call("GET", "/api/record")
+    landed = [row for row in record["rows"]
+              if str(row["subject"]).startswith("same-instant-")]
+    assert len(landed) == rounds, (
+        f"{len(landed)} of {rounds} acts reached the chain")
+
+    # And the chain still adds up — the half that matters most. Before 0021 the
+    # rows above could link backwards in seq order, and the verifier, which walks
+    # by seq, reported an honestly built chain as tampered with. That is this
+    # project's own recorded failure class: the audit trail accusing an honest
+    # system.
+    status, checked = admin.call("POST", "/api/health-checks/chain")
+    assert status == 200, checked
+    broken = checked["rows"][0]["first_broken_seq"]
+    assert broken is None, (
+        f"the chain verifies as broken at seq {broken} after {rounds} people "
+        "acted at the same instant. Every one of those acts was honest."
+    )
+
+
 # ── The session's own clock ─────────────────────────────────────────────────
 
 

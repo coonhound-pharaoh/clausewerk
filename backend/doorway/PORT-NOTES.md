@@ -414,6 +414,31 @@ verification.
 **Whose it is:** the database's. The doorway must not retry — that is WP-P3's
 rule 2, and a retry here would be a governed act quietly performed twice. Nor
 should the index be loosened: it is the only thing standing between an
-unexplained duplicate and two futures for the chain. The fix belongs in the
-tail-read and the verifier, which both currently assume sequence order is append
-order.
+unexplained duplicate and two futures for the chain.
+
+**FIXED, and confirmed here because nothing else can confirm it.**
+`0021_append_order_is_seq_order.sql` assigns `seq` **inside** the advisory lock
+rather than letting the `bigserial` default assign it outside. Sequence order
+becomes append order again by construction, so the tail-read, `audit_verify()`,
+the checkpoint height and the anchor all keep meaning what they already meant —
+a smaller change than rewriting the verifier to walk links, which was the other
+option.
+
+Re-measured against `0021`, on the same reproductions that failed:
+
+| | before | after |
+|---|---|---|
+| 8 writers held at a barrier, then released | 5 of 8 refused | **0 refused** |
+| 6 concurrent writers | ~half refused | **0 refused** |
+| rows chained to a higher seq | present | **0** |
+| `cw.audit_verify()` | broken at seq 13 | **clean** |
+| 96 acts, 8 writers × 12 rounds | — | **0 failures, 323 governed acts/second** |
+
+The throughput is the property being accepted rather than a problem: appends to a
+hash chain cannot be parallel and still be a chain. 323 acts per second is not a
+number anybody needs to plan around.
+
+`doorway/test_retirement.py::test_the_chain_survives_people_acting_at_the_same_instant`
+now holds it permanently, and asserts both halves — every act lands, and the
+chain still verifies. It is the only test in the repository that can see a race
+at all.
