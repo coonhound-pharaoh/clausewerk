@@ -216,11 +216,17 @@ function HealthPane() {
         tiles above show them differently.
       </div>
 
-      {/* ── Retention: visible here, actioned by Legal ─────────────────── */}
+      {/* ── Retention: visible here, and yours to action ───────────────────
+          Owner decision U9 (0022) moved destruction to the Administrator and
+          REVOKED Legal admin's right rather than sharing it. This copy said
+          "Legal admin's recorded act" until 2026-07-27 — telling the one
+          person who can act that they cannot, which is exactly the mistake
+          0022 was written to stop. No screen performs the act yet; what is
+          corrected here is who it belongs to. */}
       <div className="mt-8">
         <PanelHead
           title="Retention coming due"
-          sub="You can see what is due. Destroying it is Legal admin's recorded act."
+          sub="You can see what is due. Destroying it is your own recorded act — no screen offers it yet."
         />
         {due.status === 'failed' ? <LoadFailed reason={due.reason} /> : (
           <WaitingList
@@ -251,19 +257,19 @@ function HealthPane() {
                       });
                       if (!n.ok) setError(n.reason);
                     }}
-                  >nudge Legal</button>
+                  >record a reminder</button>
                 </>
               ),
             }))}
             empty={<Empty kicker="retention" line="Nothing is past its retention date."
-                          sub="When something is, it appears here for Legal admin to act on." />}
+                          sub="When something is, it appears here for you to act on." />}
           />
         )}
         <div className="caption mt-2">
-          <strong>Nudging records that Legal was told.</strong> It changes no
-          retention state and destroys nothing — you hold no privilege to do
-          either, so this button could not become a delete even if somebody
-          rewired it.
+          <strong>The reminder records that this was seen.</strong> It changes no
+          retention state and destroys nothing — nothing here destroys anything
+          on a timer, by decision, so this button could not become a delete even
+          if somebody rewired it.
         </div>
       </div>
     </div>

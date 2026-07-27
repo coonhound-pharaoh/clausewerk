@@ -1206,6 +1206,33 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     repl: `.acting-role { color: #7dd3fc;`,
     expect: 'v4.css adds no new colour and no new typeface' },
 
+  // A SCREEN READING A FIELD ITS ENDPOINT DOES NOT RETURN. WP-U11 found this
+  // in the endpoint's own statement; it recurred one layer up, in the desk
+  // that reads the rows. `undefined.trim()` in a component body blanks the
+  // whole workspace, and the seeded system has no tickets to reveal it.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the review desk reads a ticket field again',
+    find: `  const edited = approved.trim() !== ticket.proposed_text.trim();`,
+    repl: `  const edited = approved.trim() !== (ticket.invented_column ?? '').trim();`,
+    expect: 'every field the review desk reads is one the endpoint returns' },
+
+  // A FAILED FINDINGS READ RENDERING AS "NO FINDINGS" — on the one screen
+  // whose whole purpose is deciding each finding on its own.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the override surface swallows a failed findings read',
+    find: `  if (findings.status === 'failed') return <LoadFailed reason={findings.reason} />;`,
+    repl: ``,
+    expect: 'the override surface says it could not ask, rather than showing nothing' },
+
+  // REVOKING THE GRANT THAT CONFERS NOTHING. Two live grants is a normal
+  // state, and effective_role confers the newest — so revoking the oldest
+  // succeeds, closes the dialog, and leaves the person's access untouched.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'revoke targets the oldest live grant instead of the newest',
+    find: `    return live.length ? live[0].grant_id : null;`,
+    repl: `    return live.length ? live[live.length - 1].grant_id : null;`,
+    expect: 'revoke targets the grant that actually confers access' },
+
   // ════════════════════════════════════════════════════════════════════════
   // The people console (WP-U08)
   // ════════════════════════════════════════════════════════════════════════

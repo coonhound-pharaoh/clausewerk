@@ -445,9 +445,14 @@ WRITES: dict[str, Write] = {
     # statement with "could not determine data type" — which reaches the console
     # as a refusal and reads like a permission problem.
     "POST /retention/nudge": Write(
+        # The reminder names the ADMINISTRATOR, per owner decision U9 (0022),
+        # which moved destruction from legal_admin and revoked legal_admin's
+        # right rather than sharing it. This said "legal_admin's act" until
+        # 2026-07-27 — writing a sentence that was false since 0022 into an
+        # append-only chain, once per nudge, permanently.
         sql="""select cw.audit('retention_nudged', %(agreement_id)s,
          jsonb_build_object('note', %(note)s::text,
-                            'reminder', 'destruction is legal_admin''s act'))""",
+                            'reminder', 'destruction is the administrator''s act (U9)'))""",
         rule="insert on cw.audit_event only — the administrator holds no write on "
              "cw.agreement_retention, so a nudge cannot become a destruction",
         fields=(Field("agreement_id"), Field("note", required=False)),

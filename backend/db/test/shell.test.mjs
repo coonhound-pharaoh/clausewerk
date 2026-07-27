@@ -363,6 +363,28 @@ await test('revoke says next request, and does not promise instant lockout', asy
     'the revoke dialog promises an immediate lockout the service does not deliver');
 });
 
+await test('revoke targets the grant that actually confers access', async () => {
+  // cw.effective_role confers the NEWEST live grant (0013: "order by
+  // l.person, l.acted_at desc, l.grant_id desc"), and /access-history arrives
+  // newest-first. Taking the last element took the OLDEST live grant — and
+  // two live grants is a normal state, because granting a second role does
+  // not revoke the first. The revoke then succeeded, the dialog closed, and
+  // the person's effective role was untouched: access the administrator
+  // believed removed was still live, with the row still reading "effective".
+  const fn = stripComments(/const liveGrantFor[\s\S]*?\n  \};/.exec(consoleSrc())[0]);
+  assert(!/live\[live\.length - 1\]/.test(fn),
+    'revoke takes the OLDEST live grant while effective_role confers the '
+    + 'newest — the revocation lands on a grant that confers nothing');
+  assert(/live\[0\]/.test(fn),
+    'revoke no longer names the newest live grant');
+  // And it must not offer the button before it can name a grant: posting a
+  // null grant_id produces a refusal about a missing field, when the truth is
+  // the screen had not loaded the history yet.
+  assert(/history\.status !== 'loaded'/.test(fn),
+    'liveGrantFor reads the history without checking it loaded, so a slow or '
+    + 'failed read makes revoke post a null grant');
+});
+
 await test('the revoke reason is required by the screen, not just by the database', async () => {
   const dialog = /function RevokeDialog[\s\S]*?\n\}/.exec(consoleSrc())[0];
   assert(/disabled=\{busy \|\| !reason\.trim\(\)\}/.test(dialog),
@@ -496,8 +518,16 @@ await test('never-ran renders as its own thing, not as pass or fail', async () =
 
 await test('the nudge notifies and cannot destroy', async () => {
   const src = restSrc();
-  assert(/nudge Legal/.test(src), 'the nudge action is gone');
-  assert(/API\.nudgeRetention/.test(src), 'the nudge calls something else');
+  // Anchored on the CALL, not on the button's words. This asserted the literal
+  // string "nudge Legal" — display copy — and so failed on 2026-07-27 when the
+  // copy was corrected to stop naming Legal as the destroying authority, which
+  // owner decision U9 had moved to the Administrator months of work earlier.
+  // The test was pinning a sentence that had become false. Fifth time an
+  // assertion on user-facing prose has fought a correct change; the property
+  // here is "the action exists and calls the nudge", nothing about its label.
+  assert(/API\.nudgeRetention/.test(src), 'the nudge action is gone');
+  assert(/data-testid={`nudge-\$\{r\.agreement_id\}`}/.test(src),
+    'the nudge control lost the handle its test hangs on');
   // What the pane CALLS, not what it says. Matching on the words "destroy" or
   // "delete" fails on the pane's own copy explaining that it destroys nothing —
   // a check that cannot tell a warning from the thing it warns about punishes
@@ -651,6 +681,40 @@ await test('the justification is rendered in the established idiom', async () =>
   assert(/“/.test(fn) && /var\(--accent\)/.test(fn),
     'the human justification is not wrapped in the oversized teal quotation '
     + 'marks the visual language uses for exactly this');
+});
+
+await test('every field the review desk reads is one the endpoint returns', async () => {
+  // WP-U11's lesson, one layer up. That package found /waiting/tickets naming
+  // three columns cw.review_ticket does not have; nobody noticed because the
+  // seeded system had no tickets. The desk then read `proposed_text` off rows
+  // the endpoint did not select — `undefined.trim()` in the component body, so
+  // opening ANY ticket blanked the whole workspace. Checked against the
+  // statement rather than by rendering, because there is no DOM here.
+  const desk = stripComments(/function TicketDesk[\s\S]*?\n\}/.exec(revSrc())[0]);
+  const reads = new Set([...desk.matchAll(/ticket\.([a-z_]+)/g)].map((m) => m[1]));
+  assert(reads.size, 'the desk reads no ticket fields at all — check this regex');
+
+  const sql = /"GET \/waiting\/tickets": Read\(\s*sql="""([\s\S]*?)"""/
+    .exec(readFileSync(join(HERE, '..', '..', 'doorway', 'reads.py'), 'utf8'))[1];
+  const selected = sql.slice(0, sql.toLowerCase().indexOf('from'));
+  for (const field of reads) {
+    assert(new RegExp(`\\b${field}\\b`).test(selected),
+      `the review desk reads ticket.${field}, which GET /waiting/tickets does `
+      + 'not select — opening a ticket crashes the workspace');
+  }
+});
+
+await test('the override surface says it could not ask, rather than showing nothing', async () => {
+  // `(findings.rows ?? [])` turns a FAILED read into an empty list, so a
+  // request would render "Each finding, decided on its own" with nothing
+  // beneath it. On the one screen whose entire purpose is deciding each
+  // finding, "we could not ask" must not wear the clothes of "nothing here".
+  const fn = stripComments(/function OverrideDecisions[\s\S]*?\n\}\n/.exec(revSrc())[0]);
+  for (const pane of ['findings', 'notified']) {
+    assert(new RegExp(`${pane}\\.status === 'failed'`).test(fn),
+      `a failed ${pane} read renders as an empty list — a refusal is not an `
+      + 'empty result');
+  }
 });
 
 await test('the reviewer is not offered acts that are not theirs', async () => {

@@ -215,6 +215,15 @@ function OverrideDecisions({ me, onError }) {
 
   if (requests.status === 'loading') return <Loading />;
   if (requests.status === 'failed') return <LoadFailed reason={requests.reason} />;
+  // The findings and the socialisation list are checked too, and this is not
+  // belt-and-braces. `(findings.rows ?? [])` turns a FAILED read into an empty
+  // list, so a request would render "Each finding, decided on its own" with
+  // nothing under it — "we could not ask" wearing the clothes of "there is
+  // nothing here", on the one screen where the whole point is deciding each
+  // finding. A refusal is not an empty list, here as everywhere.
+  if (findings.status === 'failed') return <LoadFailed reason={findings.reason} />;
+  if (notified.status === 'failed') return <LoadFailed reason={notified.reason} />;
+  if (findings.status === 'loading' || notified.status === 'loading') return <Loading />;
 
   const open = requests.rows.filter((r) => r.state === 'socialised');
   const reload = () => { requests.reload(); findings.reload(); notified.reload(); };

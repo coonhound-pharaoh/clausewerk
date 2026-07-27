@@ -220,7 +220,15 @@ function OpenDeal({ deal, me, onBack }) {
           title="Override requests"
           sub="Asking is recorded. Being allowed is a separate thing, and Legal's."
         />
-        {mine.length === 0 ? (
+        {overrides.status === 'failed' ? (
+          <LoadFailed reason={overrides.reason} />
+        ) : findings.status === 'failed' ? (
+          /* Said plainly rather than rendered as a request with no findings
+             under it. `(findings.rows ?? [])` turns a failed read into an
+             empty list, and "we could not ask" must never wear the clothes of
+             "there is nothing here". */
+          <LoadFailed reason={findings.reason} />
+        ) : mine.length === 0 ? (
           <Empty
             kicker="overrides"
             line="You have not asked for an override on this deal."

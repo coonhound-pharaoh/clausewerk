@@ -97,10 +97,12 @@ READS: dict[str, Read] = {
     # — the same check this port carries over as `test_reads.py`.
     "GET /waiting/tickets": Read(
         sql="""select ticket_id, agreement_id, category_key, severity, reason_code,
-                 provenance_badge, state, opened_by, created_at
+                 proposed_text, provenance_badge, state, opened_by, created_at
           from cw.review_ticket where state = 'pending'
           order by created_at""",
-        rule="cw.review_ticket read_scoped policy",
+        rule="cw.review_ticket read_scoped policy. proposed_text is here because "
+             "the review desk adjudicates it — the desk crashed without it, which "
+             "is WP-U11's column lesson recurring one layer up",
     ),
 
     # The countersign queue. Read by everyone; only a Legal admin can act on it.
@@ -257,7 +259,8 @@ READS: dict[str, Read] = {
         sql="""select agreement_id, retention_until, under_hold, matters
           from cw.retention_due order by retention_until""",
         rule="cw.retention_due, granted to administrator — due-ness and identity, "
-             "never agreement bodies. Destruction stays legal_admin's act",
+             "never agreement bodies. Destruction is the administrator's own act "
+             "(owner decision U9, 0022; revoked from legal_admin, not shared)",
     ),
 
     # The auditor's chain explorer. Scoped by cw.audit_event's own policy: an

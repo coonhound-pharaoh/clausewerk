@@ -300,12 +300,20 @@ function PeopleAndAccessConsole({ me }) {
   // The grant row a person's access hangs on, needed to revoke it. Taken from
   // the access history rather than held on the account, because the grant is
   // the thing being revoked and the account is not.
+  //
+  // NEWEST live grant, deliberately, because that is the one cw.effective_role
+  // confers (0013: newest wins). The history arrives newest-first, and this
+  // used to take the LAST element — the OLDEST live grant. With two live
+  // grants (a normal state: granting a second role does not revoke the first)
+  // the revoke succeeded, the dialog closed, and the person's effective role
+  // was untouched: access the administrator believed removed was still live.
   const liveGrantFor = (person) => {
+    if (history.status !== 'loaded') return null;
     const acts = history.rows.filter((g) => g.person === person);
     const granted = acts.filter((g) => g.action === 'granted');
     const revoked = new Set(acts.filter((g) => g.action === 'revoked').map((g) => g.grant_ref));
     const live = granted.filter((g) => !revoked.has(g.grant_id));
-    return live.length ? live[live.length - 1].grant_id : null;
+    return live.length ? live[0].grant_id : null;
   };
 
   return (
@@ -375,8 +383,13 @@ function PeopleAndAccessConsole({ me }) {
                 <span className="waiting-age">
                   {p.last_act_at ? since(p.last_act_at) : '—'}
                 </span>
+                {/* No revoke button until the access history has actually
+                    loaded. Without the history there is no grant to name, and
+                    the button posted a null one — a baffling refusal about a
+                    missing field, when the truth is the screen could not ask. */}
                 {me.role === 'administrator' && p.state === 'active' && p.effective_role
-                  && p.person !== me.person && (
+                  && p.person !== me.person && history.status === 'loaded'
+                  && liveGrantFor(p.person) && (
                   <button className="btn btn-sm"
                           onClick={() => setRevoking({ person: p.person, grantId: liveGrantFor(p.person) })}>
                     revoke
