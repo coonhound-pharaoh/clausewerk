@@ -167,6 +167,21 @@ def test_every_read_names_the_rule_that_decides_who_sees_it(key: str):
     )
 
 
+@pytest.mark.parametrize("key", sorted(READS))
+def test_no_read_is_a_write_in_disguise(key: str):
+    """A GET that changes something turns a link into an action, and a browser
+    prefetching links would then perform it. Carried over from the JavaScript
+    suite (`db/test/endpoints.test.mjs`), which is where this check was written."""
+    assert key.startswith("GET "), f"{key} is registered as a read but is not a GET"
+
+    mutating = re.findall(
+        r"\b(insert|update|delete|truncate|create|drop|alter|grant|revoke)\b",
+        READS[key].sql, flags=re.IGNORECASE)
+    assert not mutating, (
+        f"{key} is served as a read but its statement contains {mutating}"
+    )
+
+
 # ── 3. Every statement runs against the real schema ─────────────────────────
 
 
@@ -291,7 +306,77 @@ def test_an_unknown_read_is_not_reported_as_a_refusal(people, db: Database):
     assert shaped.body.get("error") != "refused"
 
 
-# ── 5. No permission logic arrived in the Python ────────────────────────────
+# ── 5. A view does not inherit the rules underneath it ──────────────────────
+
+
+@pytest.fixture
+def two_requesters_and_a_viewer(people, db: Database):
+    """Two requesters with an override request each, and a viewer told about
+    neither. The smallest arrangement in which "sees their own" means anything."""
+    with psycopg.connect(OWNER_URL, autocommit=True) as owner:
+        owner.execute(
+            "insert into cw.account (person,display_name,unit,role,created_by) "
+            "values ('ben@clausewerk','Ben Buyer','Procurement','requester','admin@clausewerk'),"
+            "       ('sam@clausewerk','Sam Supplier','Supplier','viewer','admin@clausewerk')")
+        owner.execute(
+            "insert into cw.role_grant (action,person,role,acted_by,reason) "
+            "values ('granted','ben@clausewerk','requester','admin@clausewerk','x'),"
+            "       ('granted','sam@clausewerk','viewer','admin@clausewerk','x')")
+        owner.execute("insert into cw.category (key,label,short) values ('data','Data Privacy','DP')")
+        owner.execute("insert into cw.agreement (agreement_id,counterparty,requester) "
+                      "values ('AG-1','Northwind','rita@clausewerk')")
+        owner.execute("insert into cw.snapshot (snapshot_id) values (%s)", ("1" * 64,))
+        owner.execute("insert into cw.ruleset (ruleset_id) values (%s)", ("2" * 64,))
+        for n, who in ((1, "rita@clausewerk"), (2, "ben@clausewerk")):
+            owner.execute(
+                "insert into cw.run (run_id,agreement_id,vendor,manifest,manifest_source,"
+                "snapshot_id,ruleset_id,result_hash,engine_version,gate_open,created_by) "
+                "values (%s,'AG-1','Northwind','{}','manual',%s,%s,%s,'1.0.0',false,%s)",
+                (f"RUN-{n}", "1" * 64, "2" * 64, str(n) * 64, who))
+            owner.execute(
+                "insert into cw.override_request (run_id,agreement_id,requested_by,justification) "
+                "values (%s,'AG-1',%s,'a justification long enough to clear the floor')",
+                (f"RUN-{n}", who))
+    return db
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="cw.override_status has no scoping of its own and runs with its "
+           "owner's rights, so it hands every row to anyone granted select on "
+           "it. Found 2026-07-26 during WP-P2. The fix is a WHERE clause in the "
+           "view, in the same words as read_scoped — the pattern already used in "
+           "0017_reading_room.sql. Owned by the schema, not the doorway. When "
+           "this test starts FAILING, the leak is fixed: delete the xfail.",
+)
+def test_a_requester_sees_only_their_own_overrides(two_requesters_and_a_viewer, db):
+    """GET /overrides claims "a requester sees their own". This is that claim."""
+    rows = run(db, REQUESTER, "GET /overrides")
+    others = [r["requested_by"] for r in rows if r["requested_by"] != REQUESTER.person]
+    assert not others, (
+        f"GET /overrides handed a requester {len(others)} other people's override "
+        f"request(s): {others}. The endpoint's own note says they see their own."
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="same view, same cause. Recorded separately because this is the "
+           "sharper edge: ADR-0008 created the viewer role precisely so a "
+           "contract could be shown to somebody without giving them a way in.",
+)
+def test_a_viewer_sees_only_the_overrides_they_were_told_about(
+    two_requesters_and_a_viewer, db
+):
+    viewer = Caller(person="sam@clausewerk", role="viewer")
+    rows = run(db, viewer, "GET /overrides")
+    assert rows == [], (
+        f"GET /overrides handed a viewer who was notified about nothing "
+        f"{len(rows)} override request(s), justification text included"
+    )
+
+
+# ── 6. No permission logic arrived in the Python ────────────────────────────
 
 
 def executable_source(path: Path) -> str:

@@ -69,7 +69,52 @@ second thing to drift.
 
 No behaviour change: same rows, same column names, same order.
 
-### 4 · Nothing else
+### 4 · `GET /overrides` shows every requester's overrides to everybody — **schema, confirmed, open**
+
+Not a port difference. It is present in both languages, and it is the most
+serious thing this package found.
+
+`cw.override_status` is a view over `cw.override_request`. A PostgreSQL view runs
+with its **owner's** rights, and the owner is exempt from row-level security — so
+the view hands back every row regardless of the `read_scoped` policy underneath
+it. Select on the view is granted to all six roles.
+
+Observed, on a seeded database, not argued:
+
+| asked by | `cw.override_request` (policy applies) | `cw.override_status` (the view) |
+|---|---|---|
+| a requester, owner of 1 of 2 requests | 1 | **2** |
+| a viewer, told about nothing | 0 | **2**, justification text included |
+
+The viewer case is the sharp one. ADR-0008 created that role precisely so a
+contract could be shown to somebody without giving them a way in.
+
+The endpoint's own rule note claims "a requester sees their own, Legal and Audit
+see all, a viewer sees only what they were told about". That sentence is
+currently false, which makes it worse than no note at all.
+
+**Where the fix belongs:** the view, in `db/migrations/`, not the doorway. Adding
+a `WHERE` to the endpoint would be exactly the second copy of the permission
+model this whole layer exists to avoid. `security_invoker = true` is the obvious
+fix and is the wrong one — it evaluates as the caller, who then needs SELECT on
+every joined table, and a viewer holds none. The scoping goes in the view's own
+`WHERE` clause in the same words as the policy, which is the pattern
+`0017_reading_room.sql` already uses.
+
+**How it is held open:** two strict-xfail tests in `test_reads.py`. They pass
+while the leak exists and **fail the moment it is fixed**, so nobody has to
+remember to come back and delete them.
+
+**How it was found:** the role-based-UI session warned that a view does not
+inherit the policies underneath it. Twelve of the 25 reads point at views over
+protected tables; of those, only three sit over a table whose read policy scopes
+by PERSON rather than by role, and only one of those three is granted to roles
+that the scoping was meant to hold back. `cw.person_activity` and
+`cw.review_quality` are granted only to roles that already read the whole chain
+or the whole queue, so bypassing the per-person scoping gives them nothing they
+were not entitled to. One real leak, checked rather than assumed.
+
+### 5 · Nothing else
 
 No behaviour difference was found in the other 24 endpoints, and no permission
 logic was added on either side. There is not one role comparison in
