@@ -61,6 +61,41 @@ class ConflictRule:
             # Would match every contract and block everything.
             raise RuleGrammarError(f"{self.ref}: predicate is empty")
 
+        # The SHAPE of each value, mirroring 0004's predicate_grammar constraint
+        # — the grammar is enforced in both layers on purpose (CLA §4A.4), and
+        # until this check existed the two layers disagreed: 0004 checked
+        # shapes, this checked keys, and the migration carries a note saying
+        # so. Shape is not pedantry here. A string where a list belongs is
+        # iterated character by character and never matches — a HIGH rule that
+        # silently fails OPEN — and an empty list holds vacuously, a rule that
+        # fires on every contract in the system. Both are wrong quietly, in
+        # opposite directions, which is the worst combination.
+        for key in ("all_present", "none_present"):
+            if key not in self.predicate:
+                continue
+            tags = self.predicate[key]
+            if isinstance(tags, str) or not isinstance(tags, (list, tuple)):
+                raise RuleGrammarError(
+                    f"{self.ref}: {key} must be a list of tags, not "
+                    f"{type(tags).__name__}"
+                )
+            if not tags:
+                raise RuleGrammarError(
+                    f"{self.ref}: {key} is empty — a rule that asks nothing "
+                    f"fires on everything"
+                )
+            if not all(isinstance(t, str) and t.strip() for t in tags):
+                raise RuleGrammarError(
+                    f"{self.ref}: {key} must contain only non-empty tag strings"
+                )
+        if "conflicting_values" in self.predicate:
+            ns = self.predicate["conflicting_values"]
+            if not isinstance(ns, str) or not ns.strip():
+                raise RuleGrammarError(
+                    f"{self.ref}: conflicting_values must name one tag "
+                    f"namespace, as a non-empty string"
+                )
+
 
 @dataclass(frozen=True)
 class Finding:

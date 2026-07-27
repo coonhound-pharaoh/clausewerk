@@ -90,12 +90,11 @@ create table cw.conflict_rule (
     -- contract in the system — which is exactly the outcome the "at least one
     -- primitive" clause exists to prevent, arriving through a different door.
     --
-    -- NOT YET MATCHED IN THE ENGINE. CLA §4A.4 says the grammar is enforced in
-    -- both layers on purpose, and `validation.py.__post_init__` still checks
-    -- only that the predicate dictionary is non-empty, never that its values
-    -- are. Anything READ FROM THIS TABLE is now safe; a predicate built in
-    -- Python from a fixture is not. Recorded rather than fixed here because
-    -- validation.py belongs to another package.
+    -- MATCHED IN THE ENGINE since 2026-07-27. CLA §4A.4 says the grammar is
+    -- enforced in both layers on purpose, and `validation.py.__post_init__`
+    -- now mirrors every conjunct below — the value shapes and the emptiness
+    -- checks both — so a predicate built in Python from a fixture is refused
+    -- the same way a row in this table is. Its own mutation checks watch it.
     and (not predicate ? 'all_present'
          or jsonb_array_length(predicate->'all_present') > 0)
     and (not predicate ? 'none_present'

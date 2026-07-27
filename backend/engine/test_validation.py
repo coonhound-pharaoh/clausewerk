@@ -70,6 +70,42 @@ def test_empty_predicate_is_refused():
         ConflictRule("XX-002", 1, "n", HIGH, "t", "d", {}, "R")
 
 
+def test_a_string_where_a_list_belongs_is_refused():
+    """{"all_present": "data:regulated"} iterates CHARACTERS: no single letter
+    is ever a tag, so the rule never fires — a HIGH gate silently failing
+    open. The database refuses this shape (0004's predicate_grammar); the
+    engine must refuse it identically, or a rule built in Python behaves
+    differently from the same rule read back from the table. The migration
+    carried a note naming this exact gap; this closes it."""
+    for key in ("all_present", "none_present"):
+        with pytest.raises(RuleGrammarError, match="list"):
+            ConflictRule("XX-003", 1, "n", HIGH, "t", "d",
+                         {key: "data:regulated"}, "R")
+
+
+def test_a_primitive_that_asks_nothing_is_refused():
+    """The three empty forms each fire on EVERY contract (0004, WP-23b): an
+    empty tag list holds vacuously, an empty namespace is skipped — and an
+    empty tuple of refs counts as the rule firing."""
+    for predicate in ({"all_present": []}, {"none_present": []},
+                      {"conflicting_values": ""}, {"conflicting_values": "  "}):
+        with pytest.raises(RuleGrammarError):
+            ConflictRule("XX-004", 1, "n", HIGH, "t", "d", predicate, "R")
+
+
+def test_a_namespace_must_be_one_string_not_a_list():
+    with pytest.raises(RuleGrammarError, match="namespace"):
+        ConflictRule("XX-005", 1, "n", HIGH, "t", "d",
+                     {"conflicting_values": ["jurisdiction"]}, "R")
+
+
+def test_a_tag_list_must_hold_real_tags():
+    for tags in (["data:regulated", ""], ["data:regulated", 7]):
+        with pytest.raises(RuleGrammarError, match="non-empty tag strings"):
+            ConflictRule("XX-006", 1, "n", HIGH, "t", "d",
+                         {"all_present": tags}, "R")
+
+
 def test_the_grammar_expresses_every_documented_rule():
     for r in (GOVERNING_LAW, LIABILITY, SLA_EXIT, REGULATED_DATA):
         assert set(r.predicate) <= {"all_present", "none_present", "conflicting_values"}

@@ -134,6 +134,20 @@ MUTATIONS = [
         "test_unknown_predicate_key_is_refused",
     ),
     (
+        "a predicate's shape goes unchecked, only its keys",
+        "validation.py",
+        '        for key in ("all_present", "none_present"):',
+        "        for key in ():",
+        "test_a_string_where_a_list_belongs_is_refused",
+    ),
+    (
+        "an empty namespace slips the grammar and fires on everything",
+        "validation.py",
+        '        if "conflicting_values" in self.predicate:',
+        "        if False:",
+        "test_a_namespace_must_be_one_string_not_a_list",
+    ),
+    (
         "tags are not pinned into the snapshot",
         "snapshot.py",
         '"tags": sorted(c.tags),',
