@@ -79,10 +79,17 @@ class App:
                 "reason": "no active account with an effective role for that person",
             })
 
-        issued = self._sessions.issue(who["person"], session_length(self._db))
+        length = session_length(self._db)
+        issued = self._sessions.issue(who["person"], length)
         return Response(200, {
             "token": issued.token,
-            "expiresAt": issued.expires_at,
+            # Seconds from now, deliberately NOT a timestamp. The session
+            # clock is the service's own monotonic clock, whose zero point is
+            # arbitrary — the old field exported that raw value under the
+            # name "expiresAt", a "timestamp" of roughly January 1970. No
+            # screen consumed it yet, which is exactly why no test caught it;
+            # the first one to render it would have misbehaved silently.
+            "expiresInSeconds": length,
             "person": who["person"],
             "role": who["role"],
             "display_name": who["display_name"],

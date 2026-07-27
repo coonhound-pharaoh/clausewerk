@@ -119,6 +119,34 @@ def test_all_six_people_sign_in_and_get_the_role_the_database_says(running):
         assert body["token"]
 
 
+def test_the_sign_in_reply_says_how_long_not_when(running):
+    """The service's session clock is a stopwatch, not a calendar: its zero
+    point is arbitrary. The reply used to export the raw stopwatch reading
+    under the name "expiresAt" — a "timestamp" of roughly January 1970. No
+    screen consumed it yet, which is exactly why nothing caught it. The reply
+    now says how long the session lasts, which is true in anybody's clock."""
+    status, body = Client(running).sign_in("d.buyer@clausewerk")
+    assert status == 200
+    assert "expiresAt" not in body, "the raw session clock is being exported again"
+    # The seeded default. A stopwatch reading leaking through here would be
+    # the machine's uptime plus eight hours, never eight hours exactly.
+    assert body["expiresInSeconds"] == 8 * 3600
+
+
+def test_a_body_that_is_not_a_json_object_is_the_callers_mistake(running):
+    """Valid JSON is not a valid request: a list or a bare number parses
+    happily, and every handler reads named fields off the body. Before the
+    shape check, [1,2,3] crashed the handler into the last-resort 500 — the
+    person was told "we broke" when the truth is they sent the wrong shape."""
+    client = Client(running)
+    client.sign_in("a.okafor@clausewerk")
+    for wrong in ([1, 2, 3], "hello", 5):
+        status, body = client.call("POST", "/api/accounts", wrong)
+        assert status == 400, f"{wrong!r} got {status}: {body}"
+        assert body.get("error") != "refused", (
+            "a malformed request must not read as a permission problem")
+
+
 def test_a_stranger_is_refused_and_told_why(running):
     status, body = Client(running).sign_in("nobody@clausewerk")
     assert status == 403

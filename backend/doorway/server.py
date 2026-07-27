@@ -123,11 +123,19 @@ class Handler(BaseHTTPRequestHandler):
         if length <= 0:
             return None, None
         try:
-            return json.loads(self.rfile.read(length) or b"null"), None
+            parsed = json.loads(self.rfile.read(length) or b"null")
         except (json.JSONDecodeError, UnicodeDecodeError):
             # Malformed JSON is the caller's mistake, not a refusal. Saying
             # "refused" here would send somebody to argue about permissions.
             return None, Response(400, {"error": "that request was not valid JSON"})
+        if parsed is not None and not isinstance(parsed, dict):
+            # Valid JSON is not the same as a valid request: a list or a bare
+            # number parses happily, and every handler downstream reads named
+            # fields off the body. Left through, it crashes a handler into the
+            # last-resort 500 — "we broke" — when the truth is the caller sent
+            # the wrong shape, which is a 400 by this file's own rules.
+            return None, Response(400, {"error": "the request body must be a JSON object"})
+        return parsed, None
 
     def _serve_static(self, path: str) -> bool:
         """Serve a file from the static root, or report that there is none.

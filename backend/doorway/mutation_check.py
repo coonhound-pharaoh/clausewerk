@@ -129,6 +129,21 @@ MUTATIONS = [
         "test_sessions.py::test_an_entry_removed_mid_check_is_no_session_not_a_crash",
     ),
 
+    (
+        "a body of the wrong shape crashes the service instead of a 400",
+        "doorway/server.py",
+        "        if parsed is not None and not isinstance(parsed, dict):",
+        "        if False:",
+        "test_server.py::test_a_body_that_is_not_a_json_object_is_the_callers_mistake",
+    ),
+    (
+        "the sign-in reply exports the raw session clock again",
+        "doorway/app.py",
+        '            "expiresInSeconds": length,',
+        '            "expiresInSeconds": issued.expires_at,',
+        "test_server.py::test_the_sign_in_reply_says_how_long_not_when",
+    ),
+
     # ── Refusals stay legible ────────────────────────────────────────────────
     (
         "refusals are classified by reading the message, not the SQLSTATE",
