@@ -20,6 +20,7 @@ from engine.docx import (
     STYLES,
     W,
     NotADocx,
+    UnprintableText,
     ai_originated_characters,
     authored_characters,
     build_docx,
@@ -800,3 +801,71 @@ def test_provenance_counts_returns_both_figures(built_with_ai):
     assert counts["ai_origin_chars"] > 0
     assert set(counts) == {"authored_chars", "ai_origin_chars"}, (
         "the shape cw.run.authored_chars / cw.run.ai_origin_chars expect")
+
+
+# ── Text no Word file can carry, and line breaks every Word file must ───────
+# The invariant at the top of docx.py — clause text is exact or it is not the
+# approved clause — has two failure modes that this module's OWN parser cannot
+# see, because both survive a round trip through it and only fail in Word:
+# a control character makes the file unopenable, and a raw newline inside a
+# text element renders as nothing, so the printed wording is not the approved
+# wording. Both proofs below therefore reach past the parser: one insists the
+# build refuses, the other inspects the emitted XML bytes themselves.
+
+
+def _one_clause_document(body):
+    lib = [clause("XX-T-001", "Data Privacy", HIGH, body)]
+    manifest = Manifest(vendor="Vendor", value="", source="llm",
+                        risks=(Risk("Data Privacy", HIGH, "test"),))
+    res = resolve(manifest, Snapshot.build(lib))
+    return build_docx(manifest, res, today=date(2026, 8, 1)), res
+
+
+def test_wording_no_word_file_can_carry_is_refused_not_emitted():
+    """\\x0b is what Word itself puts on the clipboard for a Shift+Enter line
+    break, so it arrives in a clause body by honest paste. No XML file can
+    carry it, even escaped: emitting it produces bytes with a valid hash that
+    Word refuses to open. Refusing the build, loudly, is the only honest
+    outcome — and the message must say the wording is the problem."""
+    with pytest.raises(UnprintableText):
+        _one_clause_document("Line one.\x0bLine two.")
+
+
+def test_a_line_break_in_approved_wording_is_a_real_line_break_in_the_file():
+    """The proof reads the emitted XML, deliberately. A raw newline inside a
+    text element survives paragraphs() — every round-trip assertion in this
+    file stays green — and then Word renders it as nothing."""
+    data, _ = _one_clause_document("First line.\nSecond line.")
+    with zipfile.ZipFile(BytesIO(data)) as z:
+        raw = z.read("word/document.xml")
+    assert b"\n" not in raw, (
+        "a raw newline was emitted into document.xml — Word will render the "
+        "approved wording without its line break")
+    assert b"<w:br/>" in raw, "the line break element is missing entirely"
+
+
+def test_wording_with_line_breaks_round_trips_exactly():
+    """Both directions: the emitted break element reads back as the newline it
+    stands for, and the character counter still recognises the wording as
+    approved rather than flagging it as stray."""
+    body = "First line.\nSecond line."
+    data, res = _one_clause_document(body)
+
+    assert body in paragraphs(data), (
+        "the wording that came back is not the wording that went in")
+
+    structural = ["MASTER SERVICES AGREEMENT", "Vendor", "Dated: 2026-08-01",
+                  "1. DATA PRIVACY", f"[{res.decisions[0].selected.ref}]",
+                  f"Clauses: 1 · Library snapshot: {res.snapshot_id[:12]}"]
+    assert authored_characters(data, [body], structural) == 0
+
+
+def test_a_carriage_return_survives_the_round_trip():
+    """A raw carriage return is legal in XML but every conforming reader folds
+    it into a newline — so wording containing one would read back changed.
+    It is emitted as a character reference instead, which survives."""
+    body = "Alpha.\r\nBeta."
+    data, _ = _one_clause_document(body)
+    assert body in paragraphs(data), (
+        "the carriage return was normalised away — the read-back text is not "
+        "the approved text")

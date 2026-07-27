@@ -243,6 +243,23 @@ MUTATIONS = [
     ),
     # ── Document service ──
     (
+        "unprintable characters are emitted into the document anyway",
+        "docx.py",
+        "    bad = _UNPRINTABLE.search(text)",
+        "    bad = None",
+        "test_wording_no_word_file_can_carry_is_refused_not_emitted",
+    ),
+    (
+        "a line break in approved wording is emitted as a raw character",
+        "docx.py",
+        '    runs = "<w:br/>".join(\n'
+        "        f'<w:t xml:space=\"preserve\">{piece}</w:t>'\n"
+        '        for piece in _esc(text).split("\\n"))\n'
+        '    return f"<w:p>{pr}<w:r>{runs}</w:r></w:p>"',
+        "    return f'<w:p>{pr}<w:r><w:t xml:space=\"preserve\">{_esc(text)}</w:t></w:r></w:p>'",
+        "test_a_line_break_in_approved_wording_is_a_real_line_break_in_the_file",
+    ),
+    (
         "clause text is reformatted on the way into the document",
         "docx.py",
         "body.append(_para(d.selected.body))",

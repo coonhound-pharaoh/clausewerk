@@ -63,8 +63,33 @@ STYLES = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </w:styles>"""
 
 
+class UnprintableText(ValueError):
+    """Text that no Word document can carry, refused before it corrupts one."""
+
+
+# Characters XML 1.0 cannot represent AT ALL — not even escaped: the control
+# characters below 0x20 other than tab, newline and carriage return, plus the
+# two permanent non-characters. A file containing one is not a Word document;
+# Word refuses to open it, and this module's own reader refuses it too. The
+# likeliest visitor is \x0b, which is what Word itself puts on the clipboard
+# for a Shift+Enter line break — so it arrives by honest paste, not malice.
+_UNPRINTABLE = re.compile("[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\ufffe\\uffff]")
+
+
 def _esc(text: str) -> str:
-    return (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+    bad = _UNPRINTABLE.search(text)
+    if bad:
+        raise UnprintableText(
+            f"character {bad.group()!r} at position {bad.start()} cannot exist "
+            "in a Word document. Emitting it would produce a file Word refuses "
+            "to open — the wording itself has to change, likely by re-entering "
+            "whatever was pasted in with it."
+        )
+    # A carriage return IS representable, but only as a character reference —
+    # a raw one is folded into a newline by every conforming XML reader, and
+    # then the read-back text is not the approved text.
+    return (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\r", "&#13;"))
 
 
 def _para(text: str, style: Optional[str] = None) -> str:
@@ -72,7 +97,16 @@ def _para(text: str, style: Optional[str] = None) -> str:
     # xml:space="preserve" so leading/trailing spaces in approved wording are
     # not silently trimmed by a Word reader. Clause text is exact or it is not
     # the approved clause.
-    return f'<w:p>{pr}<w:r><w:t xml:space="preserve">{_esc(text)}</w:t></w:r></w:p>'
+    #
+    # A newline must become a real line break element. Left as a raw character
+    # it survives this module's own parser — so every test here stays green —
+    # and then Word renders it as nothing: the printed wording would not be
+    # the approved wording, invisibly. _visible_text() reads the element back
+    # as "\n", which is what keeps the round trip exact.
+    runs = "<w:br/>".join(
+        f'<w:t xml:space="preserve">{piece}</w:t>'
+        for piece in _esc(text).split("\n"))
+    return f"<w:p>{pr}<w:r>{runs}</w:r></w:p>"
 
 
 # ── Generation ─────────────────────────────────────────────────────────────
@@ -239,6 +273,7 @@ def _document_xml(data: bytes) -> ET.Element:
 P = f"{{{W}}}p"
 R = f"{{{W}}}r"
 T = f"{{{W}}}t"
+BR = f"{{{W}}}br"
 DEL_TEXT = f"{{{W}}}delText"
 INS = f"{{{W}}}ins"
 DEL = f"{{{W}}}del"
@@ -281,6 +316,11 @@ def _visible_text(p: ET.Element) -> str:
             if tag == T:
                 if child.text:
                     parts.append(child.text)
+            elif tag == BR:
+                # The element _para() writes for a newline in approved wording.
+                # Read back as one, or the round trip loses the line break and
+                # the character counter flags approved text as stray.
+                parts.append("\n")
             elif tag == DEL_TEXT:
                 continue          # deleted text reached directly, same rule
             else:
