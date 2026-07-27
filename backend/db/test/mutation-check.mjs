@@ -1224,6 +1224,15 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     repl: ``,
     expect: 'the override surface says it could not ask, rather than showing nothing' },
 
+  // A FAILED COVERAGE READ RENDERING AS FULL COVERAGE. The banner is driven
+  // by a second endpoint, and an uncovered category is the hole that
+  // socialises an override request to nobody.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a failed coverage read is swallowed into full coverage',
+    find: `  if (coverage.status === 'failed') return <LoadFailed reason={coverage.reason} />;`,
+    repl: ``,
+    expect: 'a failed coverage read never renders as full coverage' },
+
   // REVOKING THE GRANT THAT CONFERS NOTHING. Two live grants is a normal
   // state, and effective_role confers the newest — so revoking the oldest
   // succeeds, closes the dialog, and leaves the person's access untouched.
@@ -1361,9 +1370,12 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     repl: `                    ? <span className="chip chip-err">blocked</span>`,
     expect: 'a held record renders as blocked BECAUSE held, naming the matter' },
 
+  // REPOINTED 2026-07-27: the `?? []` was removed from this line when the pane
+  // began refusing a failed coverage read outright, which made the rows
+  // guaranteed-loaded and the fallback redundant. Same guarantee, same test.
   { target: 'shell', suite: 'shell.test.mjs',
     name: 'an uncovered category is treated as nobody to tell',
-    find: `  const gaps = (coverage.rows ?? []).filter((c) => c.watcher_count === 0);`,
+    find: `  const gaps = coverage.rows.filter((c) => c.watcher_count === 0);`,
     repl: `  const gaps = [];`,
     expect: 'an uncovered category is surfaced as a gap' },
 

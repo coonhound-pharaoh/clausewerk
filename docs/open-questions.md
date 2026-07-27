@@ -340,6 +340,40 @@ that skipped redaction, and a table constraint refuses a *row* that records one.
   decisions, positions and overrides survive. Extending it there would cascade
   through half the schema and is a decision, not a detail.
 
+## 9c. The Administrator's grant on holds and retention is inert — needs a decision
+
+Found 2026-07-27 by a defect sweep, and left unfixed deliberately, because the
+fix widens who may read something.
+
+`0022` grants `select on cw.agreement_retention, cw.legal_hold to
+cw_administrator`, with the stated reason that "a destruction refused for a
+reason the actor cannot see is a refusal nobody can act on" — the Administrator
+holds the destruction authority under `U9`, so it must be able to see what is
+blocking one.
+
+**The grant delivers nothing.** Neither table's `read_scoped` policy admits
+`administrator` (`0010` §§775–785), and `0013`'s additive `administrator_reads`
+list — written for exactly this case — omits both. Because the *grant* exists,
+row-level security **filters instead of refusing**: running `GET /holds` as each
+role gives the Administrator `200 with zero rows`, where legal_admin, legal
+reviewer and auditor each see the open hold and a viewer is cleanly refused.
+
+**Why that is worse than a refusal.** The screen renders "No holds are open."
+The Administrator is told there is nothing blocking a destruction when a hold is
+in fact open. A 403 would have sent them to ask; an empty list tells them to
+proceed.
+
+**Why it is not being fixed as a repair.** Closing it means adding
+`administrator` to two read policies — widening who may read hold matters and
+retention dates. That is an access decision, and this system's rule is that
+those are the owner's. It is also small: two policy lines in a new migration.
+
+**The question for Mike:** `0022` clearly *intended* the Administrator to see
+these. Confirm that, and it is a ten-minute change. The alternative — revoking
+the inert grant so the Administrator gets an honest refusal instead of a
+misleading empty list — is also coherent, and is the safer default if the answer
+is not obvious.
+
 ## 10. Smaller gaps — deferred
 
 | Gap | Where |

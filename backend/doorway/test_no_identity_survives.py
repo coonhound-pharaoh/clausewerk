@@ -61,6 +61,37 @@ def db(schema: str):
     database.close()
 
 
+def test_a_request_runs_as_the_role_it_was_opened_with(db: Database):
+    """The other half of the scheme, and it needed its own test.
+
+    Every check below proves the identity does not OUTLIVE the request. This
+    one proves it is attached in the first place — and it is deliberately
+    written to need no seeded people and touch no table, only
+    `current_user` and the actor setting.
+
+    That is the whole point of it. Until 2026-07-27 the "role is not bound"
+    mutation was scored by a server test whose FIXTURE seeds the demo people
+    through the doorway; with no role bound, the seeding is refused with
+    `permission denied for table account`, so the test ERRORED before running
+    a single assertion. pytest exited non-zero, the harness read that as
+    caught, and the guarantee was never evaluated. A test that cannot reach
+    its own assertion is not watching anything.
+    """
+    with db.as_person("ada@clausewerk", "legal_admin") as request:
+        role = request.one("select current_user")[0]
+        actor = request.one("select current_setting('cw.actor', true)")[0]
+
+    assert role == "cw_legal_admin", (
+        f"the request ran as {role} rather than the role it was opened with — "
+        "with no application role bound, every policy in the schema fails "
+        "closed and the doorway can do nothing at all"
+    )
+    assert actor == "ada@clausewerk", (
+        f"the request ran under the name {actor!r} — every audited act would "
+        "be recorded against nobody"
+    )
+
+
 def test_a_returned_connection_carries_no_role_and_no_actor(db: Database):
     """The named test. One connection in the pool, so the connection handed back
     is provably the same one taken out next — the strictest possible reading,

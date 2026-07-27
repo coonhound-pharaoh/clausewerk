@@ -51,8 +51,16 @@ create table cw.executed_agreement (
 );
 
 comment on table cw.executed_agreement is
-  'Frozen at signature. There is no UPDATE path and no DELETE path — not for
-   any role, including legal_admin.';
+  'Frozen at signature: no role holds UPDATE or DELETE on this table, and the
+   freeze trigger refuses an edit even if one did. NOT absolute any more, and
+   this comment said it was until 2026-07-27 — owner decision U12, built in
+   0023, added exactly two governed exits, each through a SECURITY DEFINER
+   function that runs with owner rights and therefore past the privilege lock:
+   cw.redact_agreement() clears the document content and keeps the fact
+   (legal_admin, or a named delegate), and cw.purge_agreement() deletes the
+   row (administrator alone, undelegable, and only after a redaction). Both
+   are on the audit chain, which outlives the record. Read those as the whole
+   list of ways a signed agreement can change; there is no third.';
 
 -- ── The signed document(s) ──────────────────────────────────────────────────
 -- One row per signed instrument: the agreement, each amendment, each exhibit.

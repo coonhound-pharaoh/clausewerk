@@ -34,8 +34,17 @@ minutes, so fifteen full runs is an hour nobody will wait for. Running only the
 named test proves exactly what the bar asks — break the thing the test names,
 confirm THAT test fails — and it takes seconds.
 
-Each mutation runs in its own copy of the tree, in its own process, so it gets
-its own test database (the name carries the process id) and they cannot collide.
+Each mutation runs in its own copy of the tree, in its own process, and gets its
+own test database, the name carrying the process id.
+
+THEY CAN STILL COLLIDE, and this paragraph used to say they could not.
+
+A separate database is not full isolation: `setup.py` runs `alter role cw_app
+…`, and a ROLE is cluster-wide. Six concurrent rebuilds were run deliberately
+to check the claim; five failed with `tuple concurrently updated`. A lane that
+dies in its fixture never evaluates its guarantee — so the verdict for "the
+suite exited non-zero" must not be `ok`, which is what it was until
+2026-07-27. It is now `IMPRECISE`, fatal, and named as such.
 """
 
 from __future__ import annotations
@@ -62,11 +71,16 @@ MUTATIONS = [
         "test_writes.py::test_a_write_lands_with_the_signed_in_person_s_name_on_it",
     ),
     (
+        # RE-POINTED 2026-07-27. This named a server test whose FIXTURE seeds
+        # the demo people through the doorway — with no role bound the seeding
+        # is refused, so the test ERRORED before asserting anything and the
+        # guarantee was never evaluated. The row now names a test that reaches
+        # its own assertion because it touches no table at all.
         "the role is not bound at the start of a request",
         "doorway/db.py",
         '                    cur.execute(\n                        sql.SQL("set local role {}").format(sql.Identifier(db_role))\n                    )',
         "                    pass",
-        "test_server.py::test_the_masthead_names_the_person_and_their_role",
+        "test_no_identity_survives.py::test_a_request_runs_as_the_role_it_was_opened_with",
     ),
     (
         "sign-in looks up identity on a privileged connection",
@@ -284,7 +298,37 @@ def _run_one(mutation):
         return name, expect, "miss"
     if "error" in out.lower() and "no tests ran" in out.lower():
         return name, expect, "skip"
-    return name, expect, "ok"
+    # THE NAMED TEST MUST HAVE FAILED ON ITS OWN ASSERTION — not merely
+    # "pytest exited non-zero", which is what this used to accept.
+    #
+    # The difference is not theoretical, and the sibling harness
+    # (db/test/mutation-check.mjs) has always got it right: it requires
+    # `FAIL <expect>` in the output and scores anything else IMPRECISE.
+    #
+    # Why it bites here specifically. Lanes are NOT independent, though the
+    # docstring above says they are: each gets its own database, but
+    # `setup.py`'s `alter role cw_app …` is CLUSTER-wide, and six concurrent
+    # rebuilds collide with `tuple concurrently updated` — reproduced, five
+    # of six failing. A lane that dies in its FIXTURE exits non-zero, so the
+    # guarantee was never evaluated at all, and this function called it `ok`.
+    # The bottom line could read `24/24 caught` with several never exercised.
+    #
+    # That is precisely the failure this file's own preflight exists to
+    # prevent, arriving one step later: a count that reads as protection.
+    failed_by_name = f"failed" in out.lower() and _names_a_failure(out, expect)
+    return name, expect, "ok" if failed_by_name else "imprecise"
+
+
+def _names_a_failure(out: str, expect: str) -> bool:
+    """Did the test named by this mutation appear in pytest's failure list?
+
+    pytest's short summary writes `FAILED doorway/test_x.py::test_y` — with
+    the platform's own separator, which is why the comparison is made on a
+    normalised copy rather than on the raw text.
+    """
+    normalised = out.replace("\\", "/")
+    wanted = f"doorway/{expect}".replace("\\", "/")
+    return f"FAILED {wanted}" in normalised
 
 
 def preflight() -> list[str]:
@@ -339,6 +383,30 @@ def main() -> int:
     with ThreadPoolExecutor(max_workers=lanes) as pool:
         results = list(pool.map(_run_one, MUTATIONS))
 
+    # THE SERIAL SECOND PASS, and it is not belt-and-braces — it is what makes
+    # the parallel first pass safe to keep.
+    #
+    # Lanes share one PostgreSQL cluster, and `setup.py`'s `alter role cw_app …`
+    # is cluster-wide, so concurrent rebuilds collide with `tuple concurrently
+    # updated`. Measured on 2026-07-27: NINE of twenty-four lanes died in their
+    # fixture on a single run. Every one of them scored `ok` under the old
+    # "non-zero exit means caught" rule — nine guarantees reported as guarded
+    # that were never evaluated at all.
+    #
+    # Re-running only the rows that did not fail through their own named test,
+    # one at a time, removes the collision without making the whole harness
+    # serial. A row that still does not fail by name after a lane of its own is
+    # a real finding rather than a traffic jam.
+    retried = [m for m, (_n, _e, v) in zip(MUTATIONS, results) if v == "imprecise"]
+    if retried:
+        print(f"re-running {len(retried)} row(s) serially — the suite failed "
+              f"without their named test, usually a rebuild collision\n")
+        again = {}
+        for mutation in retried:
+            name, expect, verdict = _run_one(mutation)
+            again[name] = (name, expect, verdict)
+        results = [again.get(n, (n, e, v)) for n, e, v in results]
+
     caught, missed = 0, []
     for name, expect, verdict in results:
         if verdict == "ok":
@@ -347,6 +415,15 @@ def main() -> int:
         elif verdict == "skip":
             missed.append(f"{name} — pattern not found, or the test does not exist")
             print(f"  SKIP  {name}  ← stale check")
+        elif verdict == "imprecise":
+            # Its own verdict, and fatal, because it is the one that used to
+            # read as `ok`: the suite failed, but not through the test that
+            # names this guarantee. Most often the lane's fixture died, which
+            # means the guarantee was never evaluated at all.
+            missed.append(
+                f"{name} — the suite failed, but NOT via {expect}. The "
+                f"guarantee was not evaluated; re-run this row alone")
+            print(f"  IMPRECISE  {name}  ← failed, but not through its own test")
         else:
             missed.append(f"{name} — {expect} passed with the guarantee broken")
             print(f"  MISS  {name}  ← nothing guards this")

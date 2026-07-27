@@ -287,8 +287,17 @@ function WatchersPane() {
 
   if (watchers.status === 'loading') return <Loading />;
   if (watchers.status === 'failed') return <LoadFailed reason={watchers.reason} />;
+  // The coverage read is checked too, and this one is the dangerous half.
+  // Defaulting its rows to an empty list turned a FAILED read into "no gaps",
+  // so the uncovered-categories banner never rendered — the screen read as
+  // though every category had a watcher. The watchers list loads separately
+  // and looked fine, so nothing appeared wrong at all.
+  // cw.watcher_coverage exists so that "a zero is a visible gap, not a
+  // silence"; swallowing the failure turned it back into a silence.
+  if (coverage.status === 'failed') return <LoadFailed reason={coverage.reason} />;
+  if (coverage.status === 'loading') return <Loading />;
 
-  const gaps = (coverage.rows ?? []).filter((c) => c.watcher_count === 0);
+  const gaps = coverage.rows.filter((c) => c.watcher_count === 0);
 
   const reload = () => { watchers.reload(); coverage.reload(); };
 
@@ -360,7 +369,7 @@ function WatchersPane() {
             <select className="mt-1.5 w-full font-mono" value={category}
                     onChange={(e) => setCategory(e.target.value)}>
               <option value="">every category</option>
-              {(coverage.rows ?? []).map((c) => (
+              {coverage.rows.map((c) => (
                 <option key={c.category_key} value={c.category_key}>{c.category_key}</option>
               ))}
             </select>

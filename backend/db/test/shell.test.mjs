@@ -584,6 +584,23 @@ await test('access history filters what the policy already returned', async () =
     'the access history pane opens its own connection');
 });
 
+await test('a failed coverage read never renders as full coverage', async () => {
+  // The uncovered-categories banner is driven by a SECOND endpoint, and
+  // `(coverage.rows ?? [])` turned its failure into an empty list — so the
+  // banner vanished and the screen read as though every category had a
+  // watcher. The watchers list loads separately and looked fine, so nothing
+  // appeared wrong. cw.watcher_coverage exists so "a zero is a visible gap,
+  // not a silence"; swallowing the failure turned it back into a silence.
+  // An uncovered category is the hole that socialises an override to nobody.
+  const fn = stripComments(/function WatchersPane[\s\S]*?\n\}\n/.exec(restSrc())[0]);
+  assert(/coverage\.status === 'failed'/.test(fn),
+    'a failed coverage read renders as full coverage — the gap the view exists '
+    + 'to surface disappears exactly when it cannot be read');
+  assert(!/\(coverage\.rows \?\? \[\]\)/.test(fn),
+    'the coverage rows are still defaulted to an empty list, which is the '
+    + 'shape that hid the failure');
+});
+
 await test('the auditor can export, and the export is of what is on screen', async () => {
   const fn = /const csv = \(\)[\s\S]*?\n  \};/.exec(restSrc())[0];
   assert(/rows\.map/.test(fn),
