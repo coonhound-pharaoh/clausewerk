@@ -15,7 +15,8 @@ handoff.
 | **Negotiation** | Specified, not built | [`03-negotiation.md`](03-negotiation.md) |
 | **Lifecycle (post-signature)** | Specified, one piece built | [`04-lifecycle.md`](04-lifecycle.md) |
 | **Frontend** | Specified; a working prototype exists | [`05-frontend.md`](05-frontend.md) |
-| **Service layer & identity** | Not started; everything it needs exists | [`06-service-layer-and-identity.md`](06-service-layer-and-identity.md) |
+| **Service layer & identity** | Built in JavaScript, now **frozen as the specification** the Python replacement must match | [`06-service-layer-and-identity.md`](06-service-layer-and-identity.md) |
+| **Role-based UI & the Administrator** | Thirteen of sixteen packages closed; two paused on the language move, one blocked | [`07-role-based-ui.md`](07-role-based-ui.md) |
 
 **Repository state.** Substantially further along than when reports 01–05 were
 written, and moving — so **do not trust a number in this file. Run
