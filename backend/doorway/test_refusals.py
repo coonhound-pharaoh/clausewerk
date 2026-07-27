@@ -12,7 +12,6 @@ import pytest
 
 from doorway.db import Database
 from doorway.refusals import classify
-from doorway.setup import OWNER_URL
 
 
 @pytest.fixture
@@ -23,8 +22,8 @@ def db(schema: str):
 
 
 @pytest.fixture
-def people(db: Database):
-    with psycopg.connect(OWNER_URL, autocommit=True) as owner:
+def people(db: Database, owner_url: str):
+    with psycopg.connect(owner_url, autocommit=True) as owner:
         owner.execute("select cw.bootstrap(%s,%s,%s,%s,%s,%s)",
                       ("owner@clausewerk", "admin@clausewerk", "The Administrator",
                        "leah@clausewerk", "Leah Legal", "Legal"))

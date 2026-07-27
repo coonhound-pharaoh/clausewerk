@@ -30,7 +30,7 @@ def db(schema: str):
 
 
 @pytest.fixture
-def people(db: Database):
+def people(db: Database, owner_url: str):
     """The bootstrap ceremony, plus the people these tests need.
 
     Bootstrapping needs the owner, because it happens before any Administrator
@@ -39,9 +39,7 @@ def people(db: Database):
     """
     import psycopg
 
-    from doorway.setup import OWNER_URL
-
-    with psycopg.connect(OWNER_URL, autocommit=True) as owner:
+    with psycopg.connect(owner_url, autocommit=True) as owner:
         owner.execute("select cw.bootstrap(%s,%s,%s,%s,%s,%s)",
                       ("owner@clausewerk", "admin@clausewerk", "The Administrator",
                        "leah@clausewerk", "Leah Legal", "Legal"))

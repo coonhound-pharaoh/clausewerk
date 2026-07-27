@@ -101,9 +101,14 @@ every joined table, and a viewer holds none. The scoping goes in the view's own
 `WHERE` clause in the same words as the policy, which is the pattern
 `0017_reading_room.sql` already uses.
 
-**How it is held open:** two strict-xfail tests in `test_reads.py`. They pass
-while the leak exists and **fail the moment it is fixed**, so nobody has to
-remember to come back and delete them.
+**CLOSED, same day.** `0019_override_views_scoped.sql` put the scoping in the
+view's own `WHERE` clause, in the same words as the `read_scoped` policy.
+
+The two tests were written as **strict** xfail — passing while the leak existed,
+failing the moment it closed. They failed within the hour, which is exactly what
+that strictness is for: nobody had to remember to come back. They are ordinary
+tests now, and they stay. A guarantee that was once broken is the one worth
+watching.
 
 **How it was found:** the role-based-UI session warned that a view does not
 inherit the policies underneath it. Twelve of the 25 reads point at views over
@@ -114,7 +119,89 @@ that the scoping was meant to hold back. `cw.person_activity` and
 or the whole queue, so bypassing the per-person scoping gives them nothing they
 were not entitled to. One real leak, checked rather than assumed.
 
-### 5 · Nothing else
+### 5 · Nothing else in the reads
+
+---
+
+## WP-P3 · The 27 writes
+
+### 6 · Numbered placeholders do not survive a literal port — **Python, structural**
+
+The JavaScript numbers its parameters `$1, $2, $3`, and PostgreSQL binds those by
+NUMBER wherever they appear. The obvious port is psycopg's `%s`, which binds by
+**order of appearance**. In three of the 27 statements the numbers do not appear
+in order:
+
+    POST /settings          set value = $2 where key = $1
+    POST /settings/decide   set value = $2, rationale = $3 … where key = $1
+    POST /grants/revoke     select … , $2 from cw.role_grant where grant_id = $1
+
+Ported naively, `POST /settings` would set the setting's key to the new value and
+look for a setting named after that value. It would not fail. It would write the
+wrong thing and report success — the worst available outcome, and invisible in a
+system with no settings a test happened to check.
+
+Verified rather than assumed: `select %s, %s` with `("VALUE", "KEY")` binds them
+in the order written, confirming the hazard is real.
+
+**The fix is structural, not careful.** Every placeholder is named after the
+field that fills it — `%(value)s`, `%(key)s`. Binding no longer depends on where
+a placeholder sits in the sentence, and a name that does not match the declared
+field list fails loudly on the first call. The statement-comparison test rebuilds
+the JavaScript's `$n` into the Python's field names before comparing, so it
+proves the statements agree **and** that the field order matches the numbering.
+
+### 7 · A write that changes nothing is no longer reported as done — **Python, deliberate divergence**
+
+The one place this port changes behaviour on purpose. The work package requires
+it and finding D1 is why.
+
+An UPDATE refused by a missing policy does not raise. It changes nothing and
+reports success. Four of the 27 are UPDATEs, and the JavaScript answers
+`{"rows": []}` for all of them — which a screen renders as "saved".
+
+| | JavaScript | Python |
+|---|---|---|
+| an UPDATE matching no row | `200 {"rows": []}` | `409 kind="changed_nothing"` |
+
+Every statement in the set returns something, so nothing returned means nothing
+happened. `run()` raises `SilentlyRefused`.
+
+### 8 · Two acts the schema does not audit — **schema, recorded, not fixed**
+
+Opening a hold is recorded in the audit chain (`legal_hold_opened`). Creating a
+category (`POST /categories`) and opening a deal (`POST /deals`) are not — they
+leave no trace in `cw.audit_event` at all.
+
+Found while writing the attribution test, which needed two audited acts by two
+different people and initially picked two acts that record nothing. Whether those
+two *should* be audited is a schema judgement and not the doorway's to make, so
+it is written down rather than acted on. Worth a look by whoever owns the chain:
+a deal opening is the act every scoping decision afterwards hangs off.
+
+### 9 · Two test suites cannot share one database — **test harness, fixed**
+
+Not a port difference, but it cost an hour and it will cost the next person the
+same.
+
+Each test in this suite drops the whole `cw` schema and rebuilds it from the
+migrations. The role-based-UI session's suite does the same. Run at the same time
+against the same database, the two **deadlock** — one holding the schema while
+the other waits to drop it — and the failure surfaces as `schema "cw" does not
+exist` halfway through migration 0003, which reads exactly like a broken
+migration and is not one.
+
+`conftest.py` now builds and uses `clausewerk_doorway`, a database of its own,
+created on first run. The shared `clausewerk` database is left to everybody else.
+Override with `CW_TEST_DATABASE`.
+
+### 10 · Nothing else in the writes
+
+The remaining 24 statements carried across with no difference. The three rules
+are checked rather than stated: one act per endpoint is **counted**, the no-retry
+rule is checked by walking the module's syntax tree for a refusal being caught
+and the statement run again, and no endpoint takes an actor from the body — each
+of the 27 checked against a list of names that are all actors.
 
 No behaviour difference was found in the other 24 endpoints, and no permission
 logic was added on either side. There is not one role comparison in

@@ -35,7 +35,6 @@ from doorway import reads
 from doorway.db import Database
 from doorway.identity import Caller
 from doorway.reads import READS, NoSuchRead, answer, run
-from doorway.setup import OWNER_URL
 
 # SQLSTATEs that mean the statement itself is broken — a column that does not
 # exist, a view that does not exist, a syntax error. These are NOT refusals, and
@@ -64,14 +63,14 @@ def db(schema: str):
 
 
 @pytest.fixture
-def people(db: Database):
+def people(db: Database, owner_url: str):
     """Two roles with genuinely different sight: an Administrator who runs the
     machine, and a requester who sees their own work and little else.
 
     Two, not one, because a suite that checks every endpoint as the most
     privileged role proves only that the endpoints parse.
     """
-    with psycopg.connect(OWNER_URL, autocommit=True) as owner:
+    with psycopg.connect(owner_url, autocommit=True) as owner:
         owner.execute(
             "select cw.bootstrap(%s,%s,%s,%s,%s,%s)",
             ("owner@clausewerk", "admin@clausewerk", "The Administrator",
@@ -307,13 +306,24 @@ def test_an_unknown_read_is_not_reported_as_a_refusal(people, db: Database):
 
 
 # ── 5. A view does not inherit the rules underneath it ──────────────────────
+#
+# These two were written on 2026-07-26 as strict-xfail: cw.override_status had no
+# scoping of its own and ran with its owner's rights, so it handed every override
+# request to anybody granted select on it — a requester saw other requesters', and
+# a viewer told about nothing saw all of them, justification text included.
+#
+# The xfail was strict deliberately, so it would FAIL the moment the leak closed
+# rather than sit passing forever. It failed within the hour:
+# 0019_override_views_scoped.sql put the scoping in the view's own WHERE clause,
+# in the same words as the read_scoped policy. They are ordinary tests now, and
+# they stay — a guarantee that was once broken is the one worth watching.
 
 
 @pytest.fixture
-def two_requesters_and_a_viewer(people, db: Database):
+def two_requesters_and_a_viewer(people, db: Database, owner_url: str):
     """Two requesters with an override request each, and a viewer told about
     neither. The smallest arrangement in which "sees their own" means anything."""
-    with psycopg.connect(OWNER_URL, autocommit=True) as owner:
+    with psycopg.connect(owner_url, autocommit=True) as owner:
         owner.execute(
             "insert into cw.account (person,display_name,unit,role,created_by) "
             "values ('ben@clausewerk','Ben Buyer','Procurement','requester','admin@clausewerk'),"
@@ -340,15 +350,6 @@ def two_requesters_and_a_viewer(people, db: Database):
     return db
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="cw.override_status has no scoping of its own and runs with its "
-           "owner's rights, so it hands every row to anyone granted select on "
-           "it. Found 2026-07-26 during WP-P2. The fix is a WHERE clause in the "
-           "view, in the same words as read_scoped — the pattern already used in "
-           "0017_reading_room.sql. Owned by the schema, not the doorway. When "
-           "this test starts FAILING, the leak is fixed: delete the xfail.",
-)
 def test_a_requester_sees_only_their_own_overrides(two_requesters_and_a_viewer, db):
     """GET /overrides claims "a requester sees their own". This is that claim."""
     rows = run(db, REQUESTER, "GET /overrides")
@@ -359,12 +360,6 @@ def test_a_requester_sees_only_their_own_overrides(two_requesters_and_a_viewer, 
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="same view, same cause. Recorded separately because this is the "
-           "sharper edge: ADR-0008 created the viewer role precisely so a "
-           "contract could be shown to somebody without giving them a way in.",
-)
 def test_a_viewer_sees_only_the_overrides_they_were_told_about(
     two_requesters_and_a_viewer, db
 ):

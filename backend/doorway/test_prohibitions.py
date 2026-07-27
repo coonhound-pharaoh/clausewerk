@@ -13,7 +13,6 @@ import pytest
 
 from doorway.db import Database, SilentlyRefused, UnknownRole
 from doorway.identity import LOOKUP_ROLE, effective_role
-from doorway.setup import OWNER_URL
 
 
 @pytest.fixture
@@ -24,8 +23,8 @@ def db(schema: str):
 
 
 @pytest.fixture
-def people(db: Database):
-    with psycopg.connect(OWNER_URL, autocommit=True) as owner:
+def people(db: Database, owner_url: str):
+    with psycopg.connect(owner_url, autocommit=True) as owner:
         owner.execute("select cw.bootstrap(%s,%s,%s,%s,%s,%s)",
                       ("owner@clausewerk", "admin@clausewerk", "The Administrator",
                        "leah@clausewerk", "Leah Legal", "Legal"))
@@ -111,7 +110,9 @@ def test_the_doorway_s_login_does_not_inherit_the_roles_it_may_become(db: Databa
     )
 
 
-def test_a_deployment_refuses_if_the_login_would_inherit_its_roles(schema: str):
+def test_a_deployment_refuses_if_the_login_would_inherit_its_roles(
+    schema: str, owner_url: str
+):
     """The guard that makes the rule above survive a hand-edited database.
 
     Migration 0016 sets NOINHERIT, but roles are cluster-wide and outlive any
@@ -121,15 +122,15 @@ def test_a_deployment_refuses_if_the_login_would_inherit_its_roles(schema: str):
     failure it prevents is silent, and a system that has quietly handed every
     connection all six roles looks entirely healthy.
     """
-    from doorway.setup import OWNER_URL, prepare
+    from doorway.setup import prepare
 
-    with psycopg.connect(OWNER_URL, autocommit=True) as owner:
+    with psycopg.connect(owner_url, autocommit=True) as owner:
         owner.execute("alter role cw_app inherit")
     try:
         with pytest.raises(RuntimeError, match="inherit"):
-            prepare()
+            prepare(owner_url=owner_url)
     finally:
-        with psycopg.connect(OWNER_URL, autocommit=True) as owner:
+        with psycopg.connect(owner_url, autocommit=True) as owner:
             owner.execute("alter role cw_app noinherit")
 
 
