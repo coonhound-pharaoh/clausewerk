@@ -1983,3 +1983,68 @@ permission rules were never widened to match — so the Administrator currently
 sees an empty list where they should see the holds. Fixing it means widening who
 can read those two tables, which is an access decision rather than a repair.
 It is recorded in the open questions for whoever picks it up.
+
+---
+
+## 2026-07-27 · The Administrator is told a record is held, not why (U13)
+
+**Your decision, answering the question above:** *"The Administrator will just
+need to be someone who has that level of confidence. It just needs to be
+flagged, it doesn't need to explain why."*
+
+**You chose neither option I offered, and the answer is smaller than both.** I
+had framed it as "let them read the hold details" or "take the permission away";
+you split it. The Administrator sees **that** a contract is held — which is all
+they need, because it is the difference between "you may destroy this" and "you
+may not" — and does not see **which** lawsuit or investigation put it there.
+That belongs to Legal.
+
+**Why this was the better answer.** Widening access needed no justifying, and
+nothing had to be granted at all: the flag was already reachable. The permission
+that was doing nothing has been removed, so nobody is shown a misleading blank
+any more, and no one else's access changed by a single row.
+
+**One cost, stated plainly.** An administrator refused a destruction has to ask
+Legal which matter blocked it. That is your intent rather than an oversight —
+and worth knowing: the refusal itself does name the matter to the person
+attempting the act, so the reason is there at the moment it decides something.
+What is withdrawn is browsing the holds at leisure.
+
+**And a check that had to be inverted.** A test *required* the matter to appear
+on the Administrator's screen. It was written when that was right; your decision
+made it demand the opposite. Now it checks the two things that matter — held and
+due look different from each other, and the matter never reaches the screen.
+
+---
+
+## 2026-07-27 · Twenty checks that policed wording, removed
+
+**Your instruction: stop writing checks that police content.** I counted first:
+**1,107 checks across the whole system. 55 test nothing but wording. Another 222
+use wording to stand in for something they could check directly. 830 are sound.**
+
+**Twenty of the worst are gone**, chosen for danger rather than for the count.
+Four whole checks retired because their entire content was "the screen must
+contain this sentence" — each promise they claimed to protect is enforced by the
+system itself and proved where it lives. Others rewritten to check the thing
+they were circling: whether a screen reads the right field, whether a decision
+can only be taken one at a time, whether a rejected item is visually
+distinguishable from an approved one.
+
+**The one that was actively dangerous.** A check banned the word "force" in
+every button and label on a **contracts** screen. The first button mentioning
+*Force majeure* — an ordinary clause category — would have stopped the build.
+And the reverse: renaming a button while leaving the machinery behind it intact
+would have passed. It was worse than having no check at all.
+
+**One file argued for the practice in writing** — a comment saying the screen's
+own wording "IS part of the test, and that is the point rather than decoration."
+Its wording checks had already been rewritten once to chase your U9 decision.
+Removed, with a note explaining why that instinct was wrong.
+
+**What is left, and it is one pattern.** About 140 of the remaining 222 are the
+same thing: a test that provokes a refusal and then checks the refusal's English
+sentence. Fifty-four of their siblings already check the *name of the rule* that
+refused instead, which never needs revisiting when wording changes. Giving each
+rule a stable code finishes almost all of it. Written up in
+`CONTENT-CHECKS-CLEANUP-2026-07-27.md` with the counts and the list.
