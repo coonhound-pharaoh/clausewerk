@@ -1,0 +1,13 @@
+# The doorway's dependencies. The contract engine needs none of these — it is
+# deliberately dependency-free, and stays that way.
+#
+#   python -m pip install -r requirements.txt
+#
+# psycopg is the PostgreSQL driver. The pool is part of the doorway's design and
+# not an optimisation: the whole identity scheme rests on a connection being
+# handed out, used for exactly one unit of work, and handed back carrying
+# nothing. A pool is what makes "handed back" a real event that can be tested.
+psycopg[binary,pool]>=3.2
+
+# Test-only. The engine already uses pytest.
+pytest>=7.0

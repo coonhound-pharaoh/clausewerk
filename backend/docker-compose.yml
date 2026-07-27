@@ -1,0 +1,49 @@
+# The database, run the ordinary way.
+#
+# WHY THIS FILE EXISTS
+# Until 2026-07-26 this project ran PostgreSQL in a form that lives inside the
+# program, which needed nothing installed. That convenience cost three things
+# the product needs: the tools to seal the audit checkpoint, the ability to have
+# more than one connection open at once, and therefore any honest test of
+# whether an identity outlives the request it belongs to. The owner's decision
+# that day was to run standard PostgreSQL from here on.
+#
+# It is pinned to 18 because that is the version the in-program database
+# reported, so the thirteen migrations move across without meeting a new
+# version's behaviour at the same time as a new packaging.
+#
+#   docker compose up -d      start it
+#   docker compose down -v    stop it and throw the data away
+#
+# This is the development and test database. Production is the same PostgreSQL,
+# run by whoever hosts it.
+
+services:
+  db:
+    image: postgres:18
+    container_name: clausewerk-db
+    environment:
+      # Development credentials, and deliberately boring ones. Nothing secret
+      # belongs in a file that is committed; a real deployment supplies its own
+      # through CW_DATABASE_URL.
+      POSTGRES_USER: clausewerk
+      POSTGRES_PASSWORD: clausewerk
+      POSTGRES_DB: clausewerk
+    ports:
+      - "5432:5432"
+    volumes:
+      # Mounted one level above the data itself, which is what PostgreSQL 18's
+      # image expects: it keeps each major version in its own subdirectory so a
+      # future version upgrade is possible. Mounting the data directory directly
+      # — the shape every older example shows — makes 18 refuse to start.
+      - db-data:/var/lib/postgresql
+    # Start-up is not instant, and a test run that begins before the database is
+    # listening fails in a way that looks like a bug in the tests.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clausewerk -d clausewerk"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  db-data:

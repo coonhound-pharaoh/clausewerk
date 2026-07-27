@@ -11,17 +11,34 @@ agreements built and verified. Document service not yet started.
 
 ```bash
 npm install
+python -m pip install -r requirements.txt
+docker compose up -d
+python -m doorway.setup
 npm run verify
 ```
 
 `verify` runs every suite and then both mutation checks. All must pass.
-Requires Node and Python 3.10+ with `pytest`. `python-docx` is optional and
-test-only — it independently validates our output; three tests skip without it.
+Requires Node, Python 3.10+ with `pytest`, and Docker. `python-docx` is optional
+and test-only — it independently validates our output; three tests skip without
+it.
 
-There is **no database to install**. SQL tests run against
-[PGlite](https://pglite.dev) — real PostgreSQL compiled to WebAssembly — so the
-DDL, constraints, triggers, views and row-level security are genuinely executed,
-not mocked. Same SQL will run on Supabase unchanged.
+**The database.** Standard PostgreSQL 18, run in Docker (`docker compose up -d`).
+Until 2026-07-26 this project used [PGlite](https://pglite.dev) — real PostgreSQL
+compiled to run inside the test process — which needed nothing installed. The
+owner's decision that day was to move to the ordinary version, because the
+convenience cost three things the product needs: the tools to seal the audit
+checkpoint (`pgcrypto`), more than one connection at a time, and therefore any
+honest test of whether an identity outlives the request it belongs to. The
+migrations moved across unchanged, first attempt.
+
+The older `db/test/*.test.mjs` suites still run against PGlite and are still
+green; they test the schema, which is identical either way. New work targets
+PostgreSQL.
+
+**Two logins, and the difference matters.** The owner applies migrations and does
+nothing else. The doorway connects as `cw_app`, which is a member of all six
+application roles and `NOINHERIT`, so it holds none of their privileges until a
+request binds one. An idle connection can do nothing at all.
 
 ## What's here
 
