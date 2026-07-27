@@ -7,6 +7,48 @@ running log of *what we decided and why*, readable without opening the code.
 
 ---
 
+## 2026-07-27 · All content is placeholder until further notice
+
+**Decision by Mike.** Everything in the system that is *content* rather than *system* — validation
+rules, clause language, example contracts, and those contracts' data and metadata — is placeholder
+until further notice, pending review. Synthetic data may be used freely to populate it; nobody
+should sweat its quality or completeness. It is part of development for now.
+
+**Why.** The system's machinery is what is being built and proven. Treating today's content as
+real would invite exactly the confusion the product boundary rule (2026-07-25) exists to prevent —
+the content will be reviewed and populated by the people responsible for it, later. Until Mike
+says otherwise, no plan should block on content, and no report should treat a content gap as a
+defect. The four specification rules stay unseeded for now; more rules come later.
+
+---
+
+## 2026-07-27 · Filing a signed contract requires its fingerprint and its signers
+
+**Decision by Mike**, answering the second question in
+[`ASSEMBLY-CONNECTION-PLAN-2026-07-27.md`](ASSEMBLY-CONNECTION-PLAN-2026-07-27.md). When Legal
+files an executed agreement — the moment the record freezes — the system demands the signed
+document's digital fingerprint **and** the named signatories, together, before it accepts the
+filing. The signing service's completion certificate is *not* required at that moment: it can be
+attached when it arrives, which matches how the paper actually shows up. The health console
+already surfaces any agreement still waiting on its certificate, so a missing one is visible, not
+forgotten. Mike's framing when first asked — "depends when you are talking about in the process" —
+is the shape of the rule: evidence accumulates in stages, but a filing without its fingerprint and
+its signers is not a filing.
+
+---
+
+## 2026-07-27 · Every assembly run belongs to a deal
+
+**Decision by Mike**, answering the first question in
+[`ASSEMBLY-CONNECTION-PLAN-2026-07-27.md`](ASSEMBLY-CONNECTION-PLAN-2026-07-27.md): when the
+service gains its "run an assembly" endpoint, a run must name the deal it is for. A run floating
+free of any deal is not offered, even though the database could store one — the reading room and
+the requester's pipeline view only make sense when a run belongs to a deal, and the database's
+existing row rules then decide whose deal a requester may run against. If a freestanding run is
+ever wanted, offering it is one field's work.
+
+---
+
 ## 2026-07-26 · The front door is Python, and we run standard PostgreSQL
 
 **Two decisions by Mike, taken together**, after a report weighing JavaScript, Python and Rust,
@@ -1670,3 +1712,274 @@ the service's own log where it belongs.
 **Guarded:** two new tests (both verified to fail on the old code — one makes a
 genuinely failed connection rather than a hand-built error), two new break-it
 checks. 22 of 22 caught by the test that names each one.
+
+---
+
+## 2026-07-27 · Two ways the printed contract could differ from the approved wording
+
+**Why this matters more here than anywhere:** this system's headline promise is
+that every character of contract text in an emitted document is approved
+library wording, exactly. The sweep found two ways that promise could break —
+both invisible to our own tests, because both only fail inside Microsoft Word.
+
+**First: an invisible character could make the contract unopenable.** When
+someone in Word presses Shift+Enter, Word puts an invisible line-break marker
+on the clipboard. Pasted into a clause body, that marker is a character a Word
+*file* is physically incapable of containing. The document builder would emit
+it anyway — producing a file, with a valid fingerprint, recorded as the
+executed artifact, that Word refuses to open. The builder now refuses instead,
+loudly, saying which character and where — so the problem surfaces as "this
+wording needs re-entering" at build time, not as a corrupt contract later.
+(Per the product boundary: the system's job is to make the gap visible; fixing
+the wording belongs to whoever owns it.)
+
+**Second: a line break in approved wording would silently vanish in print.**
+Wording with an ordinary line break survived every check we run — because our
+own reader hands it back faithfully — and then Word renders the break as
+nothing. The printed wording would not be the approved wording, and no test
+could see it. Line breaks are now written as real Word line breaks, and read
+back as what they stand for, so the round trip is exact end to end.
+
+**Guarded:** four new tests — one deliberately inspects the raw file bytes,
+since this failure hides from anything that reads the document politely — and
+two new break-it checks. 51 of 51 caught by the test that names each one.
+
+---
+
+## 2026-07-27 · A door check that could be walked around by speaking another language
+
+**The door in question:** when a vendor sends back a marked-up contract, that
+upload is the one place bytes we did not produce enter the system, so the
+reader refuses several dangerous shapes outright. One of those refusals — a
+declaration that legitimate Word files never carry, historically used to make
+a small file blow up into a huge one — checked for the marker **in one text
+encoding only.** A file written in a different encoding hid the marker from
+the check, while the reader itself, which understands that encoding perfectly
+well, went on to honour it. Reproduced before fixing: the hostile file walked
+straight past.
+
+**The fix moves the check to the other side of the translation.** Instead of
+scanning the raw bytes for the marker's most common spelling, the refusal now
+happens inside the reader itself, after the file's encoding has been decoded —
+so there is no spelling of it, in any encoding, that arrives unseen. The check
+got simpler, not more elaborate: one refusal in the right place replaced one
+in the wrong place.
+
+**Worth remembering as a pattern:** this is the same failure our own harness
+taught us twice already — a protection that reads the *representation* rather
+than the *meaning* is a protection with a dialect it does not speak. The
+break-it harness now attacks this guard both ways, plain and disguised.
+52 of 52 caught. Today's protection against the blow-up attack itself is the
+underlying reader being patched against it; this refusal is the cheap second
+line, and now a real one.
+
+---
+
+## 2026-07-27 · A known gap in the rule grammar, recorded months of work ago, now closed
+
+**This one was not discovered — it was already written down.** The database
+migration that holds the conflict rules (the attorney-authored statements that
+block a contract when two clauses cannot coexist) carries a note: the database
+checks that a rule is *shaped* correctly, the engine checks only that it uses
+the right *labels*, and the two were left disagreeing because the engine
+belonged to another workstream. The note ends "recorded rather than fixed
+here." Nobody had picked it up since.
+
+**Why the shape matters, in one example.** A rule whose condition is written
+as one piece of text instead of a list of tags is read by the engine letter by
+letter — no single letter is ever a real tag, so **the rule never fires.** A
+blocking rule that never fires is a safety gate silently failing open. The
+opposite malformation — an empty list — makes the rule fire on **every**
+contract. Both are quiet, and they are wrong in opposite directions, which is
+the worst combination.
+
+**Today it cannot happen through the database**, whose checks are sound. It
+could happen to any rule built directly in the engine — in tests, or by the
+future rule-authoring screen the architecture already plans for attorneys.
+The engine now refuses malformed shapes with the same strictness as the
+database, so the two layers agree, and the stale note in the migration now
+says so instead of describing a gap that no longer exists.
+
+**Guarded:** five new tests and two new break-it checks — 54 of 54 caught,
+170 engine tests green.
+
+---
+
+## 2026-07-27 · A severity downgrade nobody could see, and a test that outlived its purpose
+
+**The downgrade.** When the intake model assesses a risk, only the exact word
+"High" counted as high severity. "HIGH" or "high" — the kind of drift a
+routine model or prompt update produces — was silently rewritten to Standard.
+Every genuinely high risk would get the weaker standard wording, and the run
+record would show "Standard" as though the model had said so. Compare how
+carefully the same code treats an invented *category*: recorded, with a
+reason, because "the model said something wrong" and "we chose this" are
+different facts. Severity got no such care.
+
+**The fix keeps the safe direction and adds the missing record.** Severity is
+now matched on meaning, not spelling. Anything genuinely unrecognisable
+("Catastrophic", say) is still pulled *down* to Standard — pulling an unknown
+claim up would let a model's typo block a contract — but the rewrite is now
+recorded everywhere the decision travels: in the run record and on the audit
+chain, with the model's original words. A downgrade the record cannot see is
+a judgement nobody made.
+
+**Separately: I retired a test the other session wrote, and here is why.**
+During the move to Python, a test froze the engine against the exact point
+where the port began, to prove the port changed nothing — true then, and
+certified. But frozen-forever means every legitimate engine improvement fails
+it from now on, including this week's genuine bug fixes. The property it
+protected belongs to the port, which is finished and in history; it is not a
+property of the engine's future. Retired with its reason written where the
+test used to be, following the house rule that a guarantee leaves the suite
+with a reason or not at all.
+
+**Guarded:** four new tests, three break-it checks updated or added — engine
+56 of 56, doorway 22 of 22, all suites green.
+
+---
+
+## 2026-07-27 · Two small honesty fixes at the front door
+
+**A wrong-shaped request was reported as our failure.** Send the service a
+request whose body is technically valid but the wrong shape — a list where a
+form was expected — and it crashed into "the service failed". The person was
+told we broke when the truth is the request was malformed, which by this
+system's own rules is a "your mistake" answer, not a "we broke" answer. One
+shape check at the door now covers every endpoint at once.
+
+**The sign-in reply carried a number that meant nothing.** It reported when
+the session would expire using the service's internal stopwatch, whose zero
+point is arbitrary — read as a date, it lands in January 1970. Nothing on any
+screen consumed it yet, which is exactly why no test ever caught it; the first
+screen to render it would have misbehaved silently. The reply now says how
+long the session lasts, which is true on anybody's clock.
+
+**Guarded:** two new tests, two new break-it checks — 24 of 24 caught.
+
+---
+
+## 2026-07-27 · Section 1.10 would have printed before section 1.2
+
+**A defect waiting for the library to grow.** The boilerplate sections that
+open every contract are sorted by their section number — but sorted the way
+words sort, not the way numbers sort. Alphabetically, "1.10" comes before
+"1.2". Today's library has under ten such sections, so nothing has ever
+printed wrong; the first library with ten framework sections would produce
+contracts whose sections a reader meets out of order, renumbered in that
+wrong order.
+
+**Fixed and versioned.** Sections now sort as a reader counts. And because
+this system's rule is that any change to the order in which decisions are
+made must be stamped — a stored contract-assembly result that no longer
+reproduces is indistinguishable from a tampered one unless the record names
+the engine that made it — the engine version is bumped, with a dated note.
+Nothing recorded to date actually differs; the rule is "the rule changed",
+not "we saw a difference", and it is cheap to honour.
+
+**Also worth noting:** the existing order test could never have caught this —
+with single-digit fixtures, word order and number order agree. The new test
+uses a ten-section library, and the break-it harness now reinstates the text
+sort and demands the test notice. 57 of 57 caught, 174 engine tests green.
+
+---
+
+## 2026-07-27 · Four faults on the screens, two of them serious
+
+A sweep of the six workspaces — the first to check every field each screen
+reads against what the service actually sends — found four real faults.
+
+**The Legal reviewer's desk crashed on opening any ticket, blanking the whole
+workspace.** The desk displays the wording a supplier proposed; the endpoint
+feeding it never sent that wording. Reading something that isn't there takes
+the entire screen down, so the core review-and-approve workflow was unusable.
+Nobody saw it because the demonstration system has no tickets in it. **This is
+the same fault as one found weeks ago, one layer further out** — that time the
+endpoint asked the database for columns it doesn't have; this time the screen
+asked the endpoint for a column it doesn't send. There is now a check that
+compares every field the desk reads against the endpoint's own statement.
+
+**The revoke button could revoke the wrong grant, leaving access live.** When
+someone holds two roles — normal, since granting a second doesn't remove the
+first — the button targeted the *older* grant, while the system grants
+authority from the *newer* one. So the revocation succeeded, the dialog
+closed, the record showed it done, and the person's access was untouched. An
+administrator would believe they had removed access that was still live. Now
+it targets the grant that actually confers the access, and the button does not
+appear at all until the screen has the information to name it.
+
+**A sentence that stopped being true was being written into the permanent
+record.** Every retention reminder logged "destruction is Legal admin's act" —
+false since your decision U9 moved that authority to the Administrator and
+revoked Legal's. The screens said the same thing, telling the one person who
+*can* act that they cannot. Corrected in the log entry and in both screens.
+
+**Two screens rendered a failed lookup as "nothing here."** On the override
+surface — the screen whose entire purpose is deciding each finding one at a
+time — a failed findings lookup showed the heading with nothing beneath it.
+"We could not ask" wearing the clothes of "there is nothing to decide," on
+exactly the screen where that matters most.
+
+**One more thing worth recording, because it is the fifth time.** A test
+failed on my correction to the retention wording — because the test was
+checking for the *old sentence itself*. It had frozen prose that had been
+false for weeks. Rewritten to check that the button exists and does the right
+thing, with no opinion about its label.
+
+**Guarded:** three new screen checks, all verified to fail on the old code,
+and three new break-it checks. 81 screen tests green, 255 endpoint tests
+green.
+
+---
+
+## 2026-07-27 · The safety harness was counting crashes as successes
+
+**This is the most important thing found this week, and it is about our own
+safety net rather than the product.**
+
+We have three harnesses that deliberately break each protection and confirm the
+test guarding it notices. One of the three — the newest, covering the service
+front door — scored a check as **passed whenever the test run exited unhappily
+for any reason at all.** It never checked *which* test failed, or whether the
+named test had even run.
+
+**Why that turned out to matter enormously.** Those checks run several at a
+time, each against its own database, and the file said they therefore could not
+interfere with each other. That was wrong: some of the setup work is
+cluster-wide, so simultaneous runs collide. **Measured today: nine of
+twenty-four checks died during setup, before evaluating anything — and all nine
+were reported as passing.** Every "24 of 24" I have reported this week included
+some number of protections that were never actually tested.
+
+**Three changes, and the order matters:**
+
+1. **A check now only passes if the named test failed on its own assertion** —
+   the rule our oldest harness has always applied. Anything else is reported as
+   its own outcome, "the suite failed but not through its own test", and is
+   treated as a failure.
+2. **Collisions are removed rather than tolerated:** anything that comes back
+   ambiguous is automatically re-run on its own, one at a time. Eight of the
+   nine were traffic jams and resolved immediately.
+3. **The ninth was real.** A protection about binding a person's authority to
+   their request was watched by a test whose *setup* needed that very authority
+   — so breaking the thing made the test error out before asserting anything. It
+   proved nothing. There is now a small test that checks the binding directly
+   and needs nothing else to work, and the check points at that.
+
+**The honest bottom line: the count is now 24 of 24 and it means what it says.**
+Before today it did not.
+
+**Two smaller fixes alongside.** The watchers screen hid its "categories nobody
+is watching" warning whenever the underlying lookup failed — so a failure read
+as full coverage, on precisely the screen whose job is showing that gap. And
+the description attached to the signed-contract table still stated that a
+signed agreement can never be changed or deleted by anyone; your decision U12
+added exactly two controlled ways, and the description now names both rather
+than denying they exist.
+
+**One thing I did NOT change, because it is your call.** Decision U11 granted
+the Administrator sight of retention and legal-hold records, but the underlying
+permission rules were never widened to match — so the Administrator currently
+sees an empty list where they should see the holds. Fixing it means widening who
+can read those two tables, which is an access decision rather than a repair.
+It is recorded in the open questions for whoever picks it up.
