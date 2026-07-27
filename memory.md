@@ -995,3 +995,422 @@ engine made of it is exactly what an auditor would want.
 Whether the library's content is any good — the right categories, the right
 clauses under them — belongs to the people who own the library. The system's job
 ends at making the gap visible and giving the responsible person somewhere to act.
+
+---
+
+## 2026-07-26 · We recorded everything about a deal except that it started
+
+**What we found.** The system records every step in a deal's life — when it
+changes status, when it is signed, when it is shared, when a hold goes on, when
+a renewal opens. It did not record the deal being opened. An auditor could read
+the entire history of an agreement except the moment it began and who began it.
+
+**Why that is worse than an ordinary missing entry.** The name of the person who
+opened the deal is the field the system uses to decide who may see it afterwards
+— their runs, their override requests, their reading room, and six other places.
+Every access decision for that person traced back to one field with no record of
+who set it or when.
+
+**How we knew it was an oversight and not a decision.** Nothing anywhere records
+a choice to leave deal openings unrecorded, and the system already audits the
+deal's *status changes*. Recording that something moved from A to B while not
+recording that it exists is not a position anybody would take on purpose.
+
+**Fixed.** Opening a deal, and creating a clause category, are now both on the
+permanent record. Adding a category matters for the same reason: it changes what
+the system counts as covered.
+
+**Who found it.** The other session, building the Python service, needed two
+recorded acts for a test, reached for the most obvious one in the system, and
+found it was not recorded. They wrote it down and did not act on it, because what
+belongs on the permanent record is our decision rather than theirs. That was the
+right call and it is the reason the fix is in the right place.
+
+---
+
+## 2026-07-26 · Two sessions, one database, and an hour nearly lost
+
+**What happened.** Our two working sessions were sharing one database. Each
+session's tests wipe and rebuild it, so running both at once produced failures
+that looked exactly like a broken system: missing tables, half-built structures,
+errors pointing at a migration that was entirely fine.
+
+**Why it is worth remembering.** The error message named a specific piece of our
+schema and said it did not exist. That is indistinguishable from a genuine fault,
+and the natural response is to go and fix the thing it names — which would have
+meant changing working code to chase a problem that was not there.
+
+**What settled it.** Running the same tests twice, minutes apart, with nothing
+changed in between: 129 passed with 36 errors, then 341 passed with 3 failures.
+Results that move on their own are not a fault in the code.
+
+**The habit:** when a failure cannot be reproduced twice, find out what else is
+running before changing anything. Fixed by giving each session its own database.
+
+---
+
+## 2026-07-26 · The blocker that wasn't, and the safety net that would have vanished
+
+**The situation.** The other session was ready to delete the old JavaScript
+service — the last step of moving to Python — but stopped, because deleting it
+looked like it would destroy the tests protecting our screens. The screens are
+staying, so that would have been a real loss.
+
+**It wasn't true.** I checked by moving the old service aside and running
+everything. The screens' tests do not touch it at all — 61 of 61 still passed.
+The apparent link was a comment mentioning it, not actual use. So the deletion
+they were bracing for is straightforward, and the rewrite they were budgeting
+for does not need doing.
+
+**But something else was worse than reported.** Our verification harness — the
+one that deliberately breaks each protection to prove the test guarding it
+notices — would not have "partly stopped working". It would have stopped
+starting at all, taking down all 197 checks, including the 139 that have nothing
+to do with the service. A harness that cannot start proves nothing, and it would
+have looked like a broken test rather than a missing file.
+
+**Fixed, and deliberately made noisy.** The harness now survives the deletion,
+and reports the 15 affected checks as stale — which fails the build. That is the
+intended outcome: **deleting the old service cannot make the bar green.** It goes
+red until somebody either re-proves those 15 protections against the new Python
+service or removes each one with a written reason.
+
+**Why those 15 matter.** They are the guards on the most dangerous behaviours we
+identified: that a request can't act under someone else's name, that sign-in
+never uses a privileged connection, that a refusal is never quietly retried to
+make a demo work, and that permission decisions stay in the database rather than
+being duplicated in code. The new service must hold every one of them. Those 15
+are now the checklist for proving it does.
+
+**The general point.** Twice today a plan's dependency list was wrong — once
+naming something that would break and didn't, once understating something that
+would break badly. Both were settled in minutes by moving a directory and running
+the tests. **A dependency list is a hypothesis; running it is the answer.**
+
+---
+
+## 2026-07-26 · The audit trail can only be written one act at a time
+
+**What came up.** The other session, now running on a real database, tested
+something we have never been able to test: what happens when two people record a
+governed act at the exact same moment. They reported it as a fault.
+
+**What it actually is.** The permanent record is a chain — each entry is sealed
+using the entry before it, which is what makes tampering detectable. That design
+means entries cannot be written in parallel. If two people act at the same
+instant, one waits for the other. The waiting is not a bug; it is the chain
+working.
+
+**The part that IS a problem.** They also saw an honest act occasionally fail
+outright with an unreadable database error rather than waiting its turn. That
+should not happen — the protection meant to make people queue is already in the
+code — so something is defeating it. I have given them the specific things to
+measure rather than guessing, because rewriting the most safety-critical part of
+the system from a description would be the wrong order.
+
+**Why I did not "fix" it.** The error they saw proves two writers held the same
+position in the chain at once. The obvious-looking fix — relaxing the rule that
+refuses a second entry in the same position — would remove the only thing
+standing between an unexplained error and the permanent record quietly gaining
+two versions of history. The rule is right; something upstream is wrong.
+
+**A decision you may need to make.** Recording acts one at a time bounds how many
+governed acts per second the system can accept. That has never mattered at our
+size and may never. It is a property to accept knowingly rather than discover
+later, and the alternative — a record that can be written in parallel — cannot be
+a tamper-evident chain in the same way.
+
+**Worth noting about our own honesty.** The relevant line of code carried a
+comment admitting it had never been tested and shipped "on reasoning alone",
+because our old database could not run two connections. That comment was honest
+when written and had become false the moment we moved to the new database. I have
+corrected it. A note recording a limitation that has since been lifted is its own
+kind of misinformation.
+
+---
+
+## 2026-07-26 · The audit trail's numbering was assigned in the wrong place
+
+**What was wrong.** Every entry in our permanent record carries a number saying
+its position in the order. That number was being handed out by the database a
+moment *before* the entry was actually sealed into the chain — and crucially,
+before the mechanism that makes people take turns. So when two people acted at
+the same instant, the numbers and the actual order disagreed.
+
+**Two consequences, both measured.** With eight people acting at once, five of
+the eight were refused outright with an unreadable error, for acts that were
+entirely honest. And when nothing was refused, the record came out numbered in
+one order and chained in another — so our own verification declared the record
+tampered with, when nothing had been.
+
+**That second one is the serious one.** It is the audit trail accusing an honest
+system, which we have been caught by before in a different form. It only appears
+when two people act simultaneously, which is why it has never been seen.
+
+**Fixed** by moving the numbering inside the mechanism that makes people take
+turns, so position and order are the same thing again. That also means the three
+things that read the record — the verifier, the checkpoint, the tamper anchor —
+keep working exactly as written rather than each needing to be taught a new rule.
+
+**The trap I avoided, and it was inviting.** The obvious reading was "our
+duplicate-prevention rule is too strict — relax it." That rule is the only thing
+standing between an unexplained error and the permanent record quietly holding
+two versions of history. It was right every time; it was being handed bad input.
+**When a safety check fires, ask what handed it a bad value before deciding the
+check is wrong.**
+
+**On proof, stated honestly.** Our own test setup cannot run two people at once,
+so it cannot reproduce the original fault. What it *can* prove is the mechanism —
+there is now a test showing the number comes from the right place. The proof that
+the fault is gone belongs to the other session's setup, and until they re-run it
+this is a reasoned fix rather than a verified one. I have said so everywhere it
+is written down rather than letting it read as finished.
+
+---
+
+## 2026-07-26 · The audit-trail fix is verified, and the speed question is answered
+
+**Verified.** The other session re-ran the failures against the fix. Eight people
+acting at the same instant: previously five of eight were refused, now none. The
+record previously came out numbered in one order and chained in another, and our
+own verification called it tampered with; now it verifies clean. It is a
+permanent test on their side, not a one-off measurement, so it will keep being
+true rather than having been true once.
+
+**The speed question, answered with a number rather than a shrug.** Because the
+permanent record is a chain, entries must be written one at a time — I flagged
+that as a property you might need to accept. Measured: **323 governed acts per
+second.** For a contract governance system that is several orders of magnitude
+more headroom than we need. It stops being a decision and becomes a fact we
+checked.
+
+**Worth recording about how the fix was chosen.** Their instinct was to change
+how we *find* the end of the chain. Mine was to ask who *reads* it afterwards —
+three separate things do, and that approach would have obliged all three to be
+re-taught. Assigning the number in the right place instead meant none of them
+changed at all. They said plainly they would have shipped the worse fix. Two
+people looking at the same defect from different ends is what produced the
+smaller change.
+
+**And a correction we made rather than left.** A comment in the schema had said
+this exact scenario was "checked and passes". It had been checked — on a database
+that could not run two people at once, so it never tested the thing it claimed.
+It is now true again, and the comment says explicitly that it is true for a
+different reason than it originally claimed. A note that is accidentally correct
+is not the same as a note that has been verified.
+
+---
+
+## 2026-07-27 · A near-miss worth more than the bug it nearly hid
+
+**What happened.** A routine edit to a schema file changed its invisible
+line-ending characters — a Windows/Unix difference that affects nothing about how
+the database behaves. All 23 test suites stayed green. But our safety harness,
+the one that deliberately breaks each protection to confirm the test guarding it
+notices, matches text exactly. Those invisible characters meant it could no
+longer find what it was looking for in that file.
+
+**Why it nearly slipped through.** Only one of the affected checks reported a
+problem, because the other happened to exist word-for-word in a second file and
+matched there instead. So the report read as almost perfect: one line of warning
+in a 198-line list. "198 of 198" and "197 of 198 with one skipped" look nearly
+identical and mean completely different things — one is protected, the other has
+a protection nobody is watching.
+
+**Caught, fixed, and now written down** as a thing to check whenever a schema
+file is edited by a script rather than an editor.
+
+**The wider point, and it is the same one twice today.** Our tests going green is
+not the same as our protections working. A test can pass because it was never
+run, because it was handed nothing to look at, or — here — because the harness
+quietly lost its target. **The count at the bottom of a report is the least
+informative line in it.** Read what was skipped.
+
+---
+
+## 2026-07-27 · The safety harness now refuses to run rather than mislead
+
+**Following on from yesterday's near-miss.** Our harness — the one that
+deliberately breaks each protection to confirm the test guarding it notices —
+used to report a stale check as one warning line inside a 198-line list, next to
+a near-perfect score. Technically correct, and the wrong shape: it produced a
+reassuring number and buried the thing that mattered.
+
+**Changed so there is nothing to misread.** It now checks every pattern before
+running anything. If any is stale, **nothing runs and there is no score** — just
+the list of what to fix. The idea came from the other session, who hit the same
+problem from the other direction.
+
+**It found four real problems on its first run**, none of which anyone knew
+about. In four places the harness was looking for a piece of text that appears
+more than once, and it only ever changes the first one it finds. All four
+happened to be watching the right copy — **purely by luck of what order things
+sit in the file.** Any tidy-up that moved them would have shifted the check onto
+the wrong copy, silently, and it would still have reported success.
+
+Fixed so each is unmistakable rather than lucky. All 198 checks still pass.
+
+**Why this keeps being worth the time.** Three separate times in two days, the
+thing that looked like protection wasn't: a test that could never fail, a check
+that lost its target, and now four checks watching the wrong copy of something.
+Each was invisible in a green report. **The value is not in the tests passing —
+it is in having built something that can tell us when they pass for the wrong
+reason.**
+
+---
+
+## 2026-07-27 · The Auditor's workspace is built; the Viewer's is one endpoint away
+
+**Built.** The Auditor — the role that reads everything and changes nothing —
+now has a real workspace: the full record of governed acts with search and
+filtering, a spreadsheet export, the review-quality figure, and where the
+approved wording came from. Signed in as the seeded auditor and walked all of
+it in a browser.
+
+**The design rule it is built around.** The Auditor changes nothing, and the
+screen has to *prove* that rather than assert it. So there is not a single
+greyed-out button anywhere in it. A disabled control says "you could, but not
+now", and sends somebody looking for the conditions that light it up. The truth
+is "this was never yours", and the honest way to show a right you do not hold is
+to show nothing.
+
+**Still blocked, and it is one small thing.** The Viewer's reading room has no
+way to fetch its data. The reading room was built into the database while the
+service work was paused, so it arrived after the list of service endpoints was
+frozen. I have asked the other session for two, and specifically asked them
+**not** to add a way for a viewer to download a copy — that was a deliberate
+decision and convenience is exactly how such decisions get undone. Until then the
+screen keeps saying it is not built, which is the truthful answer: an empty
+reading room would tell somebody they had been shown nothing when the truth is
+that nobody asked.
+
+**Two things it taught, both about our own checks rather than the screens.**
+
+First, a tile showed "not available" because it was looking up the wrong name.
+On screen that is indistinguishable from the health check genuinely having no
+answer — the same failure that keeps recurring here, where something missing
+looks exactly like everything being fine.
+
+**Second, and worse: the test I wrote to catch that was itself fooled.** It
+looked for a phrase in the code, and the tile's own on-screen wording contains
+that same phrase — so the test kept passing while the thing it was checking was
+broken. Our harness caught it by deliberately breaking the code and noticing the
+test did not object. **That is now six times in three days** that something
+which looked like protection was not, and every one was found by attacking it
+rather than reading it.
+
+---
+
+## 2026-07-27 · Both read-only workspaces are done
+
+**Closed.** The Auditor and the Viewer — the two roles that change nothing — now
+have working screens. Fourteen of our sixteen packages are complete. What remains
+is the Legal admin's workspace and a final acceptance pass, and **nothing is
+blocked any more.**
+
+**The Viewer's reading room** shows the agreements somebody has shown you, why
+they were shared, and the contract itself clause by clause — including who
+approved each piece of wording. That last part is the point of the role: being
+shown a contract is useless if you cannot see whose language it is.
+
+**Two rules on that screen are now enforced twice, on purpose.** The viewer's
+data cannot be requested by name — the screen has no way to ask for a particular
+agreement, only to receive what it was given — and there is **no way for a viewer
+to download a copy.** That second one was a deliberate decision when the role was
+designed: showing somebody a contract and letting them take a copy away are
+different acts, and only the first was agreed. Both the screen and the service
+now have a test that fails if either rule is broken. Single-sided would have been
+worth much less, because the whole risk is somebody adding a convenience later
+without reading the decision.
+
+**Something I want to be straight about.** I verified the reading room by its
+tests, by deliberately breaking it and confirming the tests object, and by
+checking every field it displays against what the service actually sends. But I
+have **not** seen it render a real share on screen. The shared development
+database does not have the full set of demo people, and creating them would have
+risked disturbing the other session's work — which is exactly the collision that
+cost us time yesterday. It belongs in the final acceptance pass, and I have said
+so rather than letting it read as done.
+
+---
+
+## 2026-07-27 · The Legal admin's workspace cannot be finished, and it is not our oversight
+
+**What I found.** The Legal admin's workspace asks for four surfaces. Each has a
+*looking* half and a *doing* half. I built the looking halves — the clause
+library with its history and expiry warnings, and the fallback ladders showing
+where a negotiation can retreat to. Then I checked what the doing halves need,
+and **six of them have no way to reach the system at all**:
+
+- activating, retiring or replacing a clause
+- editing a conflict rule
+- promoting a concession into the library
+- reordering a ladder, or moving its floor
+- releasing a legal hold
+- destroying a record once its retention period ends
+
+**This is not something we broke.** The list of things the system can do was
+frozen months of work ago as the specification for the rewrite, and these six
+were never on it. Nobody noticed because this workspace was paused before anyone
+looked at it closely.
+
+**Nothing is broken today.** A screen that cannot do something says so, rather
+than offering a button that fails. What is affected is the claim: **this package
+cannot be called finished**, and the final sweep must not mark it done on the
+strength of the reading screens.
+
+**Two of the six need you, not just engineering time.** Destroying a record when
+its retention period ends is irreversible, must be refused while a legal hold is
+open, and needs the most deliberate confirmation in the product. Replacing a
+clause must create a new version with its history intact — never edit the old one
+in place, because past decisions were taken against that wording and rewriting it
+changes what they meant. Both need deciding before they are built.
+
+**The question for you:** are those six in scope for this piece of work, or does
+this workspace close as the reading screens plus a named follow-on?
+
+**Recorded in `docs/open-questions.md` §9b** with the full list.
+
+---
+
+## 2026-07-27 · One system in one language, and the second one retired
+
+**What changed.** The duplicate service is gone. Until today the system had two
+of them: one written in JavaScript answering the screens, one in Python holding
+the part that actually decides things. The JavaScript one has been deleted.
+
+**What was deleted, and what deliberately was not.**
+
+| Deleted | Kept |
+|---|---|
+| the JavaScript service (6 files) | all 21 database migrations — the rules |
+| its 3 test files | the 20 database test suites |
+| | the contract engine, untouched |
+| | the screens, not one line changed |
+
+The database test suites stay in JavaScript on purpose. They test the database,
+which behaves identically whichever language asks it — rewriting them would
+re-prove what is already proven and risk losing detail earned by attacking the
+schema.
+
+**Why this was safe to do.** The thirty promises the old service made were
+re-proved against the new one before anything was deleted, each with a record of
+where it now lives. Two of them are stronger than they were: the system can now
+be tested with two people using it at the same moment, which the old database
+could not do at all.
+
+**What that new ability found, on its first use.** A defect present since the
+first migration: when two people acted in the same instant, one of them was
+refused for no good reason, and — worse — the system could declare its own audit
+trail tampered with. Both are fixed and confirmed. Nobody had seen it because
+nothing could produce two simultaneous users until this week.
+
+**The one thing worth remembering about how this was done.** Everything that
+looked like a blocker was checked rather than believed. The last one held the
+work up for a day and turned out to be a *comment* mentioning the old service in
+a file that does not use it. Reading found the blocker; running the experiment
+removed it.
+
+**Where the language decision now stands.** Python everywhere the system thinks.
+JavaScript everywhere it displays. The database keeps the rules. All six planned
+packages are complete.
