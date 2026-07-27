@@ -381,9 +381,16 @@ grant usage, select on sequence cw.supersession_id_seq to cw_legal_reviewer;`,
   // ── Executed agreements: a signed contract is frozen ──
   { suite: 'executed.test.mjs',
     name: 'signed documents can be edited after execution',
-    find: `    execute format('create trigger %I_frozen before update on cw.%I
+    // Anchored on the foreach line, because 0006 has TWO identical blocks of
+    // these format() calls — one for the agreement and its documents, one for
+    // the certificate and signatories. String.replace rewrites the first only,
+    // so without the anchor this check silently depended on which block came
+    // first in the file. Preflight refuses the ambiguity now.
+    find: `  foreach t in array array['executed_agreement','executed_document'] loop
+    execute format('create trigger %I_frozen before update on cw.%I
                     for each row execute function cw.executed_frozen()', t, t);`,
-    repl: `    perform 1;`,
+    repl: `  foreach t in array array['executed_agreement','executed_document'] loop
+    perform 1;`,
     expect: 'the signed document cannot be edited — not by anyone' },
 
   { suite: 'executed.test.mjs',
@@ -392,9 +399,18 @@ grant usage, select on sequence cw.supersession_id_seq to cw_legal_reviewer;`,
     // application bugs. It is now a trigger that raises, so the old `find`
     // string no longer exists anywhere.
     name: 'signed documents can be deleted',
-    find: `    execute format('create trigger %I_no_delete before delete on cw.%I
+    // Same anchoring, same reason. The frozen trigger is kept in the
+    // replacement so this check breaks deletion ONLY — a mutation that removed
+    // both would be caught by whichever test ran first, not by the named one.
+    find: `  foreach t in array array['executed_agreement','executed_document'] loop
+    execute format('create trigger %I_frozen before update on cw.%I
+                    for each row execute function cw.executed_frozen()', t, t);
+    execute format('create trigger %I_no_delete before delete on cw.%I
                     for each row execute function cw.executed_frozen()', t, t);`,
-    repl: `    perform 1;`,
+    repl: `  foreach t in array array['executed_agreement','executed_document'] loop
+    execute format('create trigger %I_frozen before update on cw.%I
+                    for each row execute function cw.executed_frozen()', t, t);
+    perform 1;`,
     expect: 'a signed document cannot be deleted' },
 
   { suite: 'executed.test.mjs',
@@ -594,8 +610,24 @@ grant usage, select on sequence cw.supersession_id_seq to cw_legal_reviewer;`,
   // ════════════════════════════════════════════════════════════════════════
   { suite: 'governance.test.mjs',
     name: 'the retention path does not check for a legal hold',
-    find: '  if cw.agreement_under_hold(p_agreement_id) then',
-    repl: '  if false then',
+    // ANCHORED ON THE ACT IT NAMES. `if cw.agreement_under_hold(...)` alone was
+    // unique until 0023 added the same guard to redaction and to purging, at
+    // which point it matched three blocks in two files and would have mutated
+    // whichever came first. The preflight refused the run rather than let it
+    // watch the wrong one. The word "destruction" is what makes this the
+    // retention path's guard and not one of the other two.
+    find: `  if cw.agreement_under_hold(p_agreement_id) then
+    select string_agg(h.matter_ref, ', ' order by h.matter_ref) into matters
+    from cw.legal_hold h
+    where h.agreement_id = p_agreement_id and h.released_on is null;
+    raise exception
+      '% is under legal hold (%); destruction is suspended until every hold is '`,
+    repl: `  if false then
+    select string_agg(h.matter_ref, ', ' order by h.matter_ref) into matters
+    from cw.legal_hold h
+    where h.agreement_id = p_agreement_id and h.released_on is null;
+    raise exception
+      '% is under legal hold (%); destruction is suspended until every hold is '`,
     expect: 'a record under legal hold cannot be destroyed by the retention path' },
 
   // Releasing is the consequential act — it is what lets destruction resume —
@@ -757,8 +789,13 @@ grant insert, update on cw.clause_version to cw_administrator;`,
 
   { suite: 'administrator.test.mjs',
     name: 'the bootstrap ceremony stops checking who is calling it',
-    find: '  if cw.app_role() is not null then',
-    repl: '  if false then',
+    // Anchored on the raise that follows it: `if cw.app_role() is not null then`
+    // appears twice in 0013 — here, and in the governance-setting trigger — so
+    // on its own this check depended on which came first in the file.
+    find: `  if cw.app_role() is not null then
+    raise exception 'the bootstrap ceremony is the owner''s one act; a connection '`,
+    repl: `  if false then
+    raise exception 'the bootstrap ceremony is the owner''s one act; a connection '`,
     expect: 'the in-function role guard refuses an administrator, if ever reached' },
 
   { suite: 'administrator.test.mjs',
@@ -1022,187 +1059,52 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     expect: 'a requester or viewer can reach none of them' },
 
   // ════════════════════════════════════════════════════════════════════════
-  // The service layer (WP-U05) — target: 'service'
+  // The service layer (WP-U05/U06) — REMOVED WITH WP-P5, and where it went
   // ════════════════════════════════════════════════════════════════════════
   //
-  // THE POOL BLEED, in each of the three ways it can happen. This is the
-  // ADR-0008 residual as a live wire, and every one of these failures looks
-  // like two perfectly successful requests plus a permanent record naming the
-  // wrong person — which is why none of them would be noticed in use.
-
-  // 1. The actor is not BOUND at the start of a request, so the connection
-  //    keeps whatever name it last carried and every audited write lands under
-  //    the wrong person.
+  // Fifteen mutations lived here, over `backend/service/*.mjs`. That directory
+  // was deleted when the Python doorway replaced it (WP-P5, approved by the
+  // owner 2026-07-27), so they are gone — but NOT quietly, and NOT because a
+  // deletion made the bar green.
   //
-  //    Named against the FIRST test in the suite rather than the pool-bleed one,
-  //    and the reason is worth keeping. With the binding gone, cw.app_actor()
-  //    answers 'unattributed' for everybody — so WP-U02's "the proposer cannot
-  //    also be the acceptor" rule fires during the suite's own SEEDING, and the
-  //    file dies before reaching the pool-bleed test at all. Two guarantees
-  //    colliding, both working. The fix is to assert the binding directly and
-  //    early, which the suite now does.
-  { target: 'service', suite: 'service.test.mjs',
-    name: 'the actor is not bound at the start of a request',
-    find: `      await this.#pg.query(\`select set_config('cw.actor', $1, false)\`, [person]);`,
-    repl: `      await this.#pg.query('select 1');`,
-    expect: 'a bound session sets both the name and the authority' },
-
-  // 2. The role is not bound, so the request runs as whatever the connection
-  //    was — up to and including the owner, who bypasses row-level security.
-  { target: 'service', suite: 'service.test.mjs',
-    name: 'the role is not bound at the start of a request',
-    find: `      await this.#pg.exec(\`set role \${dbRole};\`);`,
-    repl: `      await this.#pg.query('select 1');`,
-    expect: 'every request runs as a real application role, never the owner' },
-
-  // 3. Requests are not serialised onto the single connection, so two of them
-  //    interleave their `set role` and their statements.
-  { target: 'service', suite: 'service.test.mjs',
-    name: 'requests are not serialised onto the connection',
-    find: `    const result = this.#queue.then(run, run);`,
-    repl: `    const result = run();`,
-    expect: 'interleaved requests never cross-attribute — asserted on the audit rows' },
-
-  // 4. The exit cleanup removed.
+  // The guarantees they held are the dangerous ones: identity bound per request
+  // and surrendered at the end of it, no privileged connection at sign-in,
+  // sessions that expire, refusals classified by SQLSTATE rather than by
+  // message text, row scoping done by the database rather than by the API, a
+  // write attributed to nobody but the signed-in person, and a refusal never
+  // retried. Losing those silently is the worst outcome this file could produce.
   //
-  //    WHAT THIS MUTATION ACTUALLY PROVED, recorded because the first version of
-  //    it was wrong and the harness said so. Removing the `reset role` and the
-  //    actor clear changes NO behaviour that any test can observe — because
-  //    every entry point binds both before its first statement, so a stale value
-  //    is always overwritten rather than read. The cleanup is a genuine second
-  //    line of defence, not the mechanism, and the mechanism is mutations 1–3.
+  // EVERY ONE IS RE-PROVED IN `backend/doorway/mutation_check.py`, checked name
+  // by name before these were removed rather than taken on trust:
   //
-  //    So this entry keys on the structural assertion instead, and the comment
-  //    in db.mjs says the same thing. Claiming a behavioural test for it would
-  //    have been a document promising what no code enforced — which is the exact
-  //    failure class the 2026-07-25 review catalogued eighteen of.
-  { target: 'service', suite: 'service.test.mjs',
-    name: 'the connection is never cleaned up after a request',
-    find: `        await this.#pg.exec('reset role;');`,
-    repl: `        await this.#pg.query('select 1');`,
-    expect: 'the service exposes no way to query outside a bound session' },
-
-  // THE PRIVILEGED SHORTCUT. Sign-in reads cw.account before any role is known;
-  // doing it as the owner would be the one place a privileged connection could
-  // hide, and the owner bypasses row-level security entirely.
-  { target: 'service', suite: 'service.test.mjs',
-    name: 'sign-in looks up identity on a privileged connection',
-    find: `    return this.asPerson('__signin__', 'viewer', fn);`,
-    repl: `    return fn({ query: async (sql, params = []) =>
-      (await this.#pg.query(sql, params)).rows });`,
-    expect: 'sign-in itself is not privileged either' },
-
-  // REVOCATION AT NEXT REQUEST. If the role is cached on the session, revoking
-  // somebody takes effect at their next SIGN-IN — which for an eight-hour
-  // session means tomorrow, while the console says revoked.
-  { target: 'service', suite: 'service.test.mjs',
-    name: 'the effective role is resolved once and cached on the session',
-    find: `    const rows = await this.#db.lookUpIdentity(({ query }) =>
-      query(\`select role from cw.effective_role where person = $1\`, [person]));
-    if (!rows.length) {`,
-    repl: `    const rows = this.__roleCache?.[person]
-      ? [{ role: this.__roleCache[person] }]
-      : await this.#db.lookUpIdentity(({ query }) =>
-          query(\`select role from cw.effective_role where person = $1\`, [person]));
-    (this.__roleCache ??= {})[person] = rows[0]?.role;
-    if (!rows.length) {`,
-    expect: 'a revoked person is refused on their very next request' },
-
-  // SESSION EXPIRY, ignored.
-  { target: 'service', suite: 'service.test.mjs',
-    name: 'sessions never expire',
-    find: `    if (this.#now() >= s.expiresAt) { this.#byToken.delete(token); return null; }`,
-    repl: `    if (false) { return null; }`,
-    expect: 'a session expires and re-sign-in is required' },
-
-  // THE REFUSAL, REWORDED. The schema raises refusals that name the rule and
-  // the role; classifying by message text instead of SQLSTATE silently demotes
-  // every schema-worded refusal to a 400 bad request. This one is not
-  // hypothetical — it is the bug this file shipped with and the test caught.
-  { target: 'service', suite: 'service.test.mjs',
-    name: 'refusals are classified by reading the message, not the SQLSTATE',
-    find: `  const denied = e?.code === '42501'
-    || /permission denied|row-level security/i.test(msg);`,
-    repl: `  const denied = /permission denied|row-level security|insufficient_privilege/i.test(msg);`,
-    expect: 'the database\'s own words reach the caller unchanged' },
-
-  // THE FORGED CLAIM, and the scoping filter migrating into the API. Both are
-  // structural checks, and both would otherwise be enforced by good intentions.
-  { target: 'service', suite: 'service.test.mjs',
-    name: 'the deals endpoint scopes rows in the API instead of the database',
-    find: `    sql: \`select agreement_id, counterparty, requester, status
-          from cw.agreement order by agreement_id\`,`,
-    repl: `    sql: \`select agreement_id, counterparty, requester, status
-          from cw.agreement where true order by agreement_id\`,`,
-    expect: 'the difference comes from the database, not from a filter here' },
-
-  // ════════════════════════════════════════════════════════════════════════
-  // Attributed mutations (WP-U06) — target: 'service'
-  // ════════════════════════════════════════════════════════════════════════
+  //   the actor is not bound at the start of a request          → same name
+  //   the role is not bound at the start of a request           → same name
+  //   requests are not serialised onto the connection           → 'a request is not one unit of work'
+  //   the connection is never cleaned up after a request        → split in two: 'the role is not
+  //                                                               surrendered when the request ends'
+  //                                                               and 'the actor is not surrendered…'
+  //   sign-in looks up identity on a privileged connection      → same name
+  //   the effective role is resolved once and cached            → same name
+  //   sessions never expire                                     → same name
+  //   refusals are classified by reading the message…           → same name
+  //   the deals endpoint scopes rows in the API…                → same name
+  //   a deal can be opened in somebody else's name              → same name
+  //   the reviewer verifying a ticket is taken from the request → same name
+  //   verification becomes a raw update that mints nothing      → same name
+  //   the approved wording defaults to whatever was proposed    → same name
+  //   a blank rejection note is accepted                        → same name
+  //   a refused write is retried "to make the demo work"        → same name
   //
-  // THE V3 BUG CLASS, restored one endpoint at a time. Each of these makes a
-  // write carry a name the request supplied instead of the one the session
-  // holds — which is the unattributed override wearing a different hat, and it
-  // succeeds silently every time.
-  { target: 'service', suite: 'mutations-api.test.mjs',
-    name: 'a deal can be opened in somebody else\'s name',
-    find: "       values ($1, $2, current_setting('cw.actor'))",
-    repl: "       values ($1, $2, coalesce($3, current_setting('cw.actor')))",
-    expect: 'the requester on a deal comes from the session, not the body' },
+  // The doorway's harness adds two this one never had, both found on its first
+  // run: 'a read refusal is softened into an empty list' and 'the engine's
+  // refusal is reworded on the way out'. So the surface is better watched after
+  // the move than before it — which is the only honest reason to accept a
+  // deletion here.
+  //
+  // `target: 'service'` is now used by no entry. The runner still understands
+  // it and the existsSync guard stays, so nothing breaks if somebody restores
+  // the directory to look at it.
 
-  { target: 'service', suite: 'mutations-api.test.mjs',
-    name: 'the reviewer verifying a ticket is taken from the request',
-    find: `      \`select cw.verify_review_ticket($1,$2,$3,$4,$5,current_setting('cw.actor'),$6,$7,$8)`,
-    repl: `      \`select cw.verify_review_ticket($1,$2,$3,$4,$5,coalesce($9,current_setting('cw.actor')),$6,$7,$8)`,
-    expect: 'a legal reviewer verifies it, and the minted origin is derived' },
-
-  // THE SCHEMA'S OWN GATE, bypassed by an API-shaped shortcut. This is the
-  // mistake this file actually made before the database refused it, so it is
-  // worth keeping catchable rather than trusting nobody will make it again.
-  { target: 'service', suite: 'mutations-api.test.mjs',
-    name: 'verification becomes a raw update that mints nothing',
-    find: `  'POST /tickets/verify': {`,
-    repl: `  'POST /tickets/decide': {
-    rule: 'a shortcut',
-    run: (query, body) => query(
-      \`update cw.review_ticket set state = 'verified',
-              decided_by = current_setting('cw.actor'), decided_on = now()
-        where ticket_id = $1 returning ticket_id\`, [body.ticket_id]),
-  },
-  'POST /tickets/verify': {`,
-    expect: 'verification is one act, not an API-shaped shortcut round the schema' },
-
-  // THE APPROVED WORDING, defaulted. Every unedited approval becomes a fact the
-  // system invented rather than one it recorded, and owner decision U4's whole
-  // measurement rests on this column.
-  { target: 'service', suite: 'mutations-api.test.mjs',
-    name: 'the approved wording defaults to whatever was proposed',
-    find: `      [required(body, 'ticket_id'), required(body, 'approved_text'),`,
-    repl: `      [required(body, 'ticket_id'), body.approved_text ?? body.proposed_text ?? '',`,
-    expect: 'the approved wording is never defaulted to the proposal' },
-
-  // A REQUIRED FIELD QUIETLY OPTIONAL. The rejection note is the one the schema
-  // already guards, and the empty string is exactly what a form posts when
-  // nobody typed anything.
-  { target: 'service', suite: 'mutations-api.test.mjs',
-    name: 'a blank rejection note is accepted',
-    find: `  const v = body?.[field];
-  if (v === undefined || v === null || String(v).trim() === '')`,
-    repl: `  const v = body?.[field];
-  if (false)`,
-    expect: 'a rejection without a note is refused before it reaches the database' },
-
-  // THE REFUSAL, RETRIED. The single most damaging line anybody could add.
-  { target: 'service', suite: 'mutations-api.test.mjs',
-    name: 'a refused write is retried "to make the demo work"',
-    find: `        const rows = await this.#db.asPerson(caller.person, caller.role,
-          ({ query }) => write.run(query, body ?? {}));`,
-    repl: `        let rows;
-        try {
-          rows = await this.#db.asPerson(caller.person, caller.role,
-            ({ query }) => write.run(query, body ?? {}));
-        } catch { rows = []; }`,
-    expect: 'a viewer cannot open a deal, and nothing reaches the chain' },
 
   // ════════════════════════════════════════════════════════════════════════
   // The shell (WP-U07) — target: 'shell'
@@ -1224,9 +1126,14 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     expect: "legal_reviewer's tabs match the architecture exactly" },
 
   // A TAB WITH NO PANE. A dead end somebody reaches by clicking.
+  //
+  // REPOINTED when WP-U14 built the auditor's panes: this keyed on the
+  // `quality` route while it was still a NotBuiltYet stub, and that line no
+  // longer exists. The preflight caught it the same run the panes landed —
+  // which is the whole reason the preflight refuses to produce a count.
   { target: 'shell', suite: 'shell.test.mjs',
     name: 'a tab leads nowhere',
-    find: `  'quality':        () => <NotBuiltYet what="Review quality is not built." lands="WP-U14" />,`,
+    find: `  'quality':        () => <QualityPane />,`,
     repl: ``,
     expect: 'every tab in every workspace has a pane behind it' },
 
@@ -1450,17 +1357,37 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
   // only the decision filter left the socialisation join in place, so a merely
   // requested override still passed nothing and a different test caught it —
   // reported IMPRECISE, which is the harness refusing to credit the wrong test.
+  // REPOINTED AT 0019, and the reason is trap 5.4 in its subtlest form.
+  //
+  // Both of these keyed on 0015's copy of cw.override_passes, ending in the
+  // semicolon that 0015's definition has. 0019 REDEFINES that view, so the
+  // mutation went on landing in 0015 and was then overwritten wholesale by the
+  // later migration — applied, cancelled, and reported MISSED. Not SKIP: the
+  // pattern was still found, so the harness could not tell it had gone stale,
+  // and these two read as "nothing guards this" for the two guarantees this
+  // whole workflow exists to hold.
+  //
+  // The fix is to key on text that survives EVERY migration. Dropping the
+  // trailing semicolon matches both copies, so both are mutated and the last
+  // definition to run is the mutated one.
   { suite: 'override.test.mjs',
     name: 'the gate opens on the request rather than the approval',
+    // The socialisation join goes WITH the decision filter, and that is not
+    // incidental. Keeping the join and dropping only the filter leaves a
+    // merely-requested override still passing nothing — because it has not been
+    // socialised — so the named test goes on passing and a later one catches the
+    // mutation instead. That is the IMPRECISE this entry's comment above already
+    // records once; it was reintroduced when the entry was repointed at 0019 and
+    // caught the same way.
     find: `join cw.override_socialisation s on s.request_id = f.request_id
-where f.decision = 'approved';`,
-    repl: `where true;`,
+where f.decision = 'approved'`,
+    repl: `where true`,
     expect: 'a request on its own passes NOTHING' },
 
   { suite: 'override.test.mjs',
     name: 'a rejected finding is let past with the approved ones',
-    find: `where f.decision = 'approved';`,
-    repl: `where f.decision is not null;`,
+    find: `where f.decision = 'approved'`,
+    repl: `where f.decision is not null`,
     expect: 'the gate opens for the approved finding ONLY' },
 
   // THE WINDOW, SKIPPED. The watchers are told and given no time to object,
@@ -1642,10 +1569,10 @@ grant insert on cw.override_socialisation, cw.override_notified to cw_requester;
     expect: 'the deal is opened in the session person\'s name, with no field for it' },
 
   // ════════════════════════════════════════════════════════════════════════
-  // The sharing act and the reading room (WP-U14 read models, 0016)
+  // The sharing act and the reading room (WP-U14 read models, 0017)
   // ════════════════════════════════════════════════════════════════════════
   //
-  // THE HOLE THIS CLOSED. Before 0016 a viewer could read every signed contract
+  // THE HOLE THIS CLOSED. Before 0017 a viewer could read every signed contract
   // in the system. This restores that exactly.
   { suite: 'reading-room.test.mjs',
     name: 'a viewer can read every signed agreement again',
@@ -1717,6 +1644,592 @@ grant usage, select on sequence cw.agreement_share_share_id_seq to cw_requester;
       and cw.was_notified(override_request.request_id, cw.app_actor())));`,
     repl: `  or cw.app_role() = 'viewer');`,
     expect: 'a viewer sees a request only if they were told about it' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The library and ladder consolidation views (WP-U13 read models, 0018)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // These views close no hole — they join views that already exist. So the
+  // mutations are not "can somebody see what they should not"; they are the two
+  // ways a convenience join goes wrong: it drops rows, or it duplicates them,
+  // and both render as something a screen shows without complaint.
+
+  // THE ONE THIS FILE IS MOST LIKELY TO REGRESS TO. An inner join is the
+  // shorter, more natural thing to write, and it deletes every ladder that has
+  // no rungs — reporting a configuration error as no error at all.
+  { suite: 'library-ladder-views.test.mjs',
+    name: 'the ladder board inner-joins its rungs, deleting empty ladders',
+    find: 'left join cw.ladder_rung_state r on r.ladder_id = l.ladder_id',
+    repl: 'join cw.ladder_rung_state r on r.ladder_id = l.ladder_id',
+    expect: 'an empty ladder appears, as one row, saying it is empty' },
+
+  // ONE MUTATION IS DELIBERATELY ABSENT, and it is worth the paragraph.
+  //
+  // 'every clause version appears exactly once' looks like it should be guarded
+  // by swapping cw.library_entry's counted ladder facts for a join — a clause on
+  // two ladders would then produce two library rows. That mutation was written,
+  // run, and reported MISSED, because the duplication it induces cannot happen:
+  // cw.ladder_rung_matches_ladder() refuses a rung whose clause is a different
+  // category or severity than its ladder, and cw.ladder is unique on
+  // (category_key, severity). A clause version therefore belongs to at most one
+  // ladder, and no seed can make it belong to two.
+  //
+  // So the guarantee is real but it is held UPSTREAM, by 0003, not by 0018. It
+  // is recorded here rather than deleted quietly, because a missing mutation and
+  // a forgotten one look identical six months later — and because the day
+  // anybody relaxes either of those two rules, this is the note that says the
+  // library view now needs the guard it never needed before.
+
+  // Null reads as "unknown" on a screen; the truth is "none". This is trap 5.2
+  // in miniature — an absent answer and a zero answer rendering the same.
+  { suite: 'library-ladder-views.test.mjs',
+    name: 'a version on no ladder reports null instead of false',
+    find: `  (select coalesce(bool_or(r.is_floor), false) from cw.ladder_rung r
+    where r.clause_id = s.clause_id and r.version = s.version)      as is_a_floor,`,
+    repl: `  (select bool_or(r.is_floor) from cw.ladder_rung r
+    where r.clause_id = s.clause_id and r.version = s.version)      as is_a_floor,`,
+    expect: 'a version on no ladder reports zero, not null' },
+
+  // The coverage flag stops asking. A banner that never fires is worse than no
+  // banner: it reads as "no gaps" rather than "not checked".
+  { suite: 'library-ladder-views.test.mjs',
+    name: 'the coverage-gap flag never fires',
+    find: `  exists (select 1 from cw.coverage_gap g
+           where g.category_key = s.category_key and g.severity = s.severity)
+                                                                    as category_uncovered`,
+    repl: `  false                                                             as category_uncovered`,
+    expect: 'a clause whose category has nothing selectable is flagged' },
+
+  // The board hides its unusable rungs. A degraded ladder then renders as a
+  // shorter healthy one, and the rung somebody has to fix is the one removed.
+  { suite: 'library-ladder-views.test.mjs',
+    name: 'the ladder board hides unusable rungs',
+    find: 'left join cw.ladder_rung_state r on r.ladder_id = l.ladder_id',
+    repl: `left join cw.ladder_rung_state r
+  on r.ladder_id = l.ladder_id and r.selectable`,
+    expect: 'an expired rung is carried as unusable, not hidden' },
+
+  // THE ASSUMPTION IN 0018's HEADER. The file argues these views need no
+  // WHERE-clause scoping because the grant carries what the policy asserts. If
+  // the grant is widened, that argument fails — and this proves the suite is
+  // watching the argument rather than repeating it.
+  { suite: 'library-ladder-views.test.mjs',
+    name: 'the consolidation views are granted to everybody',
+    find: `grant select on cw.library_entry, cw.ladder_board
+  to cw_viewer, cw_requester, cw_legal_reviewer, cw_legal_admin, cw_auditor;`,
+    repl: `grant select on cw.library_entry, cw.ladder_board to public;`,
+    expect: 'a connection holding no application role reads neither view' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The views that were not policies (0019)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // Six views over person-scoped tables, none of them scoped, all granted to
+  // roles that should only see their own rows. Two were reported by the Python
+  // session porting the reads; four more were found by asking the catalogue
+  // what else had the same shape. Each mutation below restores one leak
+  // exactly.
+
+  { suite: 'override.test.mjs',
+    name: 'the override status view stops scoping itself',
+    find: `where cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+   or (cw.app_role() = 'requester' and r.requested_by = cw.app_actor())
+   or (cw.app_role() = 'viewer' and cw.was_notified(r.request_id, cw.app_actor()));`,
+    repl: ';',
+    expect: 'and the status view says the same thing as the table' },
+
+  // THE GATE VIEW. This one hid because it filters on `decision` — it looks
+  // correctly empty right up until the first approval lands, and then it hands
+  // the justification of every approved override to anybody.
+  { suite: 'override.test.mjs',
+    name: 'the gate view stops scoping itself',
+    find: `where f.decision = 'approved'
+  and (cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+       or (cw.app_role() = 'requester' and r.requested_by = cw.app_actor())
+       or (cw.app_role() = 'viewer' and cw.was_notified(r.request_id, cw.app_actor())));`,
+    repl: `where f.decision = 'approved';`,
+    expect: 'the gate view is scoped, so it is not a way round the policy' },
+
+  // THE READING-ROOM HOLE, REOPENED THROUGH THE SIDE DOOR. 0017 narrowed the
+  // policies on the four tables carrying a signed contract and scoped the view
+  // it had just written; this view had been selecting from those same tables
+  // since 0006 and nobody pointed at it.
+  { suite: 'executed.test.mjs',
+    name: 'the document chain hands every signed agreement to any viewer',
+    find: `where cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+   or (cw.app_role() = 'requester' and cw.owns_agreement(e.agreement_id))
+   or (cw.app_role() = 'viewer' and cw.is_shared_with(e.agreement_id, cw.app_actor()))
+order by e.agreement_id, d.doc_seq;`,
+    repl: 'order by e.agreement_id, d.doc_seq;',
+    expect: 'and the views over it are shared-scoped too, not just the tables' },
+
+  // A list of which signed agreements are missing a signature or a completion
+  // certificate — a map of the weakest contracts in the business.
+  { suite: 'executed.test.mjs',
+    name: 'the evidence-gap list is readable by any viewer',
+    find: `from cw.executed_agreement e
+where cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+   or (cw.app_role() = 'requester' and cw.owns_agreement(e.agreement_id))
+   or (cw.app_role() = 'viewer' and cw.is_shared_with(e.agreement_id, cw.app_actor()));`,
+    repl: 'from cw.executed_agreement e;',
+    expect: 'and the views over it are shared-scoped too, not just the tables' },
+
+  // THE INVENTORY ITSELF, exercised through the schema rather than through its
+  // own source. This harness mutates migrations, not test files, so the guard
+  // is proved the way it will actually be met: by changing the database until
+  // the inventory should object.
+  //
+  // A new view reaches a viewer and nobody has classified it. This is the
+  // everyday case — somebody adds a grant, and the leak arrives with it.
+  { suite: 'views-are-not-policies.test.mjs',
+    name: 'a view is granted to a viewer with nobody having classified it',
+    find: '-- A live SOW under a terminated master.',
+    repl: `-- A live SOW under a terminated master.
+grant select on cw.review_quality to cw_viewer;`,
+    expect: 'every view a viewer can read has been classified' },
+
+  // And the other way the list rots: an entry says 'scoped' long after the
+  // scoping was taken out. A list that keeps claiming a control nobody enforces
+  // is worse than no list, because it reads like assurance.
+  { suite: 'views-are-not-policies.test.mjs',
+    name: "a view marked 'scoped' quietly stops scoping itself",
+    find: `where s.revoked_at is null
+  and (cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+       or (cw.app_role() = 'viewer' and s.shared_with = cw.app_actor())
+       or (cw.app_role() = 'requester' and cw.owns_agreement(s.agreement_id)));`,
+    repl: 'where s.revoked_at is null;',
+    expect: "every view marked 'scoped' actually consults who is asking" },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // A deal's birth is on the chain (0020)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // Found by the Python session needing two audited acts for an attribution
+  // test, reaching for the most obvious one in the system, and finding it was
+  // not audited at all.
+  { suite: 'executed.test.mjs',
+    name: 'opening a deal leaves no trace again',
+    find: `create trigger audit_agreement_opened
+  after insert on cw.agreement
+  for each row execute function cw.audit_agreement_opened();`,
+    repl: 'select 1;',
+    expect: 'the deal being opened is on the chain, naming who owns it' },
+
+  // The payload, not just the event. An `agreement_opened` row that does not
+  // name the requester records that a deal happened without recording the one
+  // field every later access decision for that role reads.
+  { suite: 'executed.test.mjs',
+    name: 'the deal opening does not record who it is scoped to',
+    find: `      'requester',    new.requester,`,
+    repl: '',
+    expect: 'the deal being opened is on the chain, naming who owns it' },
+
+  { suite: 'executed.test.mjs',
+    name: 'creating a category leaves no trace again',
+    find: `create trigger audit_category_created
+  after insert on cw.category
+  for each row execute function cw.audit_category_created();`,
+    repl: 'select 1;',
+    expect: 'creating a category is recorded too' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // seq is assigned under the lock (0021)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // The defect needs two concurrent writers and PGlite is single-connection, so
+  // the RACE cannot be reproduced here. The MECHANISM can: seq must come from
+  // the trigger, not from the bigserial default that PostgreSQL evaluates
+  // before the trigger fires — that is, outside the advisory lock.
+  //
+  // Restoring the default is exactly the regression: sequence order stops being
+  // append order, and cw.audit_verify() starts calling honest chains broken.
+  { suite: 'audit-chain.test.mjs',
+    name: 'seq goes back to the column default, outside the lock',
+    find: '  new.seq := coalesce(prev_seq, 0) + 1;',
+    repl: '',
+    expect: 'the sequence number is assigned under the lock, not by the default' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The auditor's workspace (WP-U14) — target: 'shell'
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // The role that changes nothing needs a screen that PROVES it. Each mutation
+  // below is a way the proof quietly stops being one.
+
+  // THE NAMED ANTI-PATTERN. A disabled control says "you could, but not now"
+  // and sends somebody looking for the conditions that light it up. The truth
+  // is "this was never yours".
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the auditor gets a disabled act instead of no act',
+    find: `        <button className="btn btn-sm self-center" onClick={() => setDense(!dense)}`,
+    repl: `        <button className="btn btn-sm" disabled onClick={() => API.takeCheckpoint()}`,
+    expect: 'the auditor is offered no act at all, not even a disabled one' },
+
+  // The same rule at the call site: a write helper reaching this file is a
+  // write affordance whatever the buttons look like.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a write helper appears in the auditor pane',
+    find: `  const health = usePane(() => API.health());`,
+    repl: `  const health = usePane(() => API.health());
+  const take = () => API.takeCheckpoint();`,
+    expect: 'the auditor pane writes nothing through the API' },
+
+  // THE ONE THAT ALREADY HAPPENED ONCE. The first draft looked for a tile named
+  // 'chain'; cw.health_summary publishes 'audit chain'. It found nothing and
+  // rendered "not available", which on screen is indistinguishable from the
+  // health check genuinely having no answer — a lookup that misses
+  // impersonating a real state.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the chain tile looks for a tile name that does not exist',
+    find: `health.rows.find((t) => t.tile === 'audit chain')`,
+    repl: `health.rows.find((t) => t.tile === 'chain')`,
+    expect: 'the chain tile reports the health record rather than deciding for itself' },
+
+  // NULL IS NOT ZERO. cw.review_quality returns null when nothing has been
+  // verified — no denominator. Rendering that as 0% reports perfect discipline
+  // from an empty queue, which is the most flattering possible lie.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'an unmeasured approval rate is rendered as zero per cent',
+    find: `  const unmeasured = rate === null || rate === undefined;`,
+    repl: `  const unmeasured = false;`,
+    expect: 'an unmeasured approval rate is not rendered as zero' },
+
+  // A pane quietly reverting to a stub after the endpoint exists would claim
+  // the system does less than it does — the mirror of the usual failure.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the record pane goes back to being a stub',
+    find: `  'the-record':     () => <TheRecordPane />,`,
+    repl: `  'the-record':     () => <NotBuiltYet what="The chain explorer is not built." lands="WP-U14" />,`,
+    expect: 'the auditor panes are wired into the router, not still stubs' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The viewer's reading room (WP-U14) — target: 'shell'
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // REPOINTED: these keyed on the not-built stub until the doorway served
+  // GET /reading-room. The role exists so a contract can be shown to somebody
+  // without giving them a way in, and every mutation below is a way the screen
+  // quietly becomes a way in.
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the reading room goes back to being a stub',
+    find: `  'reading-room': (me) => <ReadingRoomPane me={me} />,`,
+    repl: `  'reading-room': () => <NotBuiltYet what="The reading room is not built." lands="WP-U14" />,`,
+    expect: 'the reading room is wired to a real endpoint' },
+
+  // THE CRITICAL ANTI-PATTERN. The moment the browser can name an agreement,
+  // "this share, this person" stops being a rule and becomes a query somebody
+  // has to write carefully every time.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the reading room lets the browser name what it wants',
+    find: `    readingRoom:        () => call('GET', '/reading-room'),`,
+    repl: `    readingRoom:        (id) => call('GET', \`/reading-room?agreement=\${id}\`),`,
+    expect: 'the viewer fetches nothing broader than this share, this person' },
+
+  // ADR-0008 gave the viewer no export deliberately. This is how it comes back:
+  // as a convenience nobody thinks to question.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'a download appears on the viewer surface',
+    find: `  const [open, setOpen] = useState(null);`,
+    repl: `  const [open, setOpen] = useState(null);
+  const save = () => {
+    const blob = new Blob(['x'], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.download = 'agreement.txt';
+    a.href = URL.createObjectURL(blob);
+    a.click();
+  };`,
+    expect: 'the viewer has no export path of any kind' },
+
+  // An empty room is a TRUE FACT about this person, not a fault and not an
+  // unbuilt pane. Rendered as unbuilt it claims the system does less than it
+  // does; rendered as a failure it sends somebody chasing a problem that is
+  // not there.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'an empty reading room reports itself as unbuilt',
+    find: `        <Empty
+          kicker="reading room"
+          line="Nothing has been shared with you."`,
+    repl: `        <NotBuiltYet
+          what="Nothing has been shared with you."
+          lands="WP-U14"
+          line="Nothing has been shared with you."`,
+    expect: 'an empty reading room reads as an answer, not a failure' },
+
+  // The one place a viewer sees an approval. Being shown a contract is useless
+  // if you cannot see whose language it is.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the viewer is shown the wording but not who approved it',
+    find: `                        {c.reviewer
+                          ? \`approved by \${c.reviewer}\${c.approved_on ? \` on \${c.approved_on}\` : ''}\`
+                          : 'no approver recorded'}`,
+    repl: `                        {''}`,
+    expect: 'the viewer is shown who approved each clause' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The Legal admin's library and ladders (WP-U13) — target: 'shell'
+  // ════════════════════════════════════════════════════════════════════════
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the library goes back to being a stub',
+    find: `  'library':    () => <LibraryPane />,`,
+    repl: `  'library':    () => <NotBuiltYet what="The clause library is not built." lands="WP-U13" />,`,
+    expect: 'the library and ladders read real endpoints' },
+
+  // THE PRODUCT BOUNDARY IN PIXEL FORM. The system surfaces the gap and names
+  // who can close it; the gap itself belongs to the library's owners. Calling it
+  // an error makes it ours, which is the one framing CLAUDE.md forbids.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the coverage gap is framed as a system failure',
+    find: `            A run that reaches one of these has nothing to offer and will say so.
+            <strong> Closing it is Legal's to do</strong> — the system's part is to
+            show it here rather than discover it mid-negotiation.`,
+    repl: `            The library is misconfigured and the engine cannot resolve these
+            categories. This is an error in the clause data.`,
+    expect: 'a coverage gap is surfaced, never framed as a system failure' },
+
+  // AN IN-PLACE EDIT AFFORDANCE would be the mutation-surface invariant broken
+  // in the UI rather than in the schema. Every change to approved wording is a
+  // new version with its history intact.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the library grows an in-place edit affordance',
+    find: `                  <button className="btn btn-sm" onClick={() => setOpen(isOpen ? null : key)}`,
+    repl: `                  <button className="btn btn-sm" onClick={() => API.setSetting({ body: c.body })}`,
+    expect: 'the library offers no way to edit approved wording' },
+
+  // THE GUARANTEE 0018 WAS BUILT AROUND, undone at the last possible moment. A
+  // board that drops the null rung reports a configuration error as absence,
+  // which renders identically to health.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the empty ladder is filtered out in the browser',
+    find: `    if (r.rung !== null && r.rung !== undefined) l.steps.push(r);`,
+    repl: `    l.steps.push(r);`,
+    expect: 'an empty ladder is rendered, not filtered away' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Owner decisions U9–U11 (0022)
+  // ════════════════════════════════════════════════════════════════════════
+
+  // U9 · THE AUTHORITY MOVED, IT WAS NOT SHARED. Two roles holding an
+  // irreversible act means neither is accountable for it — the same reasoning
+  // as U7's checkpoint move.
+  { suite: 'governance.test.mjs',
+    name: 'legal admin keeps destruction alongside the administrator',
+    find: 'revoke execute on function cw.retention_destroy(text, text) from cw_legal_admin;',
+    repl: '',
+    expect: 'nor can a legal admin any more — U9 moved it, it did not share it' },
+
+  { suite: 'health.test.mjs',
+    name: 'the administrator is not given the authority U9 moved to it',
+    find: 'grant  execute on function cw.retention_destroy(text, text) to cw_administrator;',
+    repl: '',
+    expect: 'the administrator sees what is due AND may act on it' },
+
+  // U9 · "Auto-record-destruction should never happen." It never did, but a
+  // fact nobody asserts is a fact somebody can undo without noticing. This adds
+  // the timer the decision forbids and checks the assertion sees it.
+  { suite: 'governance.test.mjs',
+    name: 'a trigger destroys records without anybody asking',
+    find: `comment on function cw.retention_destroy(text, text) is`,
+    repl: `create or replace function cw.auto_destroy() returns trigger
+language plpgsql as $$
+begin
+  perform cw.retention_destroy(new.agreement_id, 'scheduler');
+  return new;
+end $$;
+create trigger auto_destroy after insert on cw.agreement_retention
+  for each row execute function cw.auto_destroy();
+
+comment on function cw.retention_destroy(text, text) is`,
+    expect: 'nothing in the schema destroys anything by itself' },
+
+  // U9 · The tile named Legal admin as the only role that may destroy. Left
+  // uncorrected it tells the one person who CAN act that they cannot.
+  { suite: 'health.test.mjs',
+    name: 'the retention tile still names Legal admin as the destroyer',
+    find: `                        'here; actioned by the Administrator, who alone may destroy',`,
+    repl: `                        'here; actioned by Legal admin, who alone may destroy',`,
+    expect: 'the administrator sees what is due AND may act on it' },
+
+  // U10 · An in-flight deal on superseded wording must be FLAGGED. Before 0022
+  // nothing reported it, and obsolete language would have been signed by
+  // mistake with nobody told.
+  { suite: 'executed.test.mjs',
+    name: 'in-flight deals stop being told their wording has moved on',
+    find: `  and (s.id is not null or cur.state <> 'active')`,
+    repl: `  and false`,
+    expect: 'an IN-FLIGHT deal carrying superseded wording is flagged too' },
+
+  // U10 · And the two reports must stay distinct: a signed contract's drift is
+  // input to a renewal, an in-flight one can still be corrected.
+  { suite: 'executed.test.mjs',
+    name: 'the in-flight report swallows signed agreements too',
+    find: `where a.status <> 'executed'`,
+    repl: `where true`,
+    expect: 'an IN-FLIGHT deal carrying superseded wording is flagged too' },
+
+  // U11 · The Administrator may read the library. The gap was the GRANT, not
+  // the policy — removing it puts the role back to content-blind against the
+  // library, the one word U5 says never to use for it.
+  { suite: 'library-ladder-views.test.mjs',
+    name: 'the administrator is content-blind against the library again',
+    find: `grant select on cw.clause, cw.clause_version, cw.category, cw.supersession,
+                cw.clause_version_state, cw.selectable_clause, cw.coverage_gap,
+                cw.library_entry
+  to cw_administrator;`,
+    repl: '',
+    expect: 'the administrator may read the library, and write none of it' },
+
+  // U11 · And sight is ALL it opened. U5's boundary was write and judgement.
+  //
+  // POINTED AT THE SWEEP, not at a narrower test of my own. The first version of
+  // this entry named a test I had just written for the library specifically, and
+  // the harness reported IMPRECISE: administrator.test.mjs already sweeps EVERY
+  // table in the schema against an explicit allow-list, so it caught the
+  // mutation first and by a better route. The narrow test was then deleted — a
+  // second, weaker assertion of a guarantee the sweep already owns is a place
+  // for the two to drift apart.
+  { suite: 'administrator.test.mjs',
+    name: 'reading the library quietly becomes writing it',
+    find: `grant select on cw.ladder, cw.ladder_rung, cw.ladder_rung_state,
+                cw.ladder_health, cw.ladder_board
+  to cw_administrator;`,
+    repl: `grant select on cw.ladder, cw.ladder_rung, cw.ladder_rung_state,
+                cw.ladder_health, cw.ladder_board
+  to cw_administrator;
+grant insert, update on cw.category, cw.clause_version to cw_administrator;`,
+    expect: 'no table in schema cw grants the administrator insert, update or delete except the two it is supposed to' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Ending a record's life (owner decision U12, 0023)
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // The most dangerous acts in the product. Everything else here is written to
+  // make records survive, so each mutation below restores a way one could be
+  // removed that the owner refused.
+
+  // THE ESCALATION IS THE CONTROL. One-step erasure is exactly what U12 refuses:
+  // a record must be redacted first, which leaves it reviewable, before anybody
+  // can remove it.
+  { suite: 'redaction.test.mjs',
+    name: 'a record can be purged without ever being redacted',
+    find: `  if r.redacted_on is null then
+    raise exception '% has not been redacted; a record is redacted first, '
+      'reviewed, and only then purged', p_agreement_id
+      using errcode = 'restrict_violation';
+  end if;`,
+    repl: '',
+    expect: 'purging before redaction is refused — the review step cannot be skipped' },
+
+  // Redaction carries out a decision; it is not the decision. Removing content
+  // from something nobody decided to dispose of is a deletion with nothing
+  // behind it.
+  { suite: 'redaction.test.mjs',
+    name: 'content can be removed before anybody decided to dispose of the record',
+    find: `  if r.destroyed_on is null then
+    raise exception 'the retention of % has not been ended; record the '
+      'destruction first, then redact', p_agreement_id
+      using errcode = 'restrict_violation';
+  end if;`,
+    repl: '',
+    expect: 'redacting before the retention decision is refused' },
+
+  // THE ASYMMETRY IS THE DECISION. Removing content can be handed out; removing
+  // the record cannot.
+  { suite: 'redaction.test.mjs',
+    name: 'the purge becomes delegable like the redaction',
+    find: 'grant execute on function cw.purge_agreement(text, text) to cw_administrator;',
+    repl: `grant execute on function cw.purge_agreement(text, text)
+  to cw_administrator, cw_legal_admin, cw_legal_reviewer;`,
+    expect: 'and STILL cannot purge — the delegation does not carry that' },
+
+  // THE NULL TRAP, RESTORED. The first version of this guard compared
+  // cw.app_role() inside a SECURITY DEFINER function, where it is NULL — and
+  // `null <> 'administrator'` is NULL, so the guard never fired and an
+  // undelegated reviewer redacted a record. This is that bug, put back.
+  { suite: 'redaction.test.mjs',
+    name: 'the redaction guard compares against a NULL and fails open',
+    find: `  if not cw.may_redact(p_actor) then`,
+    repl: `  if cw.app_role() <> 'administrator' and not cw.may_redact(p_actor) then`,
+    expect: 'a legal reviewer with no delegation cannot redact' },
+
+  // A hold outranks every disposal act, and the refusal must NAME the matter —
+  // a refusal nobody can act on is barely a refusal.
+  { suite: 'redaction.test.mjs',
+    name: 'a legal hold stops refusing the redaction',
+    find: `  if cw.agreement_under_hold(p_agreement_id) then
+    select string_agg(h.matter_ref, ', ' order by h.matter_ref) into matters
+    from cw.legal_hold h
+    where h.agreement_id = p_agreement_id and h.released_on is null;
+    raise exception
+      '% is under legal hold (%); redaction is suspended until every hold is '
+      'released', p_agreement_id, matters using errcode = 'restrict_violation';
+  end if;`,
+    repl: '',
+    expect: 'neither act proceeds while a matter is open' },
+
+  // WHAT REDACTION MUST ACTUALLY REMOVE. The certificate holds real bytes — "a
+  // reference to a certificate on someone else's server is a promise; the bytes
+  // are the evidence" — and leaving them is a redaction that redacted nothing.
+  { suite: 'redaction.test.mjs',
+    name: 'redaction leaves the certificate bytes behind',
+    find: `  update cw.signature_certificate
+     set certificate = '\\x00'::bytea, byte_size = 1
+   where agreement_id = p_agreement_id;`,
+    repl: '',
+    expect: 'the certificate bytes are gone' },
+
+  // AND WHAT IT MUST KEEP. The hash is the important survivor: it still proves
+  // what the document was to anybody holding a copy, without this system
+  // holding one. A redaction that took it would destroy the fact along with the
+  // content, which is the half U12 says to keep.
+  { suite: 'redaction.test.mjs',
+    name: 'redaction takes the record of what the document was, not just its content',
+    find: `  update cw.executed_document
+     set storage_uri = ''
+   where agreement_id = p_agreement_id;`,
+    repl: `  update cw.executed_document
+     set storage_uri = '', sha256 = repeat('0', 64), filename = ''
+   where agreement_id = p_agreement_id;`,
+    expect: 'the FACT survives in full — name, size, hash, dates' },
+
+  // THE ONE SANCTIONED EXCEPTION TO THE FREEZE, widened. If the flag alone let
+  // a write through, a session variable would defeat the guarantee the whole
+  // product rests on.
+  { suite: 'redaction.test.mjs',
+    name: 'the freeze is defeated by anybody who sets the flag',
+    find: `grant execute on function cw.redact_agreement(text, text)
+  to cw_administrator, cw_legal_admin, cw_legal_reviewer;`,
+    repl: `grant execute on function cw.redact_agreement(text, text)
+  to cw_administrator, cw_legal_admin, cw_legal_reviewer;
+grant update on cw.executed_document to cw_legal_admin;`,
+    expect: 'setting the flag by hand achieves nothing without the privilege' },
+
+  // The delegation is the Administrator's to hand out. A role that could
+  // delegate it to itself would have taken it rather than been given it.
+  { suite: 'redaction.test.mjs',
+    name: 'anybody can delegate the authority to destroy records',
+    find: `create policy administrator_delegates on cw.records_delegate for insert
+  with check (cw.app_role() = 'administrator');`,
+    repl: `create policy administrator_delegates on cw.records_delegate for insert
+  with check (cw.app_role() is not null);
+grant insert on cw.records_delegate to cw_legal_admin;
+grant usage, select on sequence cw.records_delegate_delegate_id_seq to cw_legal_admin;`,
+    expect: 'only the administrator may delegate, and it lands on the chain' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'unusable rungs are hidden so the ladder looks healthy',
+    find: `                      {!r.rung_selectable && (
+                        <span className="chip chip-err" data-testid="rung-unusable">
+                          {r.rung_state}
+                        </span>
+                      )}`,
+    repl: `                      {false && (
+                        <span className="chip chip-err">
+                          {r.rung_state}
+                        </span>
+                      )}`,
+    expect: 'an unusable rung stays on the ladder rather than being hidden' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();
@@ -1776,7 +2289,31 @@ const runOne = (m) => new Promise((resolve) => {
 // guarantee, assert the suite fails via the test that names it — but it copies
 // backend/service/*.mjs into a temp directory and points CW_SERVICE at it.
 const SERVICE_SRC = join(HERE, '..', '..', 'service');
-const serviceFiles = readdirSync(SERVICE_SRC).filter(f => f.endsWith('.mjs'));
+
+// SURVIVES THE DIRECTORY BEING GONE, and reports rather than crashes.
+//
+// WP-P5 deletes backend/service/. Before this guard, that deletion took the
+// WHOLE harness down at import: readdirSync threw ENOENT before a single
+// mutation ran, so all 197 checks — including the 139 over the migrations,
+// which have nothing to do with the service — died together. A harness that
+// cannot start is a harness that proves nothing, and the failure looked like a
+// broken test file rather than a missing dependency.
+//
+// With the guard, the 17 service mutations report SKIP, which is already fatal
+// (see the bottom of this file). That is the correct outcome and it is
+// deliberate: SKIP means "this check is stale, repoint it", and these 17 guard
+// properties the Python doorway must hold just as the JavaScript service did —
+// identity bound per request, no privileged connection at sign-in, refusals
+// classified by SQLSTATE rather than by message text, scoping in the database
+// rather than the API, a write attributed to nobody but the signed-in person,
+// and a refusal never retried.
+//
+// So deleting the service does not quietly drop them. It turns the harness red
+// until somebody either re-proves them against the doorway or removes each entry
+// with its reason written down. Going green by deletion is the one outcome this
+// arrangement will not allow.
+const serviceFiles = existsSync(SERVICE_SRC)
+  ? readdirSync(SERVICE_SRC).filter(f => f.endsWith('.mjs')) : [];
 const serviceOriginals = Object.fromEntries(
   serviceFiles.map(f => [f, readFileSync(join(SERVICE_SRC, f), 'utf8')]));
 
@@ -1839,6 +2376,86 @@ const runServiceMutation = (m) => new Promise((resolve) => {
       done(out.includes(`FAIL ${m.expect}`) ? 'ok' : 'imprecise');
     });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// PREFLIGHT — refuse to run rather than produce a count that can be misread
+// ════════════════════════════════════════════════════════════════════════════
+//
+// WHY THIS EXISTS, and it is a near-miss rather than a bug. A scripted edit
+// rewrote 0001_foundation.sql with CRLF line endings. Nothing broke — Postgres
+// does not care and all 23 suites stayed green — but every multi-line `find`
+// here is written with `\n`, so none of them matched that file any more.
+//
+// Exactly ONE check reported SKIP, because the other multi-line pattern keyed on
+// 0001 also appears word-for-word in 0021 and matched there. The report read
+// `197/198` with a single SKIP line. Against `198/198` that is nearly invisible,
+// and it meant a protection had quietly stopped being watched.
+//
+// SKIP was already fatal, so the harness was technically correct. It was still
+// the wrong shape: it produced a reassuring number and buried the one line that
+// mattered. **The count at the bottom of a report is the least informative line
+// in it.** So the fix is not a louder warning — it is refusing to produce a
+// count at all when any pattern is stale. There is nothing to misread if nothing
+// runs. (The idea is the Python session's, from `doorway/mutation_check.py`.)
+//
+// TWO INVARIANTS, and the second is the subtler one:
+//
+//   1. Every `find` must appear in at least one source file. Absent means stale.
+//   2. It must appear AT MOST ONCE PER FILE. `String.replace` rewrites the first
+//      occurrence only, so a pattern matching twice in one file mutates one of
+//      them and may not be the one the check is named for — a check reading as
+//      protection while watching the wrong thing.
+//
+// Note what is deliberately ALLOWED: the same pattern in SEVERAL files. That is
+// load-bearing here. When a later migration redefines a function, the mutation
+// must land in every copy or the last definition to run silently undoes it —
+// trap 5.4a, which cost two guarantees earlier the same day.
+const sourcesFor = (m) =>
+  m.target === 'service' ? serviceOriginals
+  : m.target === 'shell' ? shellOriginals
+  : originals;
+
+const countIn = (haystack, needle) => {
+  let n = 0, i = 0;
+  for (;;) {
+    const at = haystack.indexOf(needle, i);
+    if (at === -1) return n;
+    n++; i = at + needle.length;
+  }
+};
+
+const stale = [];
+for (const m of MUTATIONS) {
+  const src = sourcesFor(m);
+  const where = Object.entries(src)
+    .map(([f, text]) => [f, countIn(text, m.find)])
+    .filter(([, n]) => n > 0);
+
+  if (where.length === 0) {
+    stale.push(`${m.name}\n      pattern not found in any ${m.target || 'migration'} source — ` +
+               `the code moved or was reworded; repoint it, do not delete it`);
+    continue;
+  }
+  const doubled = where.filter(([, n]) => n > 1);
+  if (doubled.length) {
+    stale.push(`${m.name}\n      pattern appears ${doubled[0][1]}× in ${doubled[0][0]} — ` +
+               `only the first would be mutated, so this check may be watching ` +
+               `the wrong one; make the pattern unique within the file`);
+  }
+  if (m.suite && !existsSync(join(HERE, m.suite))) {
+    stale.push(`${m.name}\n      names a suite that does not exist: ${m.suite}`);
+  }
+}
+
+if (stale.length) {
+  console.log(`\nPREFLIGHT FAILED — ${stale.length} stale check(s). Nothing was run.\n`);
+  for (const s of stale) console.log('  · ' + s);
+  console.log(
+    `\nNo mutations executed, and that is deliberate: a partial run reports a\n` +
+    `number, and a number next to a skipped line reads as success. Fix the\n` +
+    `patterns above and run again.\n`);
+  process.exit(1);
+}
 
 const results = new Array(MUTATIONS.length);
 let next = 0;

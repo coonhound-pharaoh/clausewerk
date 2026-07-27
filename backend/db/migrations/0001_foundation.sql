@@ -257,11 +257,33 @@ declare prev text;
 begin
   -- Serialise appends so two writers cannot read the same tail and fork.
   --
-  -- HONEST LIMITATION — this line has ZERO test coverage and cannot get any in
-  -- this repository. PGlite is single-connection, so no test here can observe
-  -- its absence, and a mutation that removed it would be guaranteed to miss.
-  -- It ships on reasoning alone. The guarantee that IS proved is the unique
-  -- index on prev_hash in 0007, which refuses a fork after the fact.
+  -- THIS LINE SHIPPED ON REASONING ALONE and was, until 2026-07-26, untestable
+  -- here: PGlite is single-connection, so no suite in `db/test/` can observe its
+  -- absence and a mutation removing it is guaranteed to miss. That is still true
+  -- of this repository's JavaScript suites and it is why no mutation names it.
+  --
+  -- IT IS NO LONGER UNTESTABLE, AND IT HAS NOW BEEN TESTED. The doorway runs on
+  -- standard PostgreSQL with a real pool, so `backend/doorway/` can hold two
+  -- connections open at once and watch what this does:
+  -- `test_retirement.py::test_the_chain_survives_people_acting_at_the_same_instant`
+  -- drives eight simultaneous governed acts and asserts every one lands and the
+  -- chain still verifies. Do not read the old "cannot get any coverage" claim as
+  -- still standing — it was a statement about PGlite, not about the guarantee.
+  --
+  -- WHAT IT ACTUALLY PROMISES, stated precisely, because the scope is easy to
+  -- overestimate. `pg_advisory_xact_lock` is TRANSACTION-scoped. It is held from
+  -- here until the calling transaction ends, so it covers the tail-read and the
+  -- insert together — but only for as long as that transaction lasts. A caller
+  -- that reads the tail in one transaction and appends in another is not
+  -- protected by it, and neither is a connection running in autocommit where
+  -- each statement is its own transaction.
+  --
+  -- SO: IF A `audit_no_fork` DUPLICATE-KEY EVER APPEARS, it is not evidence that
+  -- the fork guard is over-strict. It is evidence that two writers held the same
+  -- tail at once, which means this lock was NOT held across the tail-read for at
+  -- least one of them. Find out which caller, rather than loosening the index —
+  -- the index is the thing standing between an unexplained duplicate key and two
+  -- futures for the audit chain.
   perform pg_advisory_xact_lock(4771290311);
   select hash into prev from cw.audit_event order by seq desc limit 1;
   new.prev_hash := prev;

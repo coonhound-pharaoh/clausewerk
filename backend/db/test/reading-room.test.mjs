@@ -1,6 +1,8 @@
-// The sharing act and the reading room — migration 0016 (WP-U14, read models).
+// The sharing act and the reading room — migration 0017 (WP-U14, read models).
+// It shipped as 0016 and was renumbered when the Python doorway's own 0016
+// collided with it; the header of the migration says why it moved and not that.
 //
-// WHAT THIS SUITE IS ACTUALLY ABOUT. Until 0016 a viewer could read EVERY signed
+// WHAT THIS SUITE IS ACTUALLY ABOUT. Until 0017 a viewer could read EVERY signed
 // contract in the system. Not the ones they had been shown — all of them. The
 // role was created by ADR-0008 so a contract could be shown to somebody for
 // socialisation without letting them change it, and the "shown to" half was

@@ -786,6 +786,261 @@ await test('my record says the scoping happens in the database', async () => {
     + 'out here — they are never sent');
 });
 
+// ── The auditor's workspace (WP-U14) ────────────────────────────────────
+console.log('\nthe auditor reads everything and changes nothing');
+
+const audSrc = () => read('auditor.jsx');
+
+await test('the auditor is offered no act at all, not even a disabled one', async () => {
+  // WP-U14's common anti-pattern: a disabled button standing in for an absent
+  // right. A greyed-out control says "you could, but not now" and sends
+  // somebody looking for the conditions that light it up. The truth is "this
+  // was never yours", and its honest rendering is nothing at all.
+  //
+  // Checked by ENUMERATING WHAT EACH onClick DOES rather than searching for a
+  // forbidden word — trap 5.3: an assertion that greps for the word trips on
+  // the comment explaining why there is none.
+  const src = stripComments(audSrc());
+  const handlers = [...src.matchAll(/onClick=\{([^}]*)\}/g)].map((m) => m[1].trim());
+  assert(handlers.length > 0, 'the auditor pane has no controls at all — did the file move?');
+  for (const h of handlers) {
+    const isRead = /^csv$/.test(h) || /^\(\) => set[A-Z]/.test(h);
+    assert(isRead, `the auditor is offered an act that is not a read: ${h}`);
+  }
+  assert(!/\bdisabled\b/.test(src),
+    'a control in the auditor workspace is rendered inert rather than absent');
+});
+
+await test('the auditor pane writes nothing through the API', async () => {
+  // The same rule at the call site. A POST helper appearing here would be a
+  // write affordance whatever the buttons looked like.
+  const src = stripComments(audSrc());
+  const calls = [...src.matchAll(/API\.([a-zA-Z]+)\(/g)].map((m) => m[1]);
+  const READS = ['record', 'quality', 'originMix', 'health'];
+  for (const c of calls) {
+    assert(READS.includes(c), `the auditor pane calls API.${c}(), which is not a read`);
+  }
+  assert(calls.length >= 3, 'the auditor panes stopped fetching anything');
+});
+
+await test('the chain tile reports the health record rather than deciding for itself', async () => {
+  // A page that marked its own reading as verified would be checking itself.
+  const src = stripComments(audSrc());
+  assert(/API\.health\(\)/.test(src),
+    'the record pane no longer reads the health record');
+  // Anchored on THE LOOKUP, not on the words 'audit chain' anywhere in the
+  // file. The tile's own label contains that string, so a looser pattern
+  // matched the display copy and went on passing while the lookup was broken —
+  // trap 5.3 again, wearing UI text instead of a comment. The mutation harness
+  // caught it: the check reported MISS on the first run.
+  assert(/t\.tile === 'audit chain'/.test(src),
+    'the chain tile looks for a tile name cw.health_summary does not publish; '
+    + "it publishes 'audit chain', and a lookup that misses renders as a state");
+  assert(/never_ran/.test(src),
+    'never_ran is no longer its own case — a check nobody ran now reads as one that failed');
+});
+
+await test('an unmeasured approval rate is not rendered as zero', async () => {
+  // cw.review_quality returns null when nothing has been verified: there is no
+  // denominator. Rendering that as 0% reports perfect discipline from an empty
+  // queue, which is the most flattering possible lie.
+  const src = stripComments(audSrc());
+  assert(/rate === null \|\| rate === undefined/.test(src),
+    'the quality pane no longer separates "nothing verified yet" from a rate');
+  // Whitespace-tolerant: this copy wraps, so a literal-space pattern matches
+  // the sentence only until somebody reflows the paragraph.
+  assert(/a rate of\s+zero/.test(audSrc()),
+    'the screen no longer says out loud that an unmeasured rate is not zero');
+});
+
+await test('the auditor export is of the rows on screen, escaped', async () => {
+  const fn = /const csv = \(\)[\s\S]*?\n  \};/.exec(audSrc())[0];
+  assert(/rows\.map/.test(fn),
+    'the export writes something other than the filtered rows on screen');
+  assert(/replace\(\/"\/g/.test(fn),
+    'the export does not escape quotes, so a payload containing one corrupts '
+    + 'every column after it');
+});
+
+await test('the auditor panes are wired into the router, not still stubs', async () => {
+  const panes = stripComments(read('workspaces.jsx'));
+  for (const [tab, comp] of [['the-record', 'TheRecordPane'],
+                             ['quality', 'QualityPane'],
+                             ['origin-mix', 'OriginMixPane']]) {
+    const line = new RegExp(`'${tab}':[^\\n]*`).exec(panes);
+    assert(line, `the ${tab} route disappeared from the router`);
+    assert(line[0].includes(comp), `${tab} does not render ${comp}`);
+  }
+});
+
+// ── The viewer's reading room (WP-U14) ──────────────────────────────────
+console.log('\nthe viewer sees what was shared and has no way to take it away');
+
+const viewSrc = () => read('viewer.jsx');
+
+await test('the reading room is wired to a real endpoint', async () => {
+  const panes = stripComments(read('workspaces.jsx'));
+  const line = /'reading-room':[^\n]*/.exec(panes);
+  assert(line, 'the reading-room route disappeared');
+  assert(line[0].includes('ReadingRoomPane'),
+    'the reading room does not render its pane');
+});
+
+await test('the viewer fetches nothing broader than this share, this person', async () => {
+  // WP-U14's critical anti-pattern. The two endpoints take NO parameters, and
+  // that is the control rather than an omission: the moment the browser can
+  // name an agreement, the scoping is a careful query instead of a rule.
+  const api = stripComments(read('api.jsx'));
+  for (const fn of ['readingRoom', 'readingRoomClauses']) {
+    const line = new RegExp(`${fn}:[^\\n]*`).exec(api);
+    assert(line, `api.jsx no longer exposes ${fn}`);
+    assert(/\(\)\s*=>/.test(line[0]),
+      `${fn} takes an argument, which is how "this share, this person" becomes `
+      + 'a query the caller controls');
+    assert(!/\$\{/.test(line[0]),
+      `${fn} interpolates into its path, so the browser chooses what it asks for`);
+  }
+  // And the pane itself passes nothing.
+  const src = stripComments(viewSrc());
+  assert(!/API\.readingRoom\w*\([^)]+\)/.test(src),
+    'the reading room pane passes an argument to its fetch');
+});
+
+await test('the viewer has no export path of any kind', async () => {
+  // ADR-0008 withheld it deliberately: being shown a contract and taking a copy
+  // away are different acts, and only the first was decided. Checked by what
+  // the pane DOES rather than by searching for a word — the file explains at
+  // length why there is no export, and a word search would trip on the
+  // explanation (trap 5.3).
+  const src = stripComments(viewSrc());
+  assert(!/createElement\('a'\)/.test(src) && !/URL\.createObjectURL/.test(src),
+    'the reading room builds a download link');
+  assert(!/new Blob\(/.test(src), 'the reading room assembles a file to hand over');
+  assert(!/\.download\b/.test(src), 'the reading room sets a download filename');
+  assert(!/window\.print/.test(src), 'the reading room offers a print path');
+  // No write helper either — a read-only role gets a read-only screen.
+  const calls = [...src.matchAll(/API\.([a-zA-Z]+)\(/g)].map((m) => m[1]);
+  const READS = ['readingRoom', 'readingRoomClauses'];
+  for (const c of calls) {
+    assert(READS.includes(c), `the reading room calls API.${c}(), which is not one of its two reads`);
+  }
+});
+
+await test('an empty reading room reads as an answer, not a failure', async () => {
+  // "Nothing has been shared with you" is a true fact about this person, not a
+  // fault and not an unbuilt pane. Getting it wrong in the alarming direction
+  // sends somebody chasing a problem that is not there.
+  const src = viewSrc();
+  assert(/shares\.rows\.length === 0/.test(stripComments(src)),
+    'the reading room no longer distinguishes an empty room');
+  assert(/Nothing has been shared with you/.test(src),
+    'the empty reading room no longer says plainly that nothing was shared');
+  assert(/<Empty/.test(src) && !/<NotBuiltYet/.test(src),
+    'the empty room is rendered as unbuilt rather than as empty');
+});
+
+await test('the viewer is shown who approved each clause', async () => {
+  // The one place a viewer sees an approval — WP-U14's SOW-departure
+  // visibility rule. Being shown a contract is useless if you cannot see whose
+  // language it is.
+  const src = stripComments(viewSrc());
+  assert(/c\.reviewer/.test(src), 'the clause render drops the approver');
+  assert(/c\.origin/.test(src), 'the clause render drops where the wording came from');
+  assert(/no approver recorded/.test(viewSrc()),
+    'a clause with no approver renders blank rather than saying so');
+});
+
+await test('the viewer is offered no act, not even a disabled one', async () => {
+  const src = stripComments(viewSrc());
+  const handlers = [...src.matchAll(/onClick=\{([^}]*)\}/g)].map((m) => m[1].trim());
+  for (const h of handlers) {
+    assert(/^\(\) => set[A-Z]/.test(h), `the viewer is offered an act: ${h}`);
+  }
+  assert(!/\bdisabled\b/.test(src),
+    'a control in the reading room is rendered inert rather than absent');
+});
+
+// ── The Legal admin's library and ladders (WP-U13) ──────────────────────
+console.log('\nthe library surfaces gaps without owning them');
+
+const libSrc = () => read('library.jsx');
+
+await test('the library and ladders read real endpoints', async () => {
+  const panes = stripComments(read('workspaces.jsx'));
+  for (const [tab, comp] of [['library', 'LibraryPane'], ['ladders', 'LaddersPane']]) {
+    const line = new RegExp(`'${tab}':[^\\n]*`).exec(panes);
+    assert(line, `the ${tab} route disappeared`);
+    assert(line[0].includes(comp), `${tab} does not render ${comp}`);
+  }
+});
+
+await test('a coverage gap is surfaced, never framed as a system failure', async () => {
+  // WP-U13's common anti-pattern, and the product boundary in pixel form: the
+  // system's job ends at making the gap visible and naming who can act. The gap
+  // itself belongs to the people who own the library.
+  const src = libSrc();
+  assert(/data-testid="coverage-gap"/.test(src), 'the coverage gap is no longer surfaced');
+  assert(/Closing it is Legal's to do/.test(src),
+    'the gap banner no longer names whose it is to close');
+  // Checked by enumerating the words it uses, not by grepping for a ban — the
+  // file's own comment explains the ban and a word search would trip on it.
+  const banner = /data-testid="coverage-gap"[\s\S]*?\n        <\/div>/.exec(src);
+  assert(banner, 'the coverage-gap banner changed shape; re-point this check');
+  for (const blame of ['error', 'failed', 'misconfigur', 'invalid', 'broken']) {
+    assert(!new RegExp(blame, 'i').test(banner[0]),
+      `the coverage-gap banner calls the gap "${blame}", which makes it the `
+      + "system's fault rather than the library owner's to close");
+  }
+});
+
+await test('the library offers no way to edit approved wording', async () => {
+  // WP-U13's critical anti-pattern: an in-place edit affordance would be the
+  // mutation-surface invariant broken in the UI. Every change to approved
+  // wording is a new version with its history intact.
+  //
+  // Enumerated by what each control does, not by searching for a word.
+  const src = stripComments(libSrc());
+  const handlers = [...src.matchAll(/onClick=\{([^}]*)\}/g)].map((m) => m[1].trim());
+  for (const h of handlers) {
+    assert(/^\(\) => set[A-Z]/.test(h),
+      `the library offers an act that is not a filter or a drawer: ${h}`);
+  }
+  const calls = [...src.matchAll(/API\.([a-zA-Z]+)\(/g)].map((m) => m[1]);
+  for (const c of calls) {
+    assert(['library', 'ladders'].includes(c),
+      `the library pane calls API.${c}(), which is not one of its two reads`);
+  }
+  assert(/<NotBuiltYet/.test(src),
+    'the absent acts are no longer declared — a surface that is silent about '
+    + 'what it cannot do reads as a surface that does everything');
+});
+
+await test('an empty ladder is rendered, not filtered away', async () => {
+  // The guarantee 0018 was built around. cw.ladder_board LEFT JOINs its rungs so
+  // a rungless ladder still arrives, as one row with a null rung. Dropping that
+  // null here would undo it at the last possible moment and report a
+  // configuration error as absence — which renders identically to health.
+  const src = libSrc();
+  assert(/data-testid="ladder-empty"/.test(src),
+    'the empty ladder no longer has its own rendering');
+  assert(/This ladder has no rungs/.test(src),
+    'the empty ladder no longer says so in words');
+  const grouping = stripComments(src);
+  assert(/r\.rung !== null && r\.rung !== undefined/.test(grouping),
+    'the null rung is no longer distinguished, so an empty ladder either '
+    + 'vanishes or renders as a rung that does not exist');
+});
+
+await test('an unusable rung stays on the ladder rather than being hidden', async () => {
+  // A board that filtered them would report a degraded ladder as a shorter
+  // healthy one, and the rung somebody has to fix is the one removed.
+  const src = libSrc();
+  assert(/data-testid="rung-unusable"/.test(src),
+    'an unusable rung is no longer marked');
+  assert(/removing them would hide the problem/.test(src),
+    'the screen no longer says why unusable rungs stay');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) {
   console.log('\nfailures:');

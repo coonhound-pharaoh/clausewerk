@@ -107,6 +107,27 @@ const API = (() => {
     retentionDue:     () => call('GET', '/retention/due'),
     record:           () => call('GET', '/record'),
 
+    // ── The reading room (WP-U14) ───────────────────────────────────────
+    // NEITHER TAKES A PARAMETER, and that is the control rather than an
+    // oversight. WP-U14's critical anti-pattern is the viewer's render being
+    // fetched through anything broader than "this share, this person" — and an
+    // agreement_id argument is precisely how that happens: the moment the
+    // browser can name what it wants, the scoping is a careful query rather
+    // than a rule. cw.reading_room scopes itself in its own WHERE clause, from
+    // the connection's identity, so there is nothing here to pass.
+    //
+    // THERE IS NO EXPORT HERE AND THERE MUST NOT BE. ADR-0008 gave the viewer
+    // no export deliberately: the reading room shows a contract to somebody
+    // outside the deal, and letting them take a copy away is a different act
+    // nobody decided. 0017 leaves nothing in the schema for one to call and the
+    // doorway asserts no such route exists. Convenience does not amend an ADR.
+    readingRoom:        () => call('GET', '/reading-room'),
+    readingRoomClauses: () => call('GET', '/reading-room/clauses'),
+
+    // ── The library and the ladders (WP-U13) ────────────────────────────
+    library:          () => call('GET', '/library'),
+    ladders:          () => call('GET', '/ladders'),
+
     // ── Writes. Each one act. ───────────────────────────────────────────
     addCategory:   (b) => call('POST', '/categories', b),
     openDeal:      (b) => call('POST', '/deals', b),

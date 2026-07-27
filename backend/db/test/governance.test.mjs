@@ -389,7 +389,7 @@ await test('opening a hold is a named, audited act', async () => {
 await test('a record under legal hold cannot be destroyed by the retention path', async () => {
   // The guarantee. Past its retention date, otherwise destructible, and the
   // destruction is refused with the matter named.
-  await throws(() => queryAs('legal_admin',
+  await throws(() => queryAs('administrator',
     `select cw.retention_destroy('AG-001','records@clausewerk')`),
     'under legal hold (Northwind v. Us, 2026-CV-4417)');
   const r = await one(`select destroyed_on from cw.agreement_retention
@@ -438,7 +438,7 @@ await test('releasing a hold is an audited act', async () => {
 });
 
 await test('one release is not enough while another matter is still open', async () => {
-  await throws(() => queryAs('legal_admin',
+  await throws(() => queryAs('administrator',
     `select cw.retention_destroy('AG-001','records@clausewerk')`),
     'ICO investigation 2026/0912',
     'all holds must be released before an agreement is destructible');
@@ -455,7 +455,7 @@ await test('with every hold released, destruction proceeds and is audited', asyn
   await mustWrite('legal_admin',
     `update cw.legal_hold set released_by='legal@clausewerk', released_on=current_date
      where agreement_id='AG-001' and released_on is null returning hold_id`);
-  await queryAs('legal_admin', `select cw.retention_destroy('AG-001','records@clausewerk')`);
+  await queryAs('administrator', `select cw.retention_destroy('AG-001','records@clausewerk')`);
   const r = await one(`select destroyed_on, destroyed_by from cw.agreement_retention
                        where agreement_id='AG-001'`);
   assert(r.destroyed_on !== null, 'the clock resumes from where it was, and runs out');
@@ -466,13 +466,13 @@ await test('with every hold released, destruction proceeds and is audited', asyn
 });
 
 await test('destruction before the retention date is refused', async () => {
-  await throws(() => queryAs('legal_admin',
+  await throws(() => queryAs('administrator',
     `select cw.retention_destroy('AG-003','records@clausewerk')`),
     'it is not due');
 });
 
 await test('nothing is destroyed twice', async () => {
-  await throws(() => queryAs('legal_admin',
+  await throws(() => queryAs('administrator',
     `select cw.retention_destroy('AG-001','records@clausewerk')`),
     'was already destroyed');
 });
@@ -487,6 +487,53 @@ await test('a requester cannot run the retention path at all', async () => {
   await throws(() => queryAs('requester',
     `select cw.retention_destroy('AG-002','${BUYER}')`, [], BUYER),
     'permission denied');
+});
+
+await test('nor can a legal admin any more — U9 moved it, it did not share it', async () => {
+  // The destruction tests above now run as the administrator. Rewiring them
+  // without this one would have QUIETLY DROPPED the boundary they were partly
+  // there to prove: they would still pass if BOTH roles could destroy, which is
+  // exactly what U9 refused.
+  //
+  // The move matters more than the grant. Two roles holding an irreversible act
+  // means neither is accountable for it — the same reasoning as U7's checkpoint
+  // move, where legal_admin's right was revoked rather than left unused.
+  await throws(() => queryAs('legal_admin',
+    `select cw.retention_destroy('AG-002','records@clausewerk')`),
+    'permission denied',
+    'legal_admin still holds destruction, so U9 shared the authority instead of '
+    + 'moving it');
+});
+
+await test('nothing in the schema destroys anything by itself', async () => {
+  // OWNER DECISION U9, FIRST HALF: "auto-record-destruction should never
+  // happen". It never did — there is no scheduler, job or trigger here — but
+  // that was a fact about the code rather than a rule, and a fact nobody
+  // asserts is a fact somebody can undo without noticing.
+  //
+  // Asked of the catalogue rather than by reading: every trigger function body
+  // and every column default in the schema, checked for a call to the destroy
+  // function. A timer would have to become one of those to fire at all.
+  const callers = await rows(`
+    select p.proname
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'cw'
+      and p.oid in (select tgfoid from pg_trigger where not tgisinternal)
+      and p.prosrc like '%retention_destroy%'`);
+  eq(callers, [],
+    'a trigger calls cw.retention_destroy(), so destruction can happen without '
+    + 'anybody asking for it');
+
+  const defaults = await rows(`
+    select a.attname, c.relname
+    from pg_attrdef d
+    join pg_class c on c.oid = d.adrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
+    where n.nspname = 'cw'
+      and pg_get_expr(d.adbin, d.adrelid) like '%retention_destroy%'`);
+  eq(defaults, [], 'a column default calls cw.retention_destroy()');
 });
 
 await db.exec(`reset role;`);

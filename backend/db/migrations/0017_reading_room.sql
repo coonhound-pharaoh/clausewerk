@@ -1,4 +1,13 @@
--- 0016 · The sharing act, and the reading room it implies (WP-U14).
+-- 0017 · The sharing act, and the reading room it implies (WP-U14).
+--
+-- NUMBERED 0017, HAVING SHIPPED AS 0016. It collided: the Python doorway landed
+-- its own 0016 (`0016_doorway_login.sql`) in a parallel session, and two files
+-- claiming one number is a trap for whoever adds the next one. This file moved
+-- rather than that one, because that one belonged to a session still running and
+-- renaming a file out from under live work is how you cause the problem you were
+-- preventing. Nothing about the order changed: `0016_doorway_login` already
+-- sorted ahead of `0016_reading_room`, and neither reads anything the other
+-- writes, so the run order is the same before and after.
 --
 -- WHAT THIS FIXES, and it is not a refinement. Until now:
 --
@@ -189,7 +198,7 @@ where s.revoked_at is null
 comment on view cw.reading_room is
   'The agreements a person has been shown, and why. The scoping is in this '
   'view''s WHERE clause because a view runs with its owner''s rights and does '
-  'NOT inherit the policies underneath it — see the note in 0016.';
+  'NOT inherit the policies underneath it — see the note in 0017.';
 
 -- What was in the agreement, per clause, with its origin and who approved it.
 -- The one place a viewer sees an approval: WP-U14's "SOW-departure visibility

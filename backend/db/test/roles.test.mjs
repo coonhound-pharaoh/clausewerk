@@ -183,8 +183,20 @@ await test('a legal reviewer cannot become legal_admin by setting cw.role', asyn
   } catch { threw = true; }
   assert(threw, 'the claim was honoured — the reviewer wrote themselves in as legal_admin');
   await asOwner();
+  // Scoped to THE FORGERY, not to the role. This used to assert that no row
+  // anywhere carried actor_role = 'legal_admin', which held only because
+  // nothing in this suite legitimately acted as one. 0020 added audit triggers
+  // to cw.agreement and cw.category, so a legal admin creating a category now
+  // writes an honest legal_admin row and the old assertion failed on it.
+  //
+  // The narrower claim is also the truer one: what must not exist is the
+  // reviewer's forged event, not every trace of the role. A test that breaks
+  // when the system starts recording something legitimate was measuring the
+  // absence of activity rather than the presence of a control.
   const leaked = (await db.query(
-    `select count(*)::int as n from cw.audit_event where actor_role = 'legal_admin'`)).rows[0];
+    `select count(*)::int as n from cw.audit_event
+      where actor_role = 'legal_admin'
+        and event_type = 'clause_activated' and subject = 'RH-S-001@v1'`)).rows[0];
   assert(leaked.n === 0, 'a forged legal_admin attribution reached the permanent record');
 });
 

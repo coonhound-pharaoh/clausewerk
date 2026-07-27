@@ -290,6 +290,39 @@ await test('legitimate appends still work after all of that', async () => {
   eq(r.broken, null, 'the fork guard must not stand in the way of ordinary work');
 });
 
+// ── seq comes from the trigger, not the column default (0021) ───────────────
+// THE ONE PART OF 0021 THIS REPOSITORY CAN PROVE.
+//
+// The defect it fixes needs two writers at once, and PGlite is
+// single-connection, so nothing here can watch the race. But the MECHANISM is
+// testable alone, and it is the whole of the fix: `seq` must be assigned inside
+// cw.audit_chain() — under the advisory lock — rather than by the bigserial
+// default, which PostgreSQL evaluates BEFORE the trigger fires and therefore
+// outside the lock.
+//
+// Push the sequence far ahead of the table and append. If seq still comes from
+// the default, the row lands at the sequence's number. If it comes from the
+// trigger, it lands at max+1 and the default's value is discarded — which is
+// what makes sequence order and append order the same thing again under
+// concurrency.
+await test('the sequence number is assigned under the lock, not by the default', async () => {
+  const before = await one(dbD, `select max(seq)::int as m from cw.audit_event`);
+  await dbD.exec(`select setval('cw.audit_event_seq_seq', ${before.m + 5000})`);
+  await dbD.exec(`select cw.audit('f5','S-5','{}'::jsonb)`);
+  const after = await one(dbD,
+    `select seq::int as s from cw.audit_event order by seq desc limit 1`);
+  eq(after.s, before.m + 1,
+    'the row took the column default rather than its place in the append order — ' +
+    'seq is being allocated outside the advisory lock, which is the 0021 defect');
+});
+
+await test('and the chain still verifies after that', async () => {
+  // Because the point of assigning seq is to keep the thing the verifier walks
+  // and the thing the chain links in the same order.
+  const r = await one(dbD, `select cw.audit_verify() as broken`);
+  eq(r.broken, null, 'assigning seq in the trigger broke the chain it exists to keep straight');
+});
+
 // ── Result ──────────────────────────────────────────────────────────────────
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) {

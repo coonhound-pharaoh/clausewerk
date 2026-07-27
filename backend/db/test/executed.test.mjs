@@ -41,6 +41,23 @@ const rows = async (s) => (await db.query(s)).rows;
 const one = async (s) => (await rows(s))[0];
 const { queryAs, execAs, mustNotWrite } = roleHelpers(db);
 
+// Read a REPORTING VIEW as somebody who is entitled to the whole picture.
+//
+// Why this exists. 0019 scoped six views that had been handing every signed
+// agreement to anybody — they now consult cw.app_role(), and the database owner
+// holds no application role at all, so on the owner's connection they are
+// empty. Five assertions in this file read them as the owner and went quietly
+// true when that happened.
+//
+// That is the habit roles.mjs was written to break, and it is worth naming: an
+// assertion about what a view REPORTS has to be made by somebody the view would
+// report to. Read as the owner it measures the owner's privileges, and once the
+// view is scoped it measures nothing at all — an empty result that looks like
+// a passing test. Legal admin is the right reader here: it is in the
+// "sees everything" branch of every one of these views.
+const rowsAsLegal = (s) => queryAs('legal_admin', s, [], 'legal@cw');
+const oneAsLegal = async (s) => (await rowsAsLegal(s))[0];
+
 const SNAP = 'a'.repeat(64), RULES = 'c'.repeat(64);
 // A result hash is a SHA-256. cw.run carries the shape check from WP-23, so a
 // one-character stand-in is now correctly refused.
@@ -107,7 +124,7 @@ await test('an amendment is appended, never applied', async () => {
   await db.exec(`insert into cw.executed_document
     (agreement_id,doc_seq,kind,filename,byte_size,sha256,storage_uri,signed_on,supersedes_seq)
     values ('AG-001',1,'amendment','amd-1.docx',5000,'${AMD}','s3://x','2027-02-01',0)`);
-  const chain = await rows(`select doc_seq, kind, sha256 from cw.agreement_chain
+  const chain = await rowsAsLegal(`select doc_seq, kind, sha256 from cw.agreement_chain
                             where agreement_id='AG-001' order by doc_seq`);
   eq(chain.length, 2);
   eq(chain[0].sha256, SIG, 'the original document is untouched by the amendment');
@@ -264,7 +281,7 @@ await test('retiring the clause it used changes nothing either', async () => {
 });
 
 await test('drift is reported, not applied', async () => {
-  const drift = await rows(`select clause_id, executed_version, successor_version,
+  const drift = await rowsAsLegal(`select clause_id, executed_version, successor_version,
                                    superseded_reason
                             from cw.agreement_drift where agreement_id='AG-001'`);
   eq(drift.length, 1);
@@ -273,7 +290,81 @@ await test('drift is reported, not applied', async () => {
   assert(drift[0].superseded_reason.includes('SCC'));
 });
 
+await test('an IN-FLIGHT deal carrying superseded wording is flagged too', async () => {
+  // OWNER DECISION U10, 2026-07-27: replacing a clause mints a new version and
+  // never rewrites wording already committed to — signed OR in-flight — and both
+  // are FLAGGED as carrying obsolete language rather than quietly corrected.
+  //
+  // Signed contracts already had cw.agreement_drift. In-flight deals had
+  // NOTHING, and that is the worse of the two: a signed contract's wording is
+  // settled and its drift report is input to a renewal, whereas an in-flight one
+  // can still be corrected — and is the case where obsolete language would
+  // otherwise be signed BY MISTAKE.
+  //
+  // AG-001 is executed, so it must NOT appear here; its report is the other view.
+  const executed = await rowsAsLegal(
+    `select run_id from cw.run_drift where agreement_id='AG-001'`);
+  eq(executed, [],
+    'a signed agreement appears in the in-flight report, which would double-count '
+    + 'it and blur the one distinction the two views exist to draw');
+
+  // A deal still negotiating, whose run chose DP-H-014 v1 — the version that was
+  // superseded by v2 earlier in this suite.
+  await db.exec(`
+    insert into cw.agreement (agreement_id,counterparty,requester)
+      values ('AG-INFLIGHT','Contoso','buyer@cw');
+    insert into cw.run (run_id,agreement_id,vendor,manifest,manifest_source,
+                        snapshot_id,ruleset_id,result_hash,engine_version,
+                        gate_open,created_by)
+      values ('RUN-INFLIGHT','AG-INFLIGHT','Contoso','{}','manual','${SNAP}',
+              '${RULES}','${'f'.repeat(64)}','clausewerk-engine/3',true,'buyer@cw');
+    insert into cw.run_decision (run_id,seq,category_key,severity,clause_id,version,reason)
+      values ('RUN-INFLIGHT',0,'data','High','DP-H-014',1,'Matched High variant');`);
+
+  const d = await rowsAsLegal(`select clause_id, chosen_version, successor_version,
+                                      agreement_status, current_state
+                               from cw.run_drift where agreement_id='AG-INFLIGHT'`);
+  eq(d.length, 1, 'an in-flight deal on superseded wording is not flagged');
+  eq([d[0].clause_id, d[0].chosen_version, d[0].successor_version],
+     ['DP-H-014', 1, 2]);
+  assert(d[0].agreement_status !== 'executed');
+
+  // REPORTING ONLY. The run's own decision is untouched — the whole decision is
+  // that superseding never rewrites what a deal already carries.
+  const decision = await one(`select version from cw.run_decision
+                              where run_id='RUN-INFLIGHT' and clause_id='DP-H-014'`);
+  eq(decision.version, 1,
+    'the in-flight run was rewritten to the new version, which is exactly what '
+    + 'U10 forbids — flag it, never correct it');
+});
+
 console.log('\nprovenance and access');
+
+await test('the deal being opened is on the chain, naming who owns it', async () => {
+  // 0020. Every LATER move of an agreement was audited — status changes,
+  // execution, shares, holds, renewals — and its creation was not. An auditor
+  // could read the whole life of a deal except the moment it started.
+  //
+  // It matters more than an ordinary gap because cw.agreement.requester is the
+  // column cw.owns_agreement() reads, and that function decides a requester's
+  // access to their deals, runs, overrides and reading room. Every scoping
+  // decision for that role hung off a field with no record of who set it.
+  const e = await one(`select actor, subject, payload from cw.audit_event
+                       where event_type='agreement_opened' and subject='AG-001'`);
+  assert(e, 'opening a deal leaves no trace on the chain');
+  eq(e.payload.requester, 'buyer@cw',
+    'the opening does not record who the deal is scoped to, which is the whole point');
+  eq(e.payload.counterparty, 'Northwind');
+});
+
+await test('creating a category is recorded too', async () => {
+  // Smaller, same reasoning: cw.coverage_gap is defined over the category list,
+  // so adding one changes what the system considers covered.
+  const e = await one(`select subject, payload from cw.audit_event
+                       where event_type='category_created' and subject='data'`);
+  assert(e, 'adding a category leaves no trace');
+  eq(e.payload.label, 'Data Privacy');
+});
 
 await test('execution and freezing are both audited', async () => {
   const e = await rows(`select event_type, subject from cw.audit_event
@@ -311,7 +402,7 @@ await test('a viewer reads a signed contract ONLY once it is shared with them', 
   // without letting them change it, and the "shown to" half was never built —
   // nothing anywhere recorded who had been shown what.
   //
-  // 0016 builds it. The viewer's reach is now exactly "this share, this
+  // 0017 builds it. The viewer's reach is now exactly "this share, this
   // person", enforced in the policy rather than by a careful query.
   await db.exec(`reset role; select set_config('cw.actor','outsider@cw',false);`);
   await db.exec(`insert into cw.account (person,display_name,role,created_by)
@@ -421,10 +512,10 @@ await test('a missing certificate or signatory is reported, never invented', asy
   // The product boundary: the system makes the gap visible and gives the
   // responsible person a place to act. It does not refuse to file a contract
   // that was genuinely signed, and it does not fabricate the missing evidence.
-  const g = await one(`select * from cw.execution_evidence_gap where agreement_id='AG-003'`);
+  const g = await oneAsLegal(`select * from cw.execution_evidence_gap where agreement_id='AG-003'`);
   eq(g.missing_completion_certificate, true);
   eq(g.missing_our_signatory, true);
-  const ok = await one(`select * from cw.execution_evidence_gap where agreement_id='AG-001'`);
+  const ok = await oneAsLegal(`select * from cw.execution_evidence_gap where agreement_id='AG-001'`);
   eq(ok.missing_completion_certificate, false);
   eq(ok.missing_our_signatory, false);
 });
@@ -563,7 +654,7 @@ await test('with everyone signed, the departure is authorised and the SOW execut
   await db.exec(`insert into cw.sow_override_settlement (override_id, settled_by)
                  values (${o.override_id},'legal@cw')`);
 
-  const inForce = await rows(`select category_key from cw.sow_override_in_force
+  const inForce = await rowsAsLegal(`select category_key from cw.sow_override_in_force
                               where sow_id='AG-102'`);
   eq(inForce.length, 1); eq(inForce[0].category_key, 'data');
 
@@ -571,7 +662,7 @@ await test('with everyone signed, the departure is authorised and the SOW execut
     (agreement_id,run_id,executed_on,effective_on,agreement_kind,parent_agreement_id)
     values ('AG-102','RUN-102','2026-08-10','2026-09-01','sow','AG-100')`);
 
-  const c = await rows(`select category_key from cw.sow_conflict where sow_id='AG-102'`);
+  const c = await rowsAsLegal(`select category_key from cw.sow_conflict where sow_id='AG-102'`);
   eq(c.length, 1, 'and it is STILL reported — authorised is not the same as hidden');
 });
 
@@ -594,12 +685,67 @@ await test('what was authorised, and by whom, cannot be rewritten', async () => 
 });
 
 await test('terminating a master over a live SOW is surfaced, not prevented', async () => {
-  const before = await rows(`select sow_id from cw.orphaned_sow`);
+  const before = await rowsAsLegal(`select sow_id from cw.orphaned_sow`);
   eq(before.length, 0);
   await db.exec(`update cw.agreement set status='terminated' where agreement_id='AG-100'`);
-  const after = await rows(`select sow_id, master_status from cw.orphaned_sow order by sow_id`);
+  const after = await rowsAsLegal(`select sow_id, master_status from cw.orphaned_sow order by sow_id`);
   assert(after.some(r => r.sow_id === 'AG-101'),
     'the named deal owner has to be told the master ended under live work');
+});
+
+await test('and the views over it are shared-scoped too, not just the tables', async () => {
+  // 0019. THE HOLE ABOVE WAS CLOSED AT THE FRONT DOOR AND LEFT OPEN AT THE SIDE.
+  // 0017 narrowed the policies on the four tables that carry a signed contract
+  // and scoped the view it had just written. It did not touch the three views in
+  // 0006 that had been selecting from those same tables since long before —
+  // and a view does not inherit the policies underneath it.
+  //
+  // So cw.agreement_chain went on returning every signed agreement in the
+  // system, with its counterparty, document filename and hash, to a viewer who
+  // had been shown nothing. Observed, not argued, before the fix.
+  //
+  // cw.execution_evidence_gap is the sharper one: it is a list of which signed
+  // agreements are missing a signature or a completion certificate — a map of
+  // the weakest contracts in the business.
+  await db.exec(`reset role; select set_config('cw.actor','outsider@cw',false);
+                 set role cw_viewer;`);
+
+  // A second agreement gets a filed document first. Without one the chain has
+  // only AG-001 in it whether the view is scoped or not, so the assertion below
+  // would pass on a completely unscoped view — it would be measuring the seed
+  // rather than the scoping. The mutation harness caught exactly that: the
+  // check reported MISSED until this document existed.
+  await db.exec(`reset role; select set_config('cw.actor','legal@cw',false);
+    insert into cw.executed_document
+      (agreement_id,doc_seq,kind,filename,byte_size,sha256,storage_uri,signed_on)
+      values ('AG-003',0,'agreement','Fabrikam-MSA-executed.docx',9001,
+              '${'e'.repeat(64)}','s3://cw-executed/AG-003/0.docx','2026-08-01');`);
+
+  await db.exec(`reset role; select set_config('cw.actor','outsider@cw',false);
+                 set role cw_viewer;`);
+  const chain = await rows(`select distinct agreement_id from cw.agreement_chain order by agreement_id`);
+  eq(chain.map(r => r.agreement_id), ['AG-001'],
+    'a viewer reads the document chain of agreements nobody shared with them');
+
+  const gaps = await rows(`select distinct agreement_id from cw.execution_evidence_gap order by agreement_id`);
+  eq(gaps.map(r => r.agreement_id), ['AG-001'],
+    'a viewer reads which signed agreements are missing their evidence');
+
+  // The other side of the same coin: the scoping must not have broken the
+  // people the views are for. Legal reads more than the viewer does, and the
+  // viewer reads the one they were actually shown rather than nothing at all.
+  // Contrast drawn on cw.execution_evidence_gap rather than the chain: the
+  // chain requires a filed document and only AG-001 has one, so it cannot show
+  // a difference between the two readers however wrong the scoping was.
+  const legal = await rowsAsLegal(
+    `select distinct agreement_id from cw.execution_evidence_gap order by agreement_id`);
+  assert(legal.length > 1,
+    'Legal now reads one agreement or fewer, so the scoping caught the wrong people');
+  assert(legal.some(r => r.agreement_id === 'AG-001'));
+  assert(legal.length > gaps.length,
+    'the viewer reads as much as Legal does, so the scoping is not doing anything');
+
+  await db.exec(`reset role; select set_config('cw.actor','legal@cw',false);`);
 });
 
 await db.exec(`reset role;`);

@@ -312,7 +312,14 @@ await test('which baseline was taken is in the audit trail, with the default alo
 await test('the drift report sits alongside the baseline it exists to compensate for', async () => {
   // Opening from the executed agreement means stale and superseded language is
   // the STARTING point. This report is what pulls it forward.
-  const d = await rows(`select clause_id, executed_version, successor_version,
+  // Asked as Legal rather than as the owner. cw.renewal_drift joins
+  // cw.agreement_drift, which 0019 scoped — it now consults cw.app_role(), and
+  // the database owner holds none, so on the owner's connection this report is
+  // empty. That is correct: drift on an agreement you cannot see is not yours
+  // to read. It also means this assertion would have gone quietly true rather
+  // than failing, which is the failure mode 0019's own note is about.
+  const d = await queryAs('legal_reviewer',
+                       `select clause_id, executed_version, successor_version,
                                superseded_reason
                         from cw.renewal_drift where negotiation_id=$1`, [NEG_A]);
   eq(d.length, 1, 'the carried concession has been superseded in the library since');

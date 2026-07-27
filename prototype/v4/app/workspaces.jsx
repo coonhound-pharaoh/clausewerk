@@ -62,19 +62,19 @@ const PANES = {
   'holds':        (me) => <HoldsPane me={me} />,
 
   // Legal admin
-  'library':    () => <NotBuiltYet what="The clause library is not built." lands="WP-U13" />,
-  'ladders':    () => <NotBuiltYet what="Ladders and conflict rules are not built." lands="WP-U13" />,
+  'library':    () => <LibraryPane />,
+  'ladders':    () => <LaddersPane />,
   'governance': () => <NotBuiltYet what="Owner decisions are not editable here yet." lands="WP-U13" />,
   'retention':  () => <NotBuiltYet what="Holds and retention are not built." lands="WP-U13" />,
 
   // Auditor
-  'the-record':     () => <NotBuiltYet what="The chain explorer is not built." lands="WP-U14" />,
-  'quality':        () => <NotBuiltYet what="Review quality is not built." lands="WP-U14" />,
-  'origin-mix':     () => <NotBuiltYet what="The origin mix is not built." lands="WP-U14" />,
+  'the-record':     () => <TheRecordPane />,
+  'quality':        () => <QualityPane />,
+  'origin-mix':     () => <OriginMixPane />,
   'access-history': () => <AccessHistoryPane />,
 
   // Viewer
-  'reading-room': () => <NotBuiltYet what="The reading room is not built." lands="WP-U14" />,
+  'reading-room': (me) => <ReadingRoomPane me={me} />,
 
   // Administrator
   'people':   (me) => <PeopleAndAccessConsole me={me} />,

@@ -26,6 +26,28 @@
 -- Checked for false positives before adopting: ordinary appends, a
 -- truncate-and-reseed, and two events with identical content written in the
 -- same instant all pass — their prev_hash values differ by construction.
+--
+-- THAT SENTENCE WAS TRUE, THEN FALSE, AND IS NOW TRUE AGAIN FOR A DIFFERENT
+-- REASON. Read it carefully before relying on it.
+--
+-- As written it meant "identical CONTENT does not collide", and the check that
+-- established it ran on PGlite — one connection, where appends cannot actually
+-- overlap. So it never tested two writers at the same instant; it tested two
+-- writers in sequence with the same payload. When the doorway moved to standard
+-- PostgreSQL and real concurrency arrived, this index began refusing honest
+-- appends roughly half the time — not because it was over-strict, but because
+-- `seq` was allocated by a column default OUTSIDE the append lock, so the
+-- tail-read found the wrong parent and handed the index a genuine fork.
+--
+-- 0021 assigns `seq` inside the trigger, under the lock. Verified since, with
+-- eight simultaneous writers through the doorway: 0 refusals, 0 rows chained to
+-- a higher seq, chain verifies clean. So the claim holds again — and now it has
+-- actually been tested against concurrency rather than inferred from a database
+-- that could not produce any.
+--
+-- THE STANDING LESSON: this index is not the thing to loosen. It was correct on
+-- every one of those refusals; something upstream was handing it a fork. See
+-- 0021 and handoff 07 §5.10c.
 create unique index audit_no_fork
   on cw.audit_event (prev_hash) nulls not distinct;
 

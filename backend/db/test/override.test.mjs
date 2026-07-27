@@ -60,18 +60,29 @@ const LEGAL = 'r.vance@clausewerk';
 const PAT   = 'p.nkemi@clausewerk';
 const DANA  = 'd.buyer@clausewerk';
 const SEC   = 'sec.lead@clausewerk';
+// Two bystanders, added for 0019's scoping tests: a viewer who is never put on
+// any watcher list, and a requester who opens nothing. Neither has any relation
+// to the request under test, which is exactly what makes them the right probe —
+// the audience comes from cw.override_watcher, so an unwatched viewer is never
+// notified and stays a stranger for the life of the suite.
+const KIM   = 'k.other@clausewerk';
+const ELI   = 'e.other@clausewerk';
 
 await db.exec(`select cw.bootstrap('${OWNER}','${ADMIN}','Ada','${LEGAL}','Rae')`);
 await execAs('administrator', `
   insert into cw.account (person,display_name,role,created_by) values
     ('${PAT}','Pat Nkemi','legal_reviewer','${ADMIN}'),
     ('${DANA}','Dana Buyer','requester','${ADMIN}'),
-    ('${SEC}','Sec Lead','viewer','${ADMIN}')`, ADMIN);
+    ('${SEC}','Sec Lead','viewer','${ADMIN}'),
+    ('${KIM}','Kim Other','viewer','${ADMIN}'),
+    ('${ELI}','Eli Other','requester','${ADMIN}')`, ADMIN);
 await execAs('administrator', `
   insert into cw.role_grant (action,person,role) values
     ('granted','${PAT}','legal_reviewer'),
     ('granted','${DANA}','requester'),
-    ('granted','${SEC}','viewer')`, ADMIN);
+    ('granted','${SEC}','viewer'),
+    ('granted','${KIM}','viewer'),
+    ('granted','${ELI}','requester')`, ADMIN);
 await execAs('legal_admin', `
   insert into cw.role_grant (action,person,role,grant_ref)
   select 'countersigned','${PAT}','legal_reviewer',grant_id from cw.role_grant
@@ -121,8 +132,16 @@ await test('a requester opens a request, and it is recorded with its justificati
 await test('a request on its own passes NOTHING', async () => {
   // The whole product, in one assertion. If this ever returns a row for a
   // request that has only been asked for, the blanket button is back.
-  const p = await rows(`select * from cw.override_passes where request_id=$1`, [REQ]);
-  eq(p, [], 'a request that nobody has decided let a finding past the gate');
+  //
+  // Asked as the people who may actually see it. On the owner's connection this
+  // assertion went trivially true the moment 0019 scoped the view — the owner
+  // holds no application role, so an empty result would prove nothing about the
+  // gate and everything about who was asking.
+  for (const [role, who] of [['requester', DANA], ['legal_reviewer', PAT]]) {
+    const p = await queryAs(role,
+      `select * from cw.override_passes where request_id=$1`, [REQ], who);
+    eq(p, [], `asked as ${role}: a request nobody has decided let a finding past the gate`);
+  }
 });
 
 await test('Legal cannot request one, and a requester cannot decide one', async () => {
@@ -280,9 +299,36 @@ await test('a reviewer approves one finding and rejects the other, with a note',
 });
 
 await test('the gate opens for the approved finding ONLY', async () => {
-  const p = await rows(`select finding_ref from cw.override_passes where request_id=$1`, [REQ]);
-  eq(p.map(x => x.finding_ref), ['data:F1'],
-    'a rejected finding was let past, which is the blanket override returning');
+  // Asked as real roles, not as the owner. This used to read cw.override_passes
+  // on the owner's connection, which measured the owner's privileges rather
+  // than the system's — the exact habit roles.mjs exists to break. It mattered
+  // once 0019 scoped the view: the owner holds no application role, so the
+  // scoped view is empty for them and the assertion was reading nothing.
+  //
+  // Both the requester who opened it and Legal must see the approved finding,
+  // and neither may see the rejected one.
+  for (const [role, who] of [['requester', DANA], ['legal_reviewer', PAT]]) {
+    const p = await queryAs(role,
+      `select finding_ref from cw.override_passes where request_id=$1`, [REQ], who);
+    eq(p.map(x => x.finding_ref), ['data:F1'],
+      `asked as ${role}: a rejected finding was let past, which is the blanket override returning`);
+  }
+});
+
+await test('the gate view is scoped, so it is not a way round the policy', async () => {
+  // 0019. cw.override_passes carried no scoping and was granted to all six
+  // roles, so a viewer who had been told about nothing read the justification of
+  // every approved override in the system. The view filters on `decision`, which
+  // is why it looked correctly empty until the first approval landed.
+  const stranger = await queryAs('viewer',
+    `select finding_ref from cw.override_passes where request_id=$1`, [REQ], KIM);
+  eq(stranger, [],
+    'a viewer nobody told reads the findings an override let past');
+
+  const alsoStranger = await queryAs('requester',
+    `select finding_ref from cw.override_passes where request_id=$1`, [REQ], ELI);
+  eq(alsoStranger, [],
+    "a requester reads the findings let past on somebody else's request");
 });
 
 await test('recording a gate for a rejected finding is refused', async () => {
@@ -399,6 +445,30 @@ await test('a requester sees their own requests and no others', async () => {
   const seen = await queryAs('requester',
     `select distinct requested_by from cw.override_request`, [], DANA);
   eq(seen.map(r => r.requested_by), [DANA]);
+});
+
+await test('and the status view says the same thing as the table', async () => {
+  // 0019. cw.override_status is a view over cw.override_request and carried no
+  // scoping of its own, so it answered this question differently from the table
+  // it is built on — a requester read every request in the system through it,
+  // and a viewer nobody had told read them all too, justification text included.
+  //
+  // Asserted against the table rather than against a fixed list, so the two can
+  // never drift apart again without this failing.
+  for (const [role, who] of [['requester', DANA], ['viewer', SEC]]) {
+    const viaTable = await queryAs(role,
+      `select request_id from cw.override_request order by request_id`, [], who);
+    const viaView = await queryAs(role,
+      `select request_id from cw.override_status order by request_id`, [], who);
+    eq(viaView.map(r => r.request_id), viaTable.map(r => r.request_id),
+      `asked as ${role}: cw.override_status disagrees with the table underneath ` +
+      `it, which means the view is not consulting the policy`);
+  }
+
+  // And a bystander who was never told about anything sees nothing at all.
+  const stranger = await queryAs('viewer',
+    `select request_id from cw.override_status`, [], KIM);
+  eq(stranger, [], 'a viewer nobody told reads override requests through the status view');
 });
 
 await test('Legal, Audit and the administrator see them all', async () => {

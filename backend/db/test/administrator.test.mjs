@@ -172,6 +172,17 @@ const ADMIN_MAY_WRITE = {
   // for everybody: a check that found something cannot be un-found, and
   // re-running it is a new row. See 0013 part 4.
   'integrity_check':    ['INSERT'],
+  // Who the Administrator has authorised to REDACT records — remove content and
+  // keep the fact (owner decision U12, 0023). Insert to delegate, update to
+  // revoke; never delete, because that somebody held this authority for that
+  // period does not stop being true.
+  //
+  // THE SWEEP CAUGHT THIS ON ITS FIRST RUN, which is the second time it has
+  // earned itself: a new writable table appeared and it refused to pass until
+  // somebody wrote down why. Note what the entry does NOT license — delegation
+  // is the authority to redact, and purging stays the Administrator's own act
+  // with nothing to hand out.
+  'records_delegate':   ['INSERT','UPDATE'],
 };
 
 console.log('\ndecision U5: contract content is WRITABLE by the administrator NOWHERE');
@@ -259,14 +270,32 @@ await test('administrator CAN take a checkpoint — decision U7 moved the duty h
   assert(r[0].id > 0, 'the administrator cannot discharge the duty it was given');
 });
 
-await test('administrator cannot destroy a retained record — destruction stays legal admin\'s', async () => {
+await test('destruction is the administrator\'s, and legal admin\'s is revoked', async () => {
+  // INVERTED BY OWNER DECISION U9, 2026-07-27, and the inversion is the point.
+  // This used to assert the opposite — "destruction stays legal admin's" — and
+  // it was right until the owner moved the authority. Records custody now sits
+  // with the role that keeps the machine.
+  //
+  // The MOVE is what is tested, not just the grant. U9 revokes legal_admin's
+  // rather than leaving both holding it, on the same reasoning as U7's
+  // checkpoint move: two roles holding an irreversible act means neither is
+  // accountable for it. So both halves are asserted here.
+  //
+  // Neither call gets far — AG-900 has no retention record — and that is
+  // deliberate. What separates the two roles is WHICH refusal each receives: a
+  // privilege refusal means the door is shut, and a "nothing to destroy" means
+  // the door opened and there was nothing behind it.
+  await throws(() => queryAs('legal_admin',
+    `select cw.retention_destroy('AG-900','${LEGAL}')`, [], LEGAL),
+    'permission denied',
+    'legal_admin still holds destruction, so U9 moved nothing');
+
   await throws(() => queryAs('administrator',
     `select cw.retention_destroy('AG-900','${ADMIN}')`, [], ADMIN),
-    'permission denied');
+    'nothing to destroy',
+    'the administrator was refused by PRIVILEGE, so it did not receive the '
+    + 'authority U9 gave it');
 });
-
-// ── Guarantee 2 · cw.account ───────────────────────────────────────────────
-console.log('\nthe system knows its people by name');
 
 await test('an administrator creates an account, and it lands on the chain', async () => {
   await mustWrite('administrator',
