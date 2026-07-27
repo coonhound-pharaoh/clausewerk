@@ -1414,3 +1414,54 @@ removed it.
 **Where the language decision now stands.** Python everywhere the system thinks.
 JavaScript everywhere it displays. The database keeps the rules. All six planned
 packages are complete.
+
+---
+
+## 2026-07-27 · A record is never destroyed without a person doing it
+
+**The rule, restated by Mike and recorded here so it stops needing restating.**
+
+A record may be **flagged** as past its retention date automatically. It may
+**never** be deleted or destroyed automatically. Destruction happens only when a
+named person performs it, deliberately, and the record says who they were.
+
+**This is not aspiration; it is how the system is built,** and the check was made
+rather than assumed:
+
+- Nothing scheduled destroys anything. The five nightly jobs are all *checks* —
+  they verify the audit log and the stored documents. None of them deletes.
+- Being past a retention date is surfaced as a **fact to act on**, not an
+  instruction. The Administrator, whose console shows the list, holds no
+  privilege to destroy at all — they can only send a reminder that Legal was
+  told.
+- Destruction is one function, `cw.retention_destroy()`, granted to the Legal
+  admin alone. It takes the acting person's name, writes it onto the record, and
+  refuses outright while any legal hold is open.
+
+**What is still missing, and it is only the button.** No screen offers the act
+yet. Adding one is in scope; adding anything that performs it on a timer is not,
+now or later.
+
+---
+
+## 2026-07-27 · Changing a clause means replacing it, however small the change
+
+**Mike's rule, confirmed 2026-07-27.** Any change to approved clause wording —
+including a comma — produces a **complete new version**. There is no edit-in-place
+of an approved clause, ever.
+
+**Why, in one sentence:** a contract signed last March must still show the exact
+words that were approved last March, and it can only do that if those words were
+never overwritten.
+
+**What this does NOT restrict, because the phrasing confused things once.** It
+places no limit whatsoever on negotiating a deal. Departing from standard
+wording on a live negotiation is a normal, supported act with its own approval
+path — the fallback ladders, the concession record, and the override request all
+exist precisely to make departures happen properly and be recorded. The rule is
+about the **library** — the master copy of the company's approved positions —
+not about what any individual contract may say.
+
+The library is the filing cabinet of approved language. You may take a clause
+out and negotiate away from it with the right approvals. You may not go into the
+cabinet and quietly retype the master copy.
