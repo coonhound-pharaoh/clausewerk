@@ -198,15 +198,11 @@ await test('the empty states are honest about which kind of empty they are', asy
   const src = read('common.jsx');
   assert(/function Empty\b/.test(src) && /function NotBuiltYet\b/.test(src),
     'the two kinds of empty state have been collapsed into one');
-  assert(/no endpoint behind this pane/.test(src),
-    'NotBuiltYet no longer says why it is empty');
 });
 
 await test('a pane that cannot load says so instead of rendering as empty', async () => {
   const src = read('common.jsx');
   assert(/function LoadFailed\b/.test(src), 'there is no failed-to-load state');
-  assert(/could not ask/.test(src),
-    'the failed state no longer distinguishes itself from an empty one');
   // And every pane uses it. A pane that treats a failure as an empty list is
   // how somebody misses a queue.
   const panes = stripComments(read('workspaces.jsx'));
@@ -352,16 +348,15 @@ await test('a pending grant is amber and never green', async () => {
   assert(!/chip-ok[^\n]*awaiting countersign/.test(fn));
 });
 
-await test('revoke says next request, and does not promise instant lockout', async () => {
-  // WP-U05 delivers revocation at the next request; a request already in flight
-  // completes. The screen must say exactly that and no more.
-  const src = consoleSrc();
-  assert(/at their next request/i.test(src),
-    'the revoke dialog no longer says when the revocation bites');
-  assert(!/immediately|at once|instantly/i.test(
-    /function RevokeDialog[\s\S]*?\n\}/.exec(src)[0]),
-    'the revoke dialog promises an immediate lockout the service does not deliver');
-});
+// RETIRED 2026-07-27 — 'revoke says next request, and does not promise instant
+// lockout'. It required the sentence "at their next request" and banned the
+// words immediately / at once / instantly. Both halves policed copy, which is
+// content: placeholder, changing, and not ours to check (CLAUDE.md). The
+// underlying promise — revocation bites at the next request — is a property of
+// the SERVICE and is proved where it lives, by
+// test_server.py::test_revocation_bites_at_the_next_request and by the doorway
+// mutation row that caches the effective role. A screen cannot make that true
+// or false; it can only describe it.
 
 await test('revoke targets the grant that actually confers access', async () => {
   // cw.effective_role confers the NEWEST live grant (0013: "order by
@@ -392,17 +387,22 @@ await test('the revoke reason is required by the screen, not just by the databas
     + 'the record');
 });
 
-await test('dormancy is never re-described as a sign-in', async () => {
-  // Comments stripped first. The file's own header explains why "last seen" is
-  // the wrong phrase, and the first version of this test failed on that
-  // explanation — a check that cannot tell a warning from the thing it warns
-  // about is a check that punishes writing the warning down.
+await test('dormancy is measured from recorded acts, not from sign-ins', async () => {
+  // REWRITTEN 2026-07-27. This used to ban the phrases "last seen" / "last
+  // sign-in" and require the phrase "recorded act" — policing copy, and it had
+  // already failed once on the file's own comment explaining the distinction.
+  //
+  // The system fact is which FIELDS the pane reads. A sign-in measure would
+  // have to come from somewhere, and there is nowhere: the read model exposes
+  // acts, and the API module offers no sign-in field at all. That is checkable
+  // and survives any rewording.
   const src = stripComments(consoleSrc());
-  assert(!/last seen|last sign-?in|last login/i.test(src),
-    'the console describes dormancy as a sign-in, which is the measure the read '
-    + 'model deliberately does not use');
-  assert(/recorded act/i.test(src),
-    'the console does not say what dormancy is actually measured from');
+  assert(/p\.acts_recorded/.test(src) && /p\.last_act_at/.test(src),
+    'the console no longer reads the recorded-act fields dormancy is defined '
+    + 'from, so it is measuring something else');
+  assert(!/last_sign_in|last_login|last_seen_at/.test(src + stripComments(read('api.jsx'))),
+    'a sign-in field has appeared — dormancy would then be measurable from '
+    + 'sign-ins, which the read model deliberately does not record');
 });
 
 await test('the countersign queue is one component, used in both places', async () => {
@@ -544,35 +544,40 @@ await test('the nudge notifies and cannot destroy', async () => {
     + 'no privilege for and must not be able to attempt');
 });
 
-await test('a held record renders as blocked BECAUSE held, naming the matter', async () => {
-  // The matter has to be on the CHIP, not merely somewhere in the file. The
-  // first version of this check looked for the word "matters" anywhere in the
-  // source and passed against a chip that just said "blocked" — because the
-  // matter was still mentioned in the row's subtitle. "Cannot be destroyed" and
-  // "cannot be destroyed while this litigation is open" are different
-  // sentences, and only the second tells anybody what to do about it.
+await test('a held record is distinguishable from a due one, and never names the matter', async () => {
+  // REWRITTEN 2026-07-27 for owner decision U13. This used to REQUIRE the
+  // matter reference on the chip; U13 says the Administrator is told that a
+  // record is held, not why, so the old assertion now demands the opposite of
+  // the decision. It was also the wrong shape twice over: it pinned prose.
+  //
+  // The system facts, and the only ones worth checking: the two states are
+  // told apart from each other, and the matter never reaches the screen.
   const src = restSrc();
-  assert(/under_hold/.test(src), 'nothing distinguishes a held record');
-  assert(/title=\{r\.matters\}/.test(src),
-    'the held chip does not name the matter holding the record');
-  assert(/>held</.test(src),
-    'the chip does not say the record is HELD, only that something is wrong');
+  assert(/under_hold/.test(src),
+    'nothing distinguishes a held record from a merely-due one, so a '
+    + 'destruction could be attempted on something frozen');
+  assert(!/r\.matters/.test(stripComments(src)),
+    'the matter reference is on the Administrator\'s screen — U13 gives them '
+    + 'the flag, not the reason');
 });
 
 await test('an uncovered category is surfaced as a gap', async () => {
   const src = restSrc();
   assert(/watcher_count === 0/.test(src),
     'nothing computes which categories nobody is watching');
-  assert(/socialised to nobody/.test(src),
-    'the gap is not spelled out — an uncovered category is a hole in the '
-    + 'socialisation, not "nobody to tell"');
+  // The sentence requirement ("socialised to nobody") is gone — 2026-07-27,
+  // copy. What is checkable is that the gap RENDERS at all: a computed gap
+  // nothing displays is the same as no computation.
+  assert(/gaps\.length > 0 &&/.test(src),
+    'the gap is computed and never rendered, so nobody is told');
 });
 
-await test('the watcher pane says what adding somebody does and does not give them', async () => {
-  const src = restSrc();
-  assert(/no vote/.test(src),
-    'the watchers pane does not say that a watcher sees but does not decide');
-});
+// RETIRED 2026-07-27 — 'the watcher pane says what adding somebody does and
+// does not give them'. Its whole body required the phrase "no vote". That a
+// watcher sees and does not decide is enforced by the SCHEMA, not by a
+// sentence: a watcher holds no grant on any decision surface, which
+// administrator.test.mjs's whole-schema sweep already proves. The screen
+// describing it well is an editorial question about placeholder copy.
 
 await test('access history filters what the policy already returned', async () => {
   // The distinction between a filter and a leak: this narrows rows the database
@@ -635,26 +640,33 @@ await test('the AI candidate is NEVER pre-filled into the approval box', async (
     'the approval box is seeded from the proposal');
 });
 
-await test('the screen says why the box is empty', async () => {
-  // An empty box looks like an oversight until somebody explains that it is the
-  // point, and a reviewer who thinks it is a bug will paste the proposal in
-  // every time — which is the pre-filled default arriving by another route.
-  const fn = /function TicketDesk[\s\S]*?\n\}/.exec(revSrc())[0];
-  assert(/Deliberately empty/.test(fn),
-    'nothing explains the empty approval box');
-});
+// RETIRED 2026-07-27 — 'the screen says why the box is empty'. Its whole body
+// required the phrase "Deliberately empty". Whether the screen explains itself
+// well is an editorial question about placeholder copy; that the box starts
+// empty is the system fact, and the test above proves it.
 
-await test('verify goes through a confirmation showing what will be minted', async () => {
+await test('verify goes through a confirmation before it mints', async () => {
+  // The two prose requirements here are gone (2026-07-27): the confirmation
+  // used to have to contain "This is what will be minted" and "cannot be
+  // edited once it exists". What matters is structural — there is a
+  // confirmation step, and it renders the actual wording that will exist
+  // rather than a summary of it.
   const fn = /function TicketDesk[\s\S]*?\n\}/.exec(revSrc())[0];
   assert(/confirming/.test(fn), 'there is no confirmation step before minting');
-  assert(/This is what will be minted/.test(fn),
-    'the confirmation does not show the wording that will exist forever');
-  assert(/cannot be edited once it exists/.test(fn),
-    'the confirmation does not say the minting is irreversible');
-  // The confirmation renders the actual text, on the paper surface, so what is
-  // agreed to is what will exist.
   assert(/paper/.test(fn) && /\{approved\.trim\(\)\}/.test(fn),
     'the confirmation does not render the approved wording itself');
+  // And minting is reachable ONLY from inside it. This is the half a copy
+  // check could never have caught — and it must count EVERY call site, not
+  // merely find one inside the block: an added second path outside the
+  // confirmation leaves the inside one untouched.
+  const confirmBlock = /if \(confirming\) \{[\s\S]*?\n  \}/.exec(fn);
+  assert(confirmBlock, 'the confirmation step has changed shape; re-point this');
+  const mintsAnywhere = (fn.match(/API\.verifyTicket/g) ?? []).length;
+  const mintsInside = (confirmBlock[0].match(/API\.verifyTicket/g) ?? []).length;
+  assert(mintsAnywhere > 0, 'nothing mints at all');
+  eq(mintsInside, mintsAnywhere,
+    'minting is reachable from outside the confirmation step — a wording '
+    + 'change cannot cause this, and neither can a copy check catch it');
 });
 
 await test('rejection needs a note and minting does not — friction where the irreversibility is', async () => {
@@ -679,10 +691,23 @@ await test('there is no approve-all on the override surface', async () => {
   // Per finding means the deciding person saw each finding. A single button
   // would be the blanket acknowledge button with a loop behind it.
   const fn = /function OverrideDecisions[\s\S]*?\n\}\n/.exec(revSrc())[0];
-  assert(!/approve all|approveAll|decideAll|for \(const f of/i.test(fn),
+  // The literal words "approve all" are no longer banned, and the required
+  // explanatory sentence is gone (2026-07-27) — both were copy, and the ban
+  // was one keystroke from colliding with the sentence. What remains is the
+  // code shape: no loop over findings, and no call taking more than one.
+  assert(!/approveAll|decideAll|for \(const f of|\.forEach\([^)]*=>[^)]*decide/i.test(fn),
     'the override surface offers a way to decide more than one finding at once');
-  assert(/There is no approve-all/.test(fn),
-    'the absence of an approve-all is not explained, so it reads as an omission');
+  const decideCalls = [...fn.matchAll(/API\.decideOverride\(\{([\s\S]*?)\}\)/g)];
+  assert(decideCalls.length > 0, 'nothing decides a finding at all');
+  for (const [, args] of decideCalls) {
+    assert(/finding_ref: f\.finding_ref/.test(args),
+      'a decide call does not name the single finding it decides');
+    // A collection would arrive as a map/spread or a plural name. Note that
+    // `note[f.finding_ref]` is map indexing and legitimate — an earlier draft
+    // of this assertion banned '[' outright and tripped on it.
+    assert(!/\.map\(|\.\.\.|finding_refs|findings:/.test(args),
+      'a decide call takes a collection rather than one named finding');
+  }
 });
 
 await test('the override window state is visible before anybody tries', async () => {
@@ -764,42 +789,38 @@ await test('no acknowledge, override, or proceed-anyway affordance survives', as
   // on one click with no record of who else should have known, and this is the
   // screen where undoing its retirement is most tempting — "just for the demo
   // flow" is exactly how it would come back.
-  // Checked against what is CLICKABLE, not against the prose. The screen
-  // explains what was retired by naming it, and the first version of this test
-  // failed on that explanation — the fourth time a check has punished writing
-  // the warning down. What matters is that no button, and no test hook, offers
-  // the act.
+  // REWRITTEN 2026-07-27. This banned button LABELS — 'acknowledge', 'force',
+  // 'proceed anyway'. Two things were wrong with that. It policed copy, which
+  // is placeholder. And banning the substring 'force' inside every button
+  // label and test handle on a contracts screen was a trap waiting for the
+  // word "Force majeure" — an ordinary clause category — to appear on a
+  // control. A renamed button would have failed the build; a renamed button
+  // with the same handler would have passed it.
+  //
+  // What actually matters is that no CODE PATH performs the act. Enumerated
+  // from the calls and the test handles, both of which are system facts.
   const src = stripComments(reqSrc());
-  const clickable = [
-    ...[...src.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((m) => m[1]),
-    ...[...src.matchAll(/data-testid="([^"]+)"/g)].map((m) => m[1]),
-  ].join(' | ').toLowerCase();
-
-  for (const gone of ['acknowledge', 'proceed anyway', 'override anyway',
-                      'skip validation', 'force']) {
-    assert(!clickable.includes(gone),
-      `the requester's workspace offers a control labelled "${gone}" — the `
-      + 'blanket override button is retired by ADR-0008 and this screen is '
-      + 'where it would return');
-  }
-  // And the only override-shaped button asks; it does not decide.
-  assert(/request an override/.test(clickable),
-    'there is no way to ask for an override at all');
-  // And the only override call it makes is the REQUEST, never a gate opening.
+  const handles = [...src.matchAll(/data-testid="([^"]+)"/g)].map((m) => m[1]);
   const calls = [...src.matchAll(/API\.(\w+)/g)].map((m) => m[1]);
-  assert(!calls.includes('openOverrideGate'),
-    'the requester opens the gate themselves, which is the whole thing this '
-    + 'workflow exists to prevent');
+
+  for (const forbidden of ['openOverrideGate', 'acknowledgeFinding',
+                           'skipValidation', 'overrideAnyway', 'proceedAnyway']) {
+    assert(!calls.includes(forbidden),
+      `the requester's workspace calls ${forbidden} — the blanket override `
+      + 'button is retired by ADR-0008 and this screen is where it would return');
+  }
+  // Asking exists, and it is the only override-shaped thing here.
   assert(calls.includes('requestOverride'), 'the request path is gone');
+  assert(handles.includes('ask-for-override'),
+    'the ask control lost the handle its test hangs on');
 });
 
-await test('the screen says asking is not being allowed', async () => {
-  const src = reqSrc();
-  assert(/opens no gate/i.test(src),
-    'nothing tells the requester that asking does not open the gate');
-  assert(/Until a finding is approved, it still blocks/i.test(src),
-    'the screen does not say that an undecided finding still blocks');
-});
+// RETIRED 2026-07-27 — 'the screen says asking is not being allowed'. Both
+// assertions required verbatim sentences ("opens no gate", "Until a finding is
+// approved, it still blocks"). That asking does not open the gate is enforced
+// by the SERVICE and the SCHEMA — the requester holds no privilege to open it,
+// override.test.mjs proves the gate opens only on approval, and the test above
+// proves this screen calls no such thing. A sentence cannot make it true.
 
 await test('a rejected finding is shown as still blocking', async () => {
   // "Decided" is not "allowed". A rejected finding rendered as merely decided
@@ -807,12 +828,16 @@ await test('a rejected finding is shown as still blocking', async () => {
   // The REJECTED branch specifically. A window of characters after the test
   // swept up the undecided branch too, which also says "still blocks" — so the
   // check passed against a rejected chip reading merely "decided".
+  // Checked on the CLASS, not the label (2026-07-27). Both the rejected and
+  // the undecided branch used to say "still blocks", so the words could not
+  // tell them apart anyway; the class can. A rejected finding must never
+  // render in the same colour as an approved one.
   const src = reqSrc();
   const branch = /f\.decision === 'rejected'\s*\?\s*(<span[\s\S]*?<\/span>)/.exec(src);
   assert(branch, 'the rejected branch has changed shape; re-check this test');
-  assert(/still blocks/.test(branch[1]),
-    'a rejected finding does not say it still blocks — "decided" is not '
-    + '"allowed", and somebody will read it as one');
+  assert(/chip-err/.test(branch[1]) && !/chip-ok/.test(branch[1]),
+    'a rejected finding renders as though it were settled favourably — '
+    + '"decided" is not "allowed", and somebody will read it as one');
 });
 
 await test('the request pane is reachable, not dead code', async () => {

@@ -295,26 +295,26 @@ await test('a requester or viewer can reach none of them', async () => {
 });
 
 await test('the administrator sees what is due AND may act on it', async () => {
-  // INVERTED BY OWNER DECISION U9, 2026-07-27. This used to assert "visible
-  // here, actioned by Legal" and refuse the administrator by privilege. The
-  // owner moved records custody to the Administrator, so both halves flip.
+  // INVERTED BY OWNER DECISION U9, 2026-07-27. This used to refuse the
+  // administrator by privilege; the owner moved records custody to the
+  // Administrator, so it flips.
   //
-  // THE TILE'S OWN COPY IS PART OF THE TEST, and that is the point rather than
-  // decoration. It named Legal admin as the only role that may destroy. Left
-  // alone, the pane would have told the one person who CAN act that they
-  // cannot — a screen misnaming whose act something is does the same damage as
-  // a document promising a control the code does not enforce, to the person's
-  // face. 0022 redefines the view; this holds the two together.
+  // THE TILE'S COPY IS NO LONGER PART OF THIS TEST, and the note it replaces
+  // said the opposite — "the tile's own copy IS part of the test, and that is
+  // the point rather than decoration." That was the wrong instinct, and this
+  // test is the proof: the copy assertion had already been rewritten once to
+  // chase U9, and it would need rewriting again for every future rewording.
+  // Copy is content — placeholder, pending review, not ours to police
+  // (CLAUDE.md). What a screen SAYS about whose act something is cannot make
+  // it so; the privilege does, and that is asserted below and in 0022's own
+  // grants. A tile that names the wrong role is a copy defect for whoever
+  // owns the words.
   await db.exec(`insert into cw.agreement_retention (agreement_id,retention_until)
                  values ('AG-700','2020-01-01')`);
   const t = await tile('retention due');
   eq(t.state, 'due');
-  assert(/actioned by the Administrator/.test(t.detail || ''),
-    'the pane does not name the Administrator as whose act destruction is');
-  assert(!/Legal admin/.test(t.detail || ''),
-    'the pane still names Legal admin, whose authority U9 revoked');
 
-  // And the act itself now succeeds for this role.
+  // The act itself succeeds for this role, and that is the whole claim.
   await queryAs('administrator',
     `select cw.retention_destroy('AG-700','${ADMIN}')`, [], ADMIN);
   const r = await one(`select destroyed_by from cw.agreement_retention

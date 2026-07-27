@@ -1263,13 +1263,13 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     repl: `    return <span className="chip chip-ok">awaiting countersign</span>;`,
     expect: 'a pending grant is amber and never green' },
 
-  // THE REVOKE COPY OVER-PROMISING. WP-U05 delivers next-request revocation;
-  // a screen saying "immediately" is a document promising what no code does.
-  { target: 'shell', suite: 'shell.test.mjs',
-    name: 'the revoke dialog promises an instant lockout',
-    find: `          Their role stops applying <strong>at their next request</strong>. A`,
-    repl: `          Their role stops applying immediately. A`,
-    expect: 'revoke says next request, and does not promise instant lockout' },
+  // REMOVED 2026-07-27 — 'the revoke dialog promises an instant lockout'. The
+  // mutation rewrote a sentence on the screen and the test caught the reworded
+  // sentence. Both halves were about copy, which is placeholder content and not
+  // ours to police (CLAUDE.md). When revocation actually bites is a property of
+  // the SERVICE, and it is guarded where it lives — the doorway's own mutation
+  // row caches the effective role and
+  // test_server.py::test_revocation_bites_at_the_next_request objects.
 
   { target: 'shell', suite: 'shell.test.mjs',
     name: 'a revocation can be recorded with no reason',
@@ -1277,14 +1277,15 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     repl: `          disabled={busy}`,
     expect: 'the revoke reason is required by the screen, not just by the database' },
 
-  // DORMANCY RE-DESCRIBED AS A SIGN-IN. The read model deliberately measures
-  // acts; a screen calling it "last seen" undoes that in the only place anybody
-  // reads it.
+  // DORMANCY MEASURED FROM SOMETHING ELSE. Re-anchored 2026-07-27: the
+  // mutation used to rewrite the label to "never signed in, last seen never",
+  // which the test caught by banning those words. It now changes the FIELD the
+  // pane reads, which is the thing that would actually make the measure wrong.
   { target: 'shell', suite: 'shell.test.mjs',
-    name: 'the console calls dormancy a sign-in',
-    find: `                    ? 'no recorded acts'`,
-    repl: `                    ? 'never signed in, last seen never'`,
-    expect: 'dormancy is never re-described as a sign-in' },
+    name: 'dormancy is measured from something other than recorded acts',
+    find: `                  {p.acts_recorded === 0`,
+    repl: `                  {p.last_sign_in === null`,
+    expect: 'dormancy is measured from recorded acts, not from sign-ins' },
 
   // THE COUNTERSIGN QUEUE LEAVING LEGAL'S WORKSPACE — the wait the rule costs
   // stops being bounded by anybody looking.
@@ -1364,11 +1365,15 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     repl: `                      const n = await API.retentionDestroy({`,
     expect: 'the nudge notifies and cannot destroy' },
 
+  // REWRITTEN 2026-07-27 for U13. This used to break the chip by REMOVING the
+  // matter reference, certifying that the matter was shown. U13 says the
+  // Administrator gets the flag and not the reason, so the guarantee inverted:
+  // the mutation now puts the matter back, and the test must object to that.
   { target: 'shell', suite: 'shell.test.mjs',
-    name: 'a held record does not say what is holding it',
-    find: `                    ? <span className="chip chip-err" title={r.matters}>held</span>`,
-    repl: `                    ? <span className="chip chip-err">blocked</span>`,
-    expect: 'a held record renders as blocked BECAUSE held, naming the matter' },
+    name: 'the matter holding a record leaks onto the administrator\'s screen',
+    find: `                    ? <span className="chip chip-err">held</span>`,
+    repl: `                    ? <span className="chip chip-err" title={r.matters}>held</span>`,
+    expect: 'a held record is distinguishable from a due one, and never names the matter' },
 
   // REPOINTED 2026-07-27: the `?? []` was removed from this line when the pane
   // began refusing a failed coverage read outright, which made the rows
@@ -1522,13 +1527,15 @@ grant insert on cw.override_socialisation, cw.override_notified to cw_requester;
     repl: `  const [approved, setApproved] = useState(ticket.proposed_text);`,
     expect: 'the AI candidate is NEVER pre-filled into the approval box' },
 
+  // RE-ANCHORED 2026-07-27: this used to retitle the confirmation panel and be
+  // caught by a test requiring that title's words. It now removes the
+  // confirmation step itself — minting straight from the button — which is the
+  // break that matters and cannot be reworded away.
   { target: 'shell', suite: 'shell.test.mjs',
-    name: 'verify mints without showing what will be minted',
-    find: `        <PanelHead
-          title="This is what will be minted"`,
-    repl: `        <PanelHead
-          title="Confirm"`,
-    expect: 'verify goes through a confirmation showing what will be minted' },
+    name: 'verify mints without a confirmation step',
+    find: `                onClick={() => setConfirming(true)}>`,
+    repl: `                onClick={async () => { await API.verifyTicket({ ticket_id: ticket.ticket_id, approved_text: approved.trim(), new_clause_id: clauseId.trim(), title: title.trim(), rationale: rationale.trim() }); onDone(); }}>`,
+    expect: 'verify goes through a confirmation before it mints' },
 
   { target: 'shell', suite: 'shell.test.mjs',
     name: 'a rejection can be recorded with no note',
@@ -1563,10 +1570,15 @@ grant insert on cw.override_socialisation, cw.override_notified to cw_requester;
   //
   // THE V3 BUTTON RETURNING. "Just for the demo flow" is exactly how it comes
   // back, and this is the screen it comes back on.
+  //
+  // RE-ANCHORED 2026-07-27: this used to relabel the button to
+  // "acknowledge · override" and be caught by a ban on those words. Renaming a
+  // button changes nothing; what matters is the handler. It now removes the
+  // test handle the ask control is addressed by, which is a system fact.
   { target: 'shell', suite: 'shell.test.mjs',
-    name: 'an acknowledge button returns to the requester\'s screen',
-    find: `                request an override…`,
-    repl: `                acknowledge · override`,
+    name: 'the ask control loses the handle it is addressed by',
+    find: `data-testid="ask-for-override"`,
+    repl: `data-testid="acknowledge"`,
     expect: 'no acknowledge, override, or proceed-anyway affordance survives' },
 
   { target: 'shell', suite: 'shell.test.mjs',
@@ -1576,16 +1588,20 @@ grant insert on cw.override_socialisation, cw.override_notified to cw_requester;
             const s = await API.socialiseOverride({`,
     expect: 'no acknowledge, override, or proceed-anyway affordance survives' },
 
-  { target: 'shell', suite: 'shell.test.mjs',
-    name: 'nothing says that asking is not being allowed',
-    find: `          This <strong>opens no gate</strong>. It records that you asked, tells`,
-    repl: `          This starts the override. It records that you asked, tells`,
-    expect: 'the screen says asking is not being allowed' },
+  // REMOVED 2026-07-27 — 'nothing says that asking is not being allowed'. The
+  // mutation rewrote one sentence into another and the test caught the
+  // rewrite. Copy, on both sides. That asking does not open the gate is
+  // enforced by privilege, and the row above — which makes this screen call
+  // API.openOverrideGate — is the check that would actually catch it.
 
   { target: 'shell', suite: 'shell.test.mjs',
-    name: 'a rejected finding no longer says it blocks',
+    // RE-ANCHORED 2026-07-27: the mutation used to change the label from
+    // "still blocks" to "decided". It now changes the CLASS, which is what
+    // makes a rejected finding look settled favourably — and is what the test
+    // checks now that it no longer reads the label.
+    name: 'a rejected finding renders as though it were allowed',
     find: `                        ? <span className="chip chip-err" title={f.note}>still blocks</span>`,
-    repl: `                        ? <span className="chip chip-err" title={f.note}>decided</span>`,
+    repl: `                        ? <span className="chip chip-ok" title={f.note}>still blocks</span>`,
     expect: 'a rejected finding is shown as still blocking' },
 
   { target: 'shell', suite: 'shell.test.mjs',
@@ -2082,13 +2098,12 @@ create trigger auto_destroy after insert on cw.agreement_retention
 comment on function cw.retention_destroy(text, text) is`,
     expect: 'nothing in the schema destroys anything by itself' },
 
-  // U9 · The tile named Legal admin as the only role that may destroy. Left
-  // uncorrected it tells the one person who CAN act that they cannot.
-  { suite: 'health.test.mjs',
-    name: 'the retention tile still names Legal admin as the destroyer',
-    find: `                        'here; actioned by the Administrator, who alone may destroy',`,
-    repl: `                        'here; actioned by Legal admin, who alone may destroy',`,
-    expect: 'the administrator sees what is due AND may act on it' },
+  // REMOVED 2026-07-27 — 'the retention tile still names Legal admin as the
+  // destroyer'. The mutation rewrote a sentence inside a SQL view's copy and
+  // the test caught the reworded sentence. Content on both sides. The
+  // authority move U9 made is proven by privilege, in the two rows above
+  // (execute revoked from legal_admin, granted to the administrator), which is
+  // the thing a screen cannot contradict into being false.
 
   // U10 · An in-flight deal on superseded wording must be FLAGGED. Before 0022
   // nothing reported it, and obsolete language would have been signed by
