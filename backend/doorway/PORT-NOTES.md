@@ -101,8 +101,43 @@ every joined table, and a viewer holds none. The scoping goes in the view's own
 `WHERE` clause in the same words as the policy, which is the pattern
 `0017_reading_room.sql` already uses.
 
-**CLOSED, same day.** `0019_override_views_scoped.sql` put the scoping in the
-view's own `WHERE` clause, in the same words as the `read_scoped` policy.
+**CLOSED, same day — and the sweep that followed matters more than the bug.**
+`0019_override_views_scoped.sql` put the scoping in the view's own `WHERE`
+clause, in the same words as the `read_scoped` policy.
+
+The role-based-UI session then asked the catalogue for siblings rather than
+reading for them, and found **five more**, including two this note had recorded
+as clean:
+
+| view | an unshown viewer could read |
+|---|---|
+| `override_passes` | approved findings, with justification text |
+| `agreement_chain` | counterparty, filename, document SHA-256 |
+| `execution_evidence_gap` | which signed agreements are missing a signature |
+| `agreement_drift`, `sow_conflict`, `orphaned_sow` | empty on the seed, same unscoped shape |
+
+`override_passes` is the one worth learning from. This note called it clean
+because it came back empty — but it filters on `decision`, so it is correctly
+empty right up until the first approval lands. **An empty result is not evidence
+of scoping.** The analysis here checked which base tables scope by person and
+then reasoned about grants; it should have checked what each view actually
+returns to a role that should see nothing, with data in it.
+
+`execution_evidence_gap` is the sharpest: a list of the weakest contracts in the
+business, readable by anybody with a viewer account.
+
+One view was deliberately left unscoped. `cw.sow_override_in_force` is read by
+the schema's own trigger, and scoping it made a properly authorised statement of
+work be refused — **a view the schema itself reads must return the same rows to
+everybody**, or a permission becomes a correctness bug that fails towards
+refusing legitimate work. Relevant here: anything the doorway calls that reads a
+view under a definer-rights function inherits that trap. WP-P6's
+`check_manifest` connection reads `cw.category` directly and is not exposed to
+it.
+
+The lasting fix is theirs too: `db/test/views-are-not-policies.test.mjs` asks the
+catalogue for every view a viewer can read and fails unless each is classified,
+with a reason. That is the shape of guard this finding deserved.
 
 The two tests were written as **strict** xfail — passing while the leak existed,
 failing the moment it closed. They failed within the hour, which is exactly what
@@ -293,3 +328,44 @@ about whether somebody else has finished is not a good enough reason to run it.
 Worth knowing when reading a failing run: **16 errors that look like broken
 migrations are almost always two suites at once.** A clean single run of this
 suite is 399 tests and about four minutes.
+
+### 16 · The audit chain refuses concurrent writers — **schema, open, found by making the two-writers test real**
+
+The plan listed "real concurrency for the two-writers audit test" as a promise
+that had become *possible* on standard PostgreSQL, and left it out of scope. It
+was written in WP-P5, and it immediately found something.
+
+`cw.audit_event` carries a unique index on `prev_hash` (`audit_no_fork`,
+migration 0007) so that no second chain can ever be started alongside the real
+one. Under genuine concurrency, two people appending at the same instant read the
+same chain tail, compute the same `prev_hash`, and collide.
+
+What actually happens, observed rather than reasoned about:
+
+- The second writer **blocks** on the first's lock — held open, the two
+  transactions deadlock the test process indefinitely. The chain therefore
+  **serialises every governed act in the system**.
+- If both did read the same tail, the second is refused on the first's commit
+  with `duplicate key value violates unique constraint "audit_no_fork"`. That is
+  not a sentence anybody can act on, and the act it refused was honest.
+- Over HTTP it is **intermittent**: usually the first commits fast enough that
+  the second reads the new tail. Eight simultaneous writes collide sometimes and
+  not others.
+
+It surfaced only after `0020_deal_and_category_openings.sql` added audit triggers
+to deal and category creation — before that, the two writers in the test wrote to
+different tables and never contended.
+
+0007's own note says the no-fork index was "checked for false positives …
+ordinary appends … two events with identical content written in the same instant
+all pass". That check was true and is now misleading: it ran on a database
+allowing one connection, where appends cannot overlap.
+
+**No test for this is in the suite, deliberately.** A deterministic reproduction
+blocks forever, and a probabilistic one flips between xfail and xpass and teaches
+everybody to ignore it. What is in the suite is the promise that still holds:
+under concurrent writes by two people, **everything that lands is attributed to
+whoever actually did it**. A refused write recorded nothing, which is correct.
+
+**Whose it is:** the database's. The doorway must not retry — that is WP-P3's
+rule 2, and a retry here would be a governed act quietly performed twice.
