@@ -137,6 +137,20 @@ MUTATIONS = [
         '    if "permission denied" in reason.lower() or "row-level security" in reason.lower():',
         "test_refusals.py::test_the_database_s_own_words_reach_the_caller_unchanged",
     ),
+    (
+        "an outage is blamed on the caller",
+        "doorway/refusals.py",
+        "    if isinstance(error, psycopg.OperationalError):",
+        "    if False:",
+        "test_refusals.py::test_the_database_being_unreachable_is_not_the_callers_fault",
+    ),
+    (
+        "an unexpected failure reads its own insides out to the caller",
+        "doorway/server.py",
+        '                self._respond(Response(500, {"error": "the service failed"}))',
+        '                self._respond(Response(500, {"error": "the service failed", "reason": str(sys.exc_info()[1])}))',
+        "test_server.py::test_an_unexpected_failure_keeps_its_details_out_of_the_reply",
+    ),
 
     # ── The database decides, not the doorway ────────────────────────────────
     (

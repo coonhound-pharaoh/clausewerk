@@ -325,6 +325,44 @@ def test_a_missing_screen_falls_through_to_the_endpoints_and_not_to_a_crash(runn
     assert status in (401, 404)
 
 
+# ── When the service itself breaks ──────────────────────────────────────────
+
+
+def test_an_unexpected_failure_keeps_its_details_out_of_the_reply():
+    """No database and no fixture: the app here is a stub that simply breaks,
+    because the subject is the last-resort handler, not the service.
+
+    What an unexpected failure says about the insides of the service is
+    exactly what a stranger probing the port hopes to read. The reply must say
+    the service failed and nothing else; the detail belongs in the log.
+    """
+    from http.server import ThreadingHTTPServer
+
+    from doorway.server import Handler
+
+    class Breaks:
+        def handle(self, *args, **kwargs):
+            raise RuntimeError("secret internal detail")
+
+    held_app, held_root = Handler.app, Handler.static_root
+    Handler.app, Handler.static_root = Breaks(), None
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        status, body = Client(
+            f"http://127.0.0.1:{server.server_address[1]}").call("GET", "/api/me")
+        assert status == 500
+        assert "secret internal detail" not in json.dumps(body), (
+            "the crash reply carried the exception's own words out of the "
+            "building")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+        Handler.app, Handler.static_root = held_app, held_root
+
+
 # ── The guard that must survive every package ───────────────────────────────
 
 

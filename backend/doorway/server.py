@@ -185,10 +185,14 @@ class Handler(BaseHTTPRequestHandler):
         """
         try:
             super().handle_one_request()
-        except Exception as broke:  # noqa: BLE001 — last resort, and it says so
+        except Exception:  # noqa: BLE001 — last resort, and it says so
+            # The detail goes to the log, not to the browser. What an unexpected
+            # failure says about the insides of the service is exactly the kind
+            # of thing a stranger probing the port is hoping to read.
+            import traceback
+            traceback.print_exc(file=sys.stderr)
             try:
-                self._respond(Response(500, {
-                    "error": "the service failed", "reason": str(broke)}))
+                self._respond(Response(500, {"error": "the service failed"}))
             except Exception:
                 pass
 

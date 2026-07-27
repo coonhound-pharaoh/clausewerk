@@ -81,6 +81,45 @@ def test_a_refusal_on_the_merits_is_not_reported_as_a_permission_problem(
     assert refused.status == 409
 
 
+def test_the_database_being_unreachable_is_not_the_callers_fault():
+    """No fixture, deliberately: the point is the database is never reached.
+
+    The error is still real — a genuine failed connection attempt against a
+    port nobody answers — because a classifier tested against errors somebody
+    wrote by hand is tested against its author's assumptions.
+
+    Two facts, both load-bearing: an outage is reported as the service's
+    failure and never as the caller's mistake (a 400 sends somebody to argue
+    with their administrator about a network cable); and the driver's own
+    message — which names hosts and ports — never reaches the caller.
+    """
+    with pytest.raises(psycopg.OperationalError) as caught:
+        psycopg.connect(
+            "postgresql://cw_app:wrong@127.0.0.1:9/clausewerk", connect_timeout=1)
+
+    broke = classify(caught.value)
+    assert broke.status == 500, (
+        f"the database being down was classified as a {broke.status} — the "
+        "caller is being blamed for an outage")
+
+    body = broke.as_body()
+    assert body["error"] != "refused", (
+        "an outage arrived wearing a refusal's clothes")
+    assert "127.0.0.1" not in body["reason"], (
+        "the driver's message reached the caller — hosts and ports are "
+        "nobody's business outside")
+
+
+def test_a_pool_timeout_is_covered_by_the_same_classification():
+    """The unreachable-database rule leans on pool timeouts being operational
+    errors. That is the driver's promise, and this pins it: if an upgrade ever
+    breaks the inheritance, this fails by name rather than the outage handling
+    quietly regressing to 400."""
+    from psycopg_pool import PoolTimeout
+
+    assert issubclass(PoolTimeout, psycopg.OperationalError)
+
+
 def test_every_refusal_is_showable(people, db: Database):
     """Whatever the kind, the interface must have something to say. A blank
     reason renders as a spinner that never resolves."""

@@ -1641,3 +1641,32 @@ fell over. Now every new sign-in first sweeps out the expired ones.
 test that fails on the old code — verified by putting the old code back and
 watching it fail — and the break-it harness now carries two new checks, one per
 guarantee. 20 of 20 caught.
+
+---
+
+## 2026-07-27 · An outage was being blamed on the person at the keyboard
+
+**The rule this system already states for itself:** "you may not do that" and
+"we broke" are different facts, and confusing them sends somebody to argue with
+their administrator about a bug. The sweep found the system breaking its own
+rule in one place: if the **database itself** was unreachable — restarted,
+network gone, or too busy to answer — the error fell through the sorting logic
+and came out as "your request was rejected". Every person using the system
+during an outage would be told they had done something wrong, and because the
+answer looked like an ordinary mistake rather than a failure, nothing would
+page whoever watches the service.
+
+**Worse, the message carried the machinery's own words** — the raw database
+error, naming internal addresses and ports — out to the browser. Same with any
+unexpected crash: the reply included the failure's internal details. What a
+failure says about the insides of a service is exactly what a stranger probing
+it hopes to read.
+
+**Fixed in the one place all requests pass through:** an unreachable database
+now comes back as "the service failed — it could not reach its database", the
+crash reply says only "the service failed", and the technical detail goes to
+the service's own log where it belongs.
+
+**Guarded:** two new tests (both verified to fail on the old code — one makes a
+genuinely failed connection rather than a hand-built error), two new break-it
+checks. 22 of 22 caught by the test that names each one.

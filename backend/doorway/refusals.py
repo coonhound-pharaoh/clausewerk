@@ -40,6 +40,7 @@ respects the choice and needs no maintenance as more rules are written.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 
 import psycopg
@@ -59,6 +60,10 @@ class Refused:
     kind: str
 
     def as_body(self) -> dict:
+        if self.kind == "broke":
+            # Not a refusal, and it must not wear one's clothes: "refused" sends
+            # somebody to argue with their administrator about an outage.
+            return {"error": "the service failed", "reason": self.reason}
         return {"error": "refused", "reason": self.reason, "kind": self.kind}
 
 
@@ -66,6 +71,19 @@ def classify(error: Exception) -> Refused:
     """Turn a database error into something an interface can say out loud."""
     reason = str(getattr(error, "diag", None) and error.diag.message_primary or error).strip()
     code = getattr(error, "sqlstate", None)
+
+    if isinstance(error, psycopg.OperationalError):
+        # The service could not reach its database — the database said nothing,
+        # because it was never asked. OperationalError covers connection
+        # failures and pool timeouts alike (psycopg_pool's PoolTimeout is a
+        # subclass, asserted in test_refusals.py). Two things must not happen
+        # here: the caller must not be told they did something wrong, and the
+        # driver's message — which names hosts and ports — must not leave the
+        # building. The detail goes to the log; the caller gets the fact.
+        sys.stderr.write(f"database unreachable: {reason}\n")
+        return Refused(status=500,
+                       reason="the service could not reach its database",
+                       kind="broke")
 
     if code == INSUFFICIENT_PRIVILEGE:
         return Refused(status=403, reason=reason, kind="not_permitted")
