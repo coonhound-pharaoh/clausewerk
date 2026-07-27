@@ -76,6 +76,17 @@ NEVER_FROM_THE_BODY = frozenset({
     "actor", "acted_by", "approved_by", "approver", "opened_by", "added_by",
     "removed_by", "decided_by", "created_by", "revoked_by", "requested_by",
     "settled_by", "proposed_by", "countersigned_by", "reviewer", "person_acting",
+    # `requester` was missing from this list until the mutation harness broke the
+    # deals endpoint and nothing noticed. It is the most load-bearing name in the
+    # schema: `cw.agreement.requester` is what `cw.owns_agreement()` reads, and
+    # that function decides a requester's access to their deals, their runs, their
+    # overrides, their reading room, and six more views. A deal opened under
+    # somebody else's name hands them all of it.
+    #
+    # `requested_by` was on the list and `requester` was not, which is exactly how
+    # a list like this goes wrong: it grows by whatever the last endpoint happened
+    # to be called.
+    "requester",
 })
 
 

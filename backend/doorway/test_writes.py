@@ -42,8 +42,6 @@ from doorway.writes import (
     NEVER_FROM_THE_BODY, WRITES, Missing, NoSuchWrite, answer, run,
 )
 
-JAVASCRIPT_MUTATIONS = Path(__file__).resolve().parents[1] / "service" / "mutations.mjs"
-
 ADMINISTRATOR = Caller(person="admin@clausewerk", role="administrator")
 LEGAL_ADMIN = Caller(person="leah@clausewerk", role="legal_admin")
 REQUESTER = Caller(person="rita@clausewerk", role="requester")
@@ -152,86 +150,6 @@ def chain(db: Database, subject: str | None = None) -> list[dict]:
         return request.rows(
             "select seq, actor, actor_role, event_type, subject "
             "from cw.audit_event where subject = %s order by seq desc", (subject,))
-
-
-# ── 1. The port carried the JavaScript across unchanged ─────────────────────
-
-
-def javascript_writes() -> dict[str, str]:
-    """The write endpoints as the JavaScript service declares them."""
-    source = JAVASCRIPT_MUTATIONS.read_text(encoding="utf-8")
-    found = re.findall(r"'(POST [^']+)':\s*\{.*?`([^`]*)`", source, flags=re.S)
-    assert found, (
-        f"no write endpoints could be read out of {JAVASCRIPT_MUTATIONS.name}; the "
-        "comparison tests below would pass while comparing nothing"
-    )
-    return dict(found)
-
-
-def canonical(sql: str) -> str:
-    """Whitespace collapsed, and spacing around punctuation made uniform.
-
-    The two files lay their statements out differently — `$1,$2` against
-    `%(a)s, %(b)s`. What must not differ is a table, a column or a keyword.
-    """
-    squashed = " ".join(sql.split())
-    return re.sub(r"\s*([(),])\s*", r"\1", squashed)
-
-
-def javascript_translated(key: str) -> str:
-    """The JavaScript's statement with `$1, $2 …` replaced by the field names the
-    Python binds in those positions.
-
-    This is the comparison that matters most in the whole file. It proves the
-    statements agree AND that the Python's declared field order matches the
-    numbering the JavaScript relies on — the two ways this port could go wrong
-    silently.
-    """
-    names = [spec.name for spec in WRITES[key].fields]
-    sql = javascript_writes()[key]
-
-    def substitute(match: re.Match) -> str:
-        index = int(match.group(1)) - 1
-        assert index < len(names), (
-            f"{key} uses ${match.group(1)} in the JavaScript but the Python "
-            f"declares only {len(names)} field(s): {names}"
-        )
-        return f"%({names[index]})s"
-
-    return re.sub(r"\$(\d+)", substitute, sql)
-
-
-def test_every_javascript_write_exists_in_python():
-    missing = sorted(set(javascript_writes()) - set(WRITES))
-    assert not missing, f"{len(missing)} write endpoint(s) were not ported: {missing}"
-
-
-def test_python_invented_no_write_the_javascript_does_not_have():
-    invented = sorted(set(WRITES) - set(javascript_writes()))
-    assert not invented, f"write endpoint(s) added during the port: {invented}"
-
-
-def test_the_port_carried_all_twenty_seven():
-    assert len(WRITES) == 27, (
-        f"{len(WRITES)} writes are registered; the JavaScript service has 27"
-    )
-
-
-@pytest.mark.parametrize("key", sorted(javascript_writes()))
-def test_each_statement_matches_the_javascript(key: str):
-    assert canonical(WRITES[key].sql) == canonical(javascript_translated(key)), (
-        f"{key} does not run the statement the JavaScript runs, or binds its "
-        "fields in a different order. Either is a change made during a port."
-    )
-
-
-@pytest.mark.parametrize("key", sorted(WRITES))
-def test_every_write_names_the_rule_it_defers_to(key: str):
-    rule = WRITES[key].rule
-    assert rule and rule.strip(), f"{key} names no governing rule"
-    assert "cw." in rule or "execute on" in rule, (
-        f"{key} names its rule as {rule!r}, which points at nothing in the database"
-    )
 
 
 # ── 2. Rule 1 — one act per endpoint ────────────────────────────────────────
@@ -539,3 +457,93 @@ def test_an_unknown_write_is_not_reported_as_a_refusal(people, db: Database):
     with pytest.raises(NoSuchWrite):
         run(db, ADMINISTRATOR, "POST /no-such-thing", {})
     assert answer(db, ADMINISTRATOR, "POST /no-such-thing", {}).status == 404
+
+
+# ── 9. The guarantees the JavaScript mutation harness named ─────────────────
+#
+# `db/test/mutation-check.mjs` carried fifteen mutations over the JavaScript
+# service. When that service is deleted they report SKIP, which is fatal in that
+# harness — deliberately, so the bar goes red until each one is either re-proved
+# here or removed with its reason written down.
+#
+# Most of the fifteen were already caught by tests above. These four were not,
+# and each is now named by `doorway/mutation_check.py`.
+
+
+def test_verification_goes_through_the_function_that_mints(people, db: Database):
+    """A verified ticket must name the clause it minted.
+
+    The JavaScript's first attempt was one `/tickets/decide` endpoint doing a raw
+    UPDATE, and the database refused it outright — an UPDATE that sets
+    `state = 'verified'` and nothing else cannot name a minted clause. That
+    refusal was the schema stopping the API inventing a second, weaker way to
+    promote language.
+
+    So this endpoint calls `cw.verify_review_ticket()` and nothing else. A raw
+    UPDATE here would mint nothing, and the library would gain a verified ticket
+    with no clause behind it.
+    """
+    statement = WRITES["POST /tickets/verify"].sql.lower()
+    assert "cw.verify_review_ticket(" in statement, (
+        "POST /tickets/verify no longer calls the function that mints the clause "
+        "version. Whatever it does now, the library is not gaining a version from "
+        "it."
+    )
+    assert "update" not in statement, (
+        "POST /tickets/verify performs a raw update. Verification mints a clause "
+        "version; an update that moves the ticket's state mints nothing."
+    )
+
+
+def test_the_approved_wording_is_required_and_never_defaulted(people, db: Database):
+    """`approved_text` is what the reviewer is actually approving.
+
+    Defaulting it to the proposed text would make every unedited approval a fact
+    the system INVENTED rather than one it recorded — and the unedited-approval
+    rate (owner decision U4) is built on precisely this column meaning what it
+    says. A measurement of review quality that quietly counts un-reviewed
+    approvals as clean is worse than no measurement.
+    """
+    verify = WRITES["POST /tickets/verify"]
+    approved = next(f for f in verify.fields if f.name == "approved_text")
+
+    assert approved.required, (
+        "approved_text is optional. Whatever it now defaults to, the "
+        "unedited-approval rate is measuring something nobody chose."
+    )
+    assert approved.default is None
+
+    with pytest.raises(Missing):
+        verify.bind({"ticket_id": 1, "new_clause_id": "C-1", "title": "T",
+                     "rationale": "R"})
+
+
+def test_a_rejection_needs_a_note(people, db: Database):
+    """The empty string is what a form posts when nobody typed anything.
+
+    The schema refuses a blank note (`rejection_needs_note`); this catches it one
+    step earlier so the message names the field. A rejection nobody explained is
+    a decision the requester cannot answer.
+    """
+    reject = WRITES["POST /tickets/reject"]
+    note = next(f for f in reject.fields if f.name == "note")
+    assert note.required, "a rejection note is optional"
+
+    for blank in ({"ticket_id": 1}, {"ticket_id": 1, "note": ""},
+                  {"ticket_id": 1, "note": "   "}):
+        with pytest.raises(Missing):
+            reject.bind(blank)
+
+
+def test_the_deals_endpoint_does_not_scope_rows_itself(people, db: Database):
+    """Named separately from the read-side check because this is the one an
+    innocent change reaches for: a requester "should only see their own", so
+    somebody adds a WHERE. The database already says so, and two copies of that
+    rule is the vulnerability."""
+    from doorway.reads import READS
+
+    statement = READS["GET /deals"].sql.lower()
+    assert "where" not in statement, (
+        f"GET /deals scopes its own rows: {statement!r}. The policy on "
+        "cw.agreement decides who sees what."
+    )

@@ -2,11 +2,11 @@
 
 THE THREE THINGS THESE TESTS ARE HERE TO CATCH
 
-  1. A statement that drifted during the port. Twenty-five endpoints copied by
-     hand is exactly where a typo lives, and a typo in a column name does not
-     look like a bug — it looks like an endpoint nobody has clicked yet. So the
-     statements are compared against the JavaScript character for character
-     (whitespace aside), and every one is then run against the real schema.
+  1. A statement nobody can answer. A typo in a column name does not look like
+     a bug — it looks like an endpoint nobody has clicked yet. Every statement is
+     run against the real schema as two different roles, and a broken one fails
+     outright. While the JavaScript service existed these were also compared
+     against it character for character; that half went with it in WP-P5.
 
   2. A refusal softened into an empty list. "Nothing is waiting on you" and "You
      may not see this" are opposite sentences. Every read is run as a role that
@@ -16,9 +16,9 @@ THE THREE THINGS THESE TESTS ARE HERE TO CATCH
      JavaScript. If a check ever seems necessary here, the database is missing a
      rule and the fix belongs there.
 
-The JavaScript service is still running and still the specification. These tests
-compare against it directly; when it is deleted in WP-P5 the comparison tests go
-with it, and what remains is the running-against-the-schema half.
+The JavaScript service was retired in WP-P5 and the comparison half of this file
+went with it, as its own docstring said it would. What remains is the half that
+does not depend on a second implementation existing.
 """
 
 from __future__ import annotations
@@ -48,9 +48,6 @@ BROKEN_STATEMENT = {
     "42883",  # undefined function
     "42P10",  # invalid column reference
 }
-
-JAVASCRIPT_SERVICE = Path(__file__).resolve().parents[1] / "service" / "app.mjs"
-
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -90,63 +87,6 @@ def people(db: Database, owner_url: str):
 
 ADMINISTRATOR = Caller(person="admin@clausewerk", role="administrator")
 REQUESTER = Caller(person="rita@clausewerk", role="requester")
-
-
-# ── 1. The port carried the JavaScript across unchanged ─────────────────────
-
-
-def javascript_reads() -> dict[str, str]:
-    """The read endpoints as the JavaScript service declares them.
-
-    Read from the file rather than from a copy kept here, because a copy kept
-    here would be the second thing to drift.
-    """
-    source = JAVASCRIPT_SERVICE.read_text(encoding="utf-8")
-    found = re.findall(r"'(GET [^']+)':\s*\{\s*sql:\s*`([^`]*)`", source)
-    assert found, (
-        f"no read endpoints could be read out of {JAVASCRIPT_SERVICE.name}; the "
-        "comparison tests below would pass while comparing nothing"
-    )
-    return {key: sql for key, sql in found}
-
-
-def squashed(sql: str) -> str:
-    """Whitespace collapsed. Indentation differs between the two files by
-    necessity; anything else differing is a change made during a port."""
-    return " ".join(sql.split())
-
-
-def test_every_javascript_read_exists_in_python():
-    missing = sorted(set(javascript_reads()) - set(READS))
-    assert not missing, (
-        f"{len(missing)} read endpoint(s) were not ported: {missing}. Each one is "
-        "a screen that goes blank when the JavaScript service is retired."
-    )
-
-
-def test_python_invented_no_read_the_javascript_does_not_have():
-    """An endpoint that appeared during the port is an untested change wearing a
-    port's clothes. New endpoints are welcome — after the port, on their own."""
-    invented = sorted(set(READS) - set(javascript_reads()))
-    assert not invented, f"read endpoint(s) added during the port: {invented}"
-
-
-@pytest.mark.parametrize("key", sorted(javascript_reads()))
-def test_each_statement_matches_the_javascript_word_for_word(key: str):
-    assert squashed(READS[key].sql) == squashed(javascript_reads()[key]), (
-        f"{key} does not run the statement the JavaScript runs. The JavaScript is "
-        "the specification until it is deleted; a difference here is either a "
-        "typo or an improvement, and both must be made deliberately rather than "
-        "during a port."
-    )
-
-
-def test_the_port_carried_all_twenty_five():
-    assert len(READS) == 25, (
-        f"{len(READS)} reads are registered; the JavaScript service has 25. If an "
-        "endpoint has been added or removed on purpose, this count moves with it "
-        "deliberately."
-    )
 
 
 # ── 2. Every read names the rule that decides who sees it ───────────────────

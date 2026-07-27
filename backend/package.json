@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "node db/test/run-all.mjs",
-    "test:mutation": "node db/test/mutation-check.mjs && python engine/mutation_check.py",
+    "test:mutation": "node db/test/mutation-check.mjs && python engine/mutation_check.py && python doorway/mutation_check.py",
     "verify": "npm run test && npm run test:engine && npm run test:doorway && npm run test:mutation",
     "test:engine": "python -m pytest engine -q",
     "test:doorway": "python -m pytest doorway -q"
