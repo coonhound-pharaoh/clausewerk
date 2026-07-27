@@ -219,9 +219,53 @@ def _run_one(mutation):
     return name, expect, "ok"
 
 
+def preflight() -> list[str]:
+    """Every mutation's pattern must appear EXACTLY ONCE in the real source.
+
+    Checked before anything runs, and reported on its own, because of a trap the
+    role-based-UI session hit on 2026-07-27: a script rewrote a migration's line
+    endings, every multi-line pattern in their harness silently stopped matching,
+    and the report read `197/198` with one SKIP. Against `198/198` that is nearly
+    invisible — a protection had stopped being watched and the bottom line barely
+    moved.
+
+    THE COUNT AT THE BOTTOM OF A REPORT IS THE LEAST INFORMATIVE LINE IN IT.
+
+    This harness turns out to be immune to their specific cause — `read_text()`
+    normalises CRLF to LF, verified rather than assumed — but not to the general
+    one. A refactor that reworded a line would put a pattern quietly out of date
+    in exactly the same way.
+
+    Exactly once, not merely present: a pattern matching twice would mutate the
+    first occurrence, which may not be the one the check is named for.
+    """
+    stale = []
+    for name, filename, find, _repl, expect in MUTATIONS:
+        hits = (BACKEND / filename).read_text(encoding="utf-8").count(find)
+        if hits == 0:
+            stale.append(f"{name} — pattern is not in {filename} any more")
+        elif hits > 1:
+            stale.append(f"{name} — pattern appears {hits} times in {filename}; "
+                         "it would mutate the first, which may be the wrong one")
+
+        test_file, _, test_name = expect.partition("::")
+        source = (HERE / test_file).read_text(encoding="utf-8")
+        if f"def {test_name.split('[')[0]}(" not in source:
+            stale.append(f"{name} — names {expect}, which does not exist")
+    return stale
+
+
 def main() -> int:
     print("mutation check — each row must FAIL the test that names it")
     print(f"{len(MUTATIONS)} mutations\n")
+
+    stale = preflight()
+    if stale:
+        print("STALE CHECKS — nothing was run, because these prove nothing:\n")
+        for entry in stale:
+            print("  · " + entry)
+        print("\nFix or remove each one. A check that cannot match is not a check.")
+        return 1
 
     lanes = max(2, min(len(MUTATIONS), (os.cpu_count() or 4) - 2))
     with ThreadPoolExecutor(max_workers=lanes) as pool:
