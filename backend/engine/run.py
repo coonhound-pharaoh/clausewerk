@@ -190,6 +190,15 @@ def run_rows(
                  "justification": r.justification, "reason": "unknown category"}
                 for r in manifest.dropped
             ],
+            # The severities the boundary rewrote, with the ORIGINAL claim.
+            # Without this, every Standard in `risks` reads as though the
+            # model chose it — and a downgrade nobody can see is a judgement
+            # nobody made.
+            "coerced": [
+                {"category": r.category, "claimed": r.severity,
+                 "recorded": "Standard", "reason": "unrecognised severity"}
+                for r in manifest.coerced
+            ],
         }),
         "manifest_source": manifest.source,
         "snapshot_id": resolution.snapshot_id,

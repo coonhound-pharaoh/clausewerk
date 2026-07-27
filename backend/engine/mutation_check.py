@@ -237,16 +237,34 @@ MUTATIONS = [
     (
         "a dropped category is discarded instead of recorded",
         "manifest.py",
-        "return replace(manifest, risks=tuple(kept), dropped=tuple(dropped))",
-        "return replace(manifest, risks=tuple(kept), dropped=())",
+        "    return replace(manifest, risks=tuple(kept), dropped=tuple(dropped),\n"
+        "                   coerced=tuple(coerced))",
+        "    return replace(manifest, risks=tuple(kept), dropped=(),\n"
+        "                   coerced=tuple(coerced))",
         "test_a_dropped_risk_is_recorded_as_dropped_not_discarded",
     ),
     (
         "severity is taken from the model verbatim",
         "manifest.py",
-        "severity = HIGH if risk.severity == HIGH else STANDARD",
-        "severity = risk.severity",
+        "        else:\n            severity = STANDARD\n            coerced.append(risk)",
+        "        else:\n            severity = risk.severity\n            coerced.append(risk)",
         "test_severity_is_coerced_to_the_two_value_enum",
+    ),
+    (
+        "a differently-spelled High is silently downgraded to Standard",
+        "manifest.py",
+        "        claimed = str(risk.severity).strip().lower()\n        if claimed == HIGH.lower():",
+        "        claimed = str(risk.severity)\n        if claimed == HIGH:",
+        "test_high_is_matched_on_meaning_not_spelling",
+    ),
+    (
+        "a severity rewrite is smoothed over instead of recorded",
+        "manifest.py",
+        "    return replace(manifest, risks=tuple(kept), dropped=tuple(dropped),\n"
+        "                   coerced=tuple(coerced))",
+        "    return replace(manifest, risks=tuple(kept), dropped=tuple(dropped),\n"
+        "                   coerced=())",
+        "test_a_coerced_severity_is_recorded_not_smoothed_over",
     ),
     (
         "an empty category enum lets everything through",

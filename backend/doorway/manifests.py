@@ -157,7 +157,7 @@ def check(db: Database, caller: Caller, body: dict | None) -> Answer:
 
             if not checked.dropped:
                 _record(request, manifest, [], "every category is in the library",
-                        accepted=True)
+                        accepted=True, coerced=checked.coerced)
 
             if checked.dropped:
                 # Ask the engine to say why, one category at a time, rather than
@@ -192,6 +192,11 @@ def check(db: Database, caller: Caller, body: dict | None) -> Answer:
                    "justification": risk.justification}
                   for risk in checked.risks],
         "dropped": [],
+        # Severities the engine rewrote on the way in, with the original
+        # claim. An accepted manifest is not necessarily an untouched one,
+        # and the screen must be able to say so.
+        "coerced": [{"category": risk.category, "claimed": risk.severity}
+                    for risk in checked.coerced],
     })
 
 
@@ -218,7 +223,7 @@ def check(db: Database, caller: Caller, body: dict | None) -> Answer:
 
 
 def _record(request, manifest: Manifest, dropped: list[Risk], reason: str,
-            *, accepted: bool) -> None:
+            *, accepted: bool, coerced: tuple[Risk, ...] = ()) -> None:
     """Write what the engine decided into the audit chain.
 
     An unrecorded refusal is invisible to the audit record, and the point of the
@@ -238,6 +243,10 @@ def _record(request, manifest: Manifest, dropped: list[Risk], reason: str,
             "payload": json.dumps({
                 "reason": reason,
                 "dropped": [risk.category for risk in dropped],
+                # Severities the engine rewrote, with the model's own claim —
+                # the chain must show an accepted manifest was not untouched.
+                "coerced": [{"category": risk.category, "claimed": risk.severity}
+                            for risk in coerced],
                 "risks_submitted": len(manifest.risks),
                 "source": manifest.source,
                 "checked_by": "engine.manifest.check_manifest",

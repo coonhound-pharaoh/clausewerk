@@ -105,6 +105,40 @@ def test_baseline_in_a_manifest_is_coerced_too():
     claiming it is as much a hallucination as an invented category."""
     checked = check_manifest(manifest(Risk("Data Privacy", BASELINE)), CATEGORIES)
     assert checked.risks[0].severity == STANDARD
+    assert [r.severity for r in checked.coerced] == [BASELINE], (
+        "the rewrite happened but the record does not show it")
+
+
+def test_high_is_matched_on_meaning_not_spelling():
+    """The regression this exists to stop: a model that starts writing 'HIGH'
+    after a prompt update must not silently downgrade every high risk to
+    Standard wording. The old exact-match comparison did exactly that, and
+    the run record showed Standard as though the model had said so."""
+    checked = check_manifest(
+        manifest(Risk("Data Privacy", "HIGH", "shouted"),
+                 Risk("Dispute Resolution", "high", "whispered"),
+                 Risk("Insurance", " High ", "padded")),
+        CATEGORIES)
+    assert [r.severity for r in checked.risks] == [HIGH, HIGH, HIGH]
+    assert checked.coerced == (), (
+        "a case variant of High preserves the model's meaning — recording it "
+        "as a rewrite would bury the real rewrites in noise")
+
+
+def test_a_coerced_severity_is_recorded_not_smoothed_over():
+    """Symmetry with `dropped`: a category the model invented is recorded, and
+    a severity the boundary rewrote must be too. Without the record, every
+    Standard in the output reads as though the model chose it — a downgrade
+    nobody can see is a judgement nobody made."""
+    checked = check_manifest(
+        manifest(Risk("Data Privacy", "CATASTROPHIC", "shouting"),
+                 Risk("Dispute Resolution", HIGH, "left alone")),
+        CATEGORIES)
+    assert [r.severity for r in checked.risks] == [STANDARD, HIGH]
+    assert [(r.category, r.severity) for r in checked.coerced] == [
+        ("Data Privacy", "CATASTROPHIC")], (
+        "the original claim is the record — 'Standard' is what we did, not "
+        "what the model said")
 
 
 def test_a_clean_manifest_passes_through_unchanged():
@@ -113,6 +147,7 @@ def test_a_clean_manifest_passes_through_unchanged():
     checked = check_manifest(clean, CATEGORIES)
     assert checked.risks == clean.risks
     assert checked.dropped == ()
+    assert checked.coerced == ()
     assert checked.vendor == clean.vendor and checked.source == clean.source
 
 

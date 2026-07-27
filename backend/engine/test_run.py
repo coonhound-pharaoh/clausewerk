@@ -488,6 +488,24 @@ def test_dropped_risks_are_recorded_in_the_run_but_never_resolved():
     assert not any(d["category_key"] == "Quantum Indemnity" for d in rows["run_decision"])
 
 
+def test_coerced_severities_are_recorded_in_the_run_with_the_original_claim():
+    """The severity half of the same principle: what the boundary rewrote is
+    part of what the model said, and the run record holds what the model said.
+    Without this entry, every Standard in the stored risks reads as though
+    the model chose it."""
+    snap = Snapshot.build(library(), LADDERS)
+    rewritten = Manifest(vendor="N", source="llm", risks=MANIFEST.risks,
+                         coerced=(Risk("Data Privacy", "CATASTROPHIC", "shouting"),))
+    res = resolve(rewritten, snap)
+    rows = run_rows("RUN-008", rewritten, res, validate(res.decisions, RULES),
+                    CATEGORIES, created_by="buyer@cw")
+    stored = json.loads(rows["run"][0]["manifest"])
+    assert stored["coerced"] == [{"category": "Data Privacy",
+                                  "claimed": "CATASTROPHIC",
+                                  "recorded": "Standard",
+                                  "reason": "unrecognised severity"}]
+
+
 # ── Origin, and the two figures it makes computable (WP-17, ADR-0010) ──────
 #
 # `origin` says who composed the words. It is deliberately NOT part of the

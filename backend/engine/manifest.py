@@ -92,9 +92,11 @@ def check_manifest(manifest: Manifest, categories: CategoryMap) -> Manifest:
       `dropped`. It never reaches resolution, so it can never appear as a
       coverage gap; and it is not lost, so nobody has to guess later why the
       model's output and the run record disagree on how many risks there were.
-    - Severity is coerced to the two-value enum. 'Baseline' is synthetic — the
-      always-include pass emits it — and a manifest claiming it is as much a
-      hallucination as an invented category.
+    - Severity is coerced to the two-value enum, matched on meaning rather
+      than spelling, and every real rewrite is recorded in `coerced` with the
+      original claim. 'Baseline' is synthetic — the always-include pass emits
+      it — and a manifest claiming it is as much a hallucination as an
+      invented category, so it lands in `coerced` too.
 
     Fails closed on an empty enum, the same way the prototype does: with no
     vocabulary to check against, nothing can be validated, and passing the model
@@ -105,15 +107,29 @@ def check_manifest(manifest: Manifest, categories: CategoryMap) -> Manifest:
             "the category enum is empty — refusing to validate a manifest "
             "against nothing, which would let every category through unchecked")
 
-    kept, dropped = [], []
+    kept, dropped, coerced = [], [], []
     for risk in manifest.risks:
         if not categories.knows(risk.category):
             dropped.append(risk)
             continue
-        # Mirrors the prototype: anything that is not exactly 'High' is
-        # Standard. Coercing an unrecognised severity *up* would let a model
-        # block a contract by typo.
-        severity = HIGH if risk.severity == HIGH else STANDARD
+        # Severity is matched on its MEANING, not its spelling. The old exact
+        # comparison meant a model that started writing 'HIGH' after a prompt
+        # update would silently downgrade every high risk to Standard wording
+        # — invisibly, since the run record showed Standard as though the
+        # model had said so. Anything that is recognisably neither High nor
+        # Standard is still coerced DOWN, because coercing an unrecognised
+        # severity *up* would let a model block a contract by typo — but the
+        # coercion is recorded in `coerced` the way category drops are
+        # recorded in `dropped`, with the original claim intact.
+        claimed = str(risk.severity).strip().lower()
+        if claimed == HIGH.lower():
+            severity = HIGH
+        elif claimed == STANDARD.lower():
+            severity = STANDARD
+        else:
+            severity = STANDARD
+            coerced.append(risk)
         kept.append(risk if severity == risk.severity else replace(risk, severity=severity))
 
-    return replace(manifest, risks=tuple(kept), dropped=tuple(dropped))
+    return replace(manifest, risks=tuple(kept), dropped=tuple(dropped),
+                   coerced=tuple(coerced))

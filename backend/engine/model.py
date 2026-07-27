@@ -117,6 +117,12 @@ class Manifest:
     #: clause for that category", and only one of them is a library gap. These
     #: never reach resolution, so they can never be reported as coverage.
     dropped: tuple[Risk, ...] = ()
+    #: Risks whose claimed severity the trust boundary rewrote to Standard
+    #: because it was not recognisably High or Standard. Each entry is the risk
+    #: AS CLAIMED, so the record shows what the model actually said — a
+    #: downgrade the record cannot see reads as though the model chose
+    #: Standard, and nobody decided that. (`engine.manifest.check_manifest`)
+    coerced: tuple[Risk, ...] = ()
 
 
 @dataclass(frozen=True)

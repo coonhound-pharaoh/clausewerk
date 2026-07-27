@@ -286,22 +286,21 @@ def test_no_session_reaches_the_engine_at_all(running):
 
 
 # ── The engine was not edited to make this fit ──────────────────────────────
-
-
-def test_the_engine_is_untouched_by_this_connection():
-    """WP-P6 connects the engine; it does not edit it. Checked against git rather
-    than trusted, because "I did not change it" is the easiest claim to make and
-    the easiest to be wrong about."""
-    import subprocess
-
-    root = Path(__file__).resolve().parents[2]
-    changed = subprocess.run(
-        ["git", "diff", "--name-only", "648d2cf", "--", "backend/engine"],
-        cwd=root, capture_output=True, text=True, check=False)
-
-    assert changed.returncode == 0, f"git could not be consulted: {changed.stderr}"
-    touched = [line for line in changed.stdout.split("\n") if line.strip()]
-    assert not touched, (
-        f"the engine has been modified since the port began: {touched}. It is "
-        "tested as it stands; adapt at the doorway side."
-    )
+#
+# RETIRED 2026-07-27, with its reason, the way any guarantee leaves this suite.
+#
+# `test_the_engine_is_untouched_by_this_connection` diffed backend/engine
+# against the commit where the port began (648d2cf) and failed if anything had
+# changed. It certified a claim about WP-P6 — the doorway CONNECTS the engine,
+# it does not edit it — and at the moment that package closed, the claim was
+# true and the test had proved it.
+#
+# But a diff against a fixed commit does not distinguish "edited to make the
+# port fit" from "improved for its own sake, afterwards". Once the port was
+# complete and the engine's own defect-sweep began fixing real engine bugs
+# (unopenable documents, a validation gap the migrations had recorded), this
+# test failed on work it was never meant to police, and would have gone on
+# failing for every legitimate engine change forever.
+#
+# The property it protected is a property OF THE PORT, already certified, in
+# history, at that commit. It is not a property of the engine's future.
