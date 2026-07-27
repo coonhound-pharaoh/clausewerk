@@ -81,8 +81,10 @@ Rae, through the doorway. Skip that step and Pat cannot sign in at all, which is
 the countersign rule doing its job rather than a bug.
 
 Point it somewhere else with `CW_DATABASE_URL`, and use `--port` if 8787 is
-taken. The JavaScript service (`node service/server.mjs`) still runs the same
-screens on the same port and is retired in WP-P5.
+taken. **This is now the only way to run the screens** — the JavaScript service
+was deleted on 2026-07-27 (WP-P5, owner-approved), so there is no second server
+to reach by accident. While both existed, a browser asking for `localhost` could
+resolve to IPv6 and reach the wrong one; that trap is gone with it.
 
 ## What's here
 

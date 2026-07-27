@@ -755,7 +755,52 @@ blocking finding means, how requesting works and what it does not promise).
 
 ---
 
-## WP-U13 · The Legal admin's workspace
+## WP-U13 · The Legal admin's workspace — **READ HALVES BUILT; the acting halves have no endpoints**
+
+*Screens paused by owner decision 2026-07-26, on the same grounds as `WP-U14`: the service is moving
+to Python and its endpoints do not serve HTTP until `WP-P4`. The database half is built now, because
+migrations are shared by both languages and none of it is wasted whichever way the service goes.*
+
+*Delivered: [](backend/db/migrations/0018_library_and_ladder_views.sql) and
+[](backend/db/test/library-ladder-views.test.mjs) — 21 tests, 5 mutations. The consolidation handoff
+07 §4 named: `cw.library_entry` (clause, version, state, expiry and rationale in one row, plus
+whether the version is a ladder floor and whether its category is uncovered) and `cw.ladder_board`
+(one row per rung, in order, floor marked, ladder health on every line).*
+
+***What it taught.*** *Two things, both about tests rather than views.*
+
+*First — the empty ladder. `cw.ladder_health` reports a status of `empty`, and an inner join to the
+rungs deletes exactly those ladders from the board. A board rendering every ladder except the broken
+ones reports a configuration error as absence, which reads identically to health: trap 5.2 again, in
+a different costume. The `LEFT JOIN` is the whole point of the view and is the shorter thing to get
+wrong.*
+
+***Second — a mutation that refused to break, which is the more useful finding.*** *A sixth mutation
+was written for "every clause version appears exactly once", swapping the counted ladder facts for a
+join. It reported `MISSED`: the duplication cannot happen, because `cw.ladder_rung_matches_ladder()`
+refuses a rung whose clause is a different category or severity than its ladder, and `cw.ladder` is
+unique on `(category_key, severity)` — so a version belongs to at most one ladder, always. The test
+passed and would have passed forever, looking exactly like protection. It is kept, and the reason it
+is unguarded is recorded in `mutation-check.mjs` rather than deleted quietly, because a missing
+mutation and a forgotten one are indistinguishable six months later.*
+
+***Surfaced, not fixed:*** *`cw_administrator` holds no `select` on the clause library or the
+ladders at all, which contradicts owner decision U5. See `docs/open-questions.md` §9a — it is a
+decision about a role's boundary, not a joined column.*
+
+***The library and the ladders are built*** *(2026-07-27):
+[](prototype/v4/app/library.jsx) — the clause table with rationale drawers, expiry flags, the
+coverage-gap banner, and whether a version is holding up a ladder as its floor; plus the ladder board
+with rungs in order, the floor marked, unusable rungs kept visible and **the empty ladder rendered
+rather than filtered**. Six tests, five mutations.*
+
+***AND THE PACKAGE CANNOT CLOSE — see [](docs/open-questions.md) §9b.*** *Six governed acts it asks
+for have **no endpoint in either language**: activate/retire/supersede, conflict-rule editing,
+concession promotion, rung/floor reordering, hold release, and retention destruction. None was ever
+among the frozen 52, so this is not a porting oversight — the package was paused before anyone
+looked. Two of the six (retention **destruction**, clause **supersession**) are the most dangerous
+acts in the product and need designing rather than endpoint-shaped guesses. **`WP-U15` must not
+report this package complete on the strength of its read halves.***
 
 **Objective.** The vault and its keys: the library, ladders & rules, owner
 decisions, holds & retention — the whole content-governance surface in one
@@ -798,14 +843,77 @@ act→role table trued if any surface shifted an act's home.
 
 ---
 
-## WP-U14 · The read-only workspaces: Auditor and Viewer — **PAUSED; read models built**
+## WP-U14 · The read-only workspaces: Auditor and Viewer — **CLOSED 2026-07-27**
 
 *Screens paused by owner decision 2026-07-26: the service is moving to Python and its endpoints do not
 serve HTTP until WP-P4. The database half is built now, because migrations are shared by both
 languages and none of it is wasted whichever way the service goes.*
 
-*Delivered: [](backend/db/migrations/0016_reading_room.sql) and
+*Delivered: [](backend/db/migrations/0017_reading_room.sql) and
 [](backend/db/test/reading-room.test.mjs) — 22 tests, 7 mutations.*
+
+***And then reopened, and closed properly.*** *`0017` narrowed the four tables that carry a signed
+contract and scoped the view it had just written. It did not touch three views in `0006` that had
+been selecting from those same tables since long before — so `cw.agreement_chain` went on returning
+every signed agreement in the system, with its counterparty, document filename and hash, to a viewer
+who had been shown nothing. The hole was closed at the front door and left open at the side.*
+
+*Found by the Python session, who reported `cw.override_status` while porting the read endpoints;
+the other five came from asking the catalogue what else had the same shape.
+[](backend/db/migrations/0019_override_views_scoped.sql) scopes six views, and
+[](backend/db/test/views-are-not-policies.test.mjs) is the guard that makes this the last time — it
+lists every view a viewer can read (21 today) and fails unless each is classified with its reason.*
+
+***The rule that came out of it, and it is the more valuable half.*** *`cw.sow_override_in_force` was
+scoped too, and it broke statement-of-work execution outright: the trigger deciding whether a SOW may
+contradict its master consults that view, and scoped, it could no longer see the approval it was
+looking for. **A view the schema itself reads must answer the same for everybody.** Access scoping
+belongs on views people read; putting it on a view a rule reads turns a permission into a correctness
+fault, and it fails by refusing work that was properly authorised.*
+
+***The Auditor's workspace is built*** *(2026-07-27):
+[](prototype/v4/app/auditor.jsx) — the chain explorer with actor-kind filter, search, timeline and
+compact views and CSV export; review quality; origin mix. Seven tests in
+[](backend/db/test/shell.test.mjs) and six mutations. Walked in a browser as the seeded auditor.*
+
+***The Viewer's reading room is built*** *(2026-07-27):
+[](prototype/v4/app/viewer.jsx) — the agreements shared with this person and why, the paper render
+per clause, and each clause's approver and origin, which is the one place a viewer sees an approval.
+Six tests, five mutations.*
+
+***Walked, and the scoping proved*** *(2026-07-27, by the Python session against a demo database with
+a share created by Legal through the doorway). Sam Reed — the viewer it was shared with — sees the
+agreement, its counterparty and the stated reason. A second viewer shown nothing sees the honest
+empty state rather than an error or a blank. Requester, legal admin and auditor each see it too.*
+
+***What is still NOT exercised, stated rather than glossed:*** *`GET /reading-room/clauses` returned
+zero rows, so **the paper render and the per-clause approver have not been seen on screen** — only
+verified by their tests and by a column-by-column diff against the endpoint's SQL.
+`cw.reading_room_clause` joins through `cw.run_decision`, so it needs a real run behind the
+agreement: manifest, snapshot, ruleset, resolution, decisions. Building one is `WP-U15`'s
+acceptance-sweep work and faking one would produce exactly the seeded-system-that-looks-busy the
+seeding principle rejects. **Carried into `WP-U15` as a named gap.***
+
+***The two endpoints it needed did not exist*** *— `cw.reading_room` and `cw.reading_room_clause`
+landed in `0017`, after the 52 were frozen. The Python session added `GET /reading-room` and
+`GET /reading-room/clauses`, and asserts on their side what this side asserts on ours: **neither
+takes a parameter**, and **no export route may exist**. Both are tests rather than conventions,
+because "this share, this person" stops being a rule the moment the browser can name an agreement,
+and ADR-0008's withheld export is exactly the sort of thing added later as a convenience by somebody
+who has not read it.*
+
+***What it taught.*** *Two things, both about assertions rather than screens.*
+
+*First — the chain tile. `cw.health_summary` publishes a tile named `audit chain`; the first draft
+looked for `chain`, found nothing, and rendered "not available". **A lookup that misses is
+indistinguishable on screen from a health check that genuinely has no answer** — the same
+absence-reads-as-calm failure as trap 5.2, arriving through a typo.*
+
+***Second, and sharper — the test written to catch that trip on the tile's own display copy.***
+*It asserted the string `'audit chain'` appeared in the source, and the tile's LABEL contains that
+string, so it went on passing while the lookup was broken. Trap 5.3 again, wearing UI text instead of
+a comment. The mutation harness reported `MISS` on the first run; the assertion is now anchored on
+`t.tile === 'audit chain'`, the lookup itself.*
 
 **Objective.** The two roles that change nothing get surfaces that prove it:
 the Auditor reads everything; the Viewer reads exactly what was shared.

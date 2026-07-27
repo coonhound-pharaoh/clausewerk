@@ -1465,3 +1465,149 @@ not about what any individual contract may say.
 The library is the filing cabinet of approved language. You may take a clause
 out and negotiate away from it with the right approvals. You may not go into the
 cabinet and quietly retype the master copy.
+
+---
+
+## 2026-07-27 · Three decisions from Mike, and the old JavaScript is gone
+
+### Records are never destroyed by the system, only by a person (U9)
+
+**Your instruction:** auto-destruction should never happen; only someone with
+authority to delete records should have it; that authority goes to the
+Administrator for now.
+
+**Half of it was already true** — nothing here has ever destroyed anything on a
+timer. But that was a fact about how the code happened to be written, not a rule,
+and a fact nobody checks is one somebody can undo without noticing. It is now a
+rule with a test behind it: if anyone ever wires destruction to fire by itself,
+the build fails and names it.
+
+**The authority has moved** from Legal admin to the Administrator, and Legal
+admin's has been **revoked rather than shared.** Two people holding an
+irreversible act means neither is accountable for it — the same reasoning you
+applied to audit checkpoints.
+
+**This amends your earlier decision** that the Administrator writes no content.
+It now performs exactly one content-affecting act: ending a record's life. What
+still holds is that it cannot write, alter or approve a single word of any
+contract, and holds no vote in any workflow.
+
+**One consequence I fixed:** the health screen told the reader that destruction
+was "actioned by Legal admin, who alone may destroy". Left alone it would have
+told the one person who *can* act that they cannot.
+
+### Replacing a clause never rewrites what is already agreed (U10)
+
+**Confirmed as you described.** Two of the three parts were already built:
+approved wording cannot be edited, only replaced by a new version with the old
+one kept; and a signed contract is frozen so nothing can reach it.
+
+**The third part was half-built and is now complete.** Signed contracts were
+already flagged when the library moved on from what they carry. **Deals still
+being negotiated had nothing** — and that is the worse case, because a signed
+contract's wording is settled whereas an in-flight one can still be corrected.
+Without the flag, obsolete wording would be signed by mistake with nobody told.
+Now both are flagged, and neither is ever quietly corrected.
+
+### The Administrator can read the library (U11)
+
+Done. It was one missing permission, not a missing rule — the rules always
+allowed it. No one else's access widened, and the role still cannot write a word
+of the library.
+
+### The old JavaScript service is deleted
+
+Gone, with your approval. Before removing it I checked that the fifteen
+protections it carried are genuinely re-proved on the Python side — name by name,
+not on trust. The Python version has those fifteen plus two more it found on its
+first run, so the surface is better watched after the move than before it.
+
+---
+
+## 2026-07-27 · One thing I did NOT do, and need you to decide
+
+You said to give the Administrator "the power to delete document". I have given
+it the authority to destroy records at the end of their retention — which is what
+your first decision described, and it is now the only role that can.
+
+**But I want to be straight about what that does today: it records the
+destruction; it does not remove the document.** The stored contract file is
+frozen and nothing anywhere deletes it. So a record marked destroyed still has
+its document sitting behind it.
+
+I did not build actual deletion, because the shape of it is a decision rather
+than a detail, and the wrong shape is expensive to undo. **The question is what
+"destroyed" should mean:**
+
+- **Remove the contents, keep the fact.** The file's name, its fingerprint, its
+  dates and the record that it was destroyed all survive — you can still prove
+  what existed and that it was properly disposed of, but the text is gone. This
+  is what I would recommend, and it is what most retention regimes expect.
+- **Remove the whole record.** Nothing survives to show the contract ever
+  existed, which also removes the evidence that you disposed of it correctly.
+
+Everything else in this system is built on the principle that the record of what
+happened survives. The first option keeps that; the second breaks it.
+
+---
+
+## 2026-07-27 · Ending a record's life is two acts, and the second needs the first (U12)
+
+**Your decision:** the Administrator can remove the whole record, but can
+delegate the authority to remove *content while keeping the fact* — and records
+handled that way can be reviewed before being removed entirely.
+
+**Built as two unequal acts:**
+
+**Redact** — the content goes, the fact stays. The document's name, size,
+fingerprint, dates and its whole history survive; what goes is the text and the
+pointer to it. **The Administrator can delegate this** to a named person, with a
+stated reason, revocably, and the delegation is on the permanent record.
+
+**Purge** — the record itself goes. **The Administrator alone**, and it cannot be
+delegated. It only works on something already redacted.
+
+**The order is the control.** You cannot erase in one step. A record must be
+redacted first, which leaves it sitting in a review list, and only then can it be
+removed. That is what makes "reviewed" mean something rather than being a hope,
+and the database refuses the shortcut even if someone edits the record by hand.
+
+**Three things worth knowing:**
+
+**The audit trail outlives the purge.** After a record is gone, the permanent log
+still shows that this contract existed, was signed, was disposed of, and by whom.
+That is deliberate — it is what makes offering a purge safe at all, because the
+evidence of correct disposal survives the thing disposed of. **But it also means
+a purge is not the erasure of every trace.** If the reason is ever a legal demand
+to erase a named person, that log is a residual we would have to discuss
+separately. I would rather say so than let it read as solved.
+
+**The file outside is not deleted by this.** Clearing the pointer severs our link
+to the stored document; it does not reach into the storage system and delete it.
+The review screen says so out loud rather than looking clean.
+
+**A purge removes the signed contract and its evidence, not the negotiation
+behind it.** Extending it further would cascade through half the system and is a
+decision rather than a detail.
+
+---
+
+## 2026-07-27 · A guard I wrote failed open, and the suite caught it in one run
+
+Building the above, I wrote a permission check that **never fired.** An
+unauthorised person could have removed content from a record on the first
+attempt.
+
+**The cause is worth remembering** because it is invisible on the page: the check
+asked "who is calling this?" from inside a piece of code that deliberately runs
+with the system's own authority — so the answer was *nothing at all*, and a
+comparison against nothing is neither true nor false in a database. It quietly
+evaluated to "don't object".
+
+**It was caught immediately** by a test that tried to do the thing and expected
+to be refused. Rewritten to ask the *records* who somebody is rather than asking
+the connection, and the failing version is now kept as a permanent break-it
+check, so it can never return unnoticed.
+
+**Seventh time this week** something that looked like protection wasn't. Every
+one found by attacking it rather than reading it.

@@ -16,7 +16,14 @@ handoff.
 | **Lifecycle (post-signature)** | Specified, one piece built | [`04-lifecycle.md`](04-lifecycle.md) |
 | **Frontend** | Specified; a working prototype exists | [`05-frontend.md`](05-frontend.md) |
 | **Service layer & identity** | Built in JavaScript, now **frozen as the specification** the Python replacement must match | [`06-service-layer-and-identity.md`](06-service-layer-and-identity.md) |
-| **Role-based UI & the Administrator** | Thirteen of sixteen packages closed; two paused on the language move, one blocked | [`07-role-based-ui.md`](07-role-based-ui.md) |
+| **Role-based UI & the Administrator** | Fourteen of sixteen closed. History and the long-form traps live here | [`07-role-based-ui.md`](07-role-based-ui.md) |
+| **CURRENT STATE — start here** | The Python move complete, the JavaScript service deleted, four more owner decisions, and **uncommitted work in the tree** | [`08-disposal-screens-and-the-python-move.md`](08-disposal-screens-and-the-python-move.md) |
+
+**Arriving cold? Read
+[`08-disposal-screens-and-the-python-move.md`](08-disposal-screens-and-the-python-move.md)
+first.** It is the current state of play and it opens with the one thing that
+will bite you: there is substantial uncommitted work in the tree, including a
+staged deletion.
 
 **Repository state.** Substantially further along than when reports 01–05 were
 written, and moving — so **do not trust a number in this file. Run

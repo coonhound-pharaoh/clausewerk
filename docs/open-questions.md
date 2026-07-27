@@ -221,6 +221,125 @@ Its own open questions are in [CLA §11](../CLAUSE-LIBRARY-ARCHITECTURE.md) — 
 how much weight to give old concessions, and how many similar concessions constitute a pattern
 worth proposing on.
 
+## 9a. The Administrator's read of the clause library — **SETTLED 2026-07-27 (U11)** ✅
+
+Owner decision U5 (2026-07-26) settled the Administrator as **content-visible and
+content-powerless**, and says in terms never to describe the role as
+content-blind. Against the clause library it currently is.
+
+**The gap is the GRANT, not the policy**, and keeping that straight matters
+because the two point at different fixes. The read policies on `cw.clause`,
+`cw.clause_version`, `cw.ladder` and `cw.ladder_rung` are all `read_all` —
+`using (cw.app_role() is not null)` — which admits an Administrator perfectly
+well. What is missing is the table privilege: `cw_administrator` holds `select`
+on **none** of `cw.clause`, `cw.clause_version`, `cw.clause_version_state`,
+`cw.ladder`, `cw.ladder_rung` or `cw.ladder_health`, so the connection is refused
+before any policy is consulted.
+
+Migrations `0002` and `0003` granted those to the five roles that existed at the
+time; `0013` created the Administrator and never revisited the list. The role
+*does* read executed agreements — `0017`'s `read_scoped` policies name
+`administrator` explicitly — so the two halves of "contract content" disagree.
+
+So the fix is one `grant select … to cw_administrator` beside the existing
+grants. **No policy needs changing**, which is worth stating because it means
+the fix cannot widen anybody else's reach by accident.
+
+Found while building `0018`'s consolidation views. **Deliberately not fixed
+there:** granting the new views to `cw_administrator` would have closed the gap
+in the one place nobody would look for it, and would have made two convenience
+joins the Administrator's only window onto the library — a new control wearing a
+convenience view's clothes. The fix belongs beside the original grants.
+
+**SETTLED: yes.** The owner granted it on 2026-07-27 as part of U11. Built in
+`0022` — a grant beside the others, no policy touched, nobody else's reach
+widened, and no write of any kind added. `library-ladder-views.test.mjs` asserts
+the read; `administrator.test.mjs`'s whole-schema sweep still asserts the role
+can write nothing.
+
+## 9b. WP-U13 cannot close: six governed acts have no endpoint — **two now decided**
+
+Found 2026-07-27 while building the Legal admin's workspace. Its **reading**
+halves are built ([`library.jsx`](../prototype/v4/app/library.jsx) — the library
+and the ladders). Its **acting** halves cannot be, because the endpoints do not
+exist:
+
+| act | WP-U13 deliverable |
+|---|---|
+| activate / retire / supersede a clause | Library |
+| edit a conflict rule | Ladders & rules |
+| promote a concession | Ladders & rules |
+| reorder a rung / move a floor | Ladders & rules |
+| release a legal hold | Holds & retention |
+| destroy under retention | Holds & retention |
+
+**This is not a porting oversight.** The Python doorway has all 27 writes the
+JavaScript service had; none of the six was ever among them. The 52 endpoints
+were frozen as the specification before `WP-U13` was looked at, so the gap has
+been there the whole time and nothing surfaced it — the package was paused.
+
+**Why it matters more than a missing screen.** Two of the six are the most
+dangerous acts in the product. Retention **destruction** is irreversible and
+`WP-U13` asks for "the strongest confirmation idiom in the product", refused
+while a matter is on hold and named as such. Clause **supersession** must mint a
+new version with its history intact — an in-place edit would break the
+mutation-surface invariant in the UI rather than in the schema. Both need
+designing before they are built, not endpoint-shaped guesses.
+
+**Nothing is broken today**, because a pane that cannot act says so rather than
+offering a button that fails. But `WP-U13` **cannot be closed** until somebody
+decides these are in scope and they are designed, and `WP-U15` should not report
+the package complete on the strength of its read halves.
+
+**TWO OF THE SIX ARE NOW DECIDED (2026-07-27), which was the part that needed
+the owner rather than engineering time:**
+
+- **Retention destruction** — U9. Never automatic; the authority is the
+  Administrator's alone, revoked from legal_admin. Built in `0022`. **The
+  endpoint is still absent**, so the act cannot yet be performed from a screen.
+- **Clause supersession** — U10. Mints a new version and never rewrites wording
+  already committed to; signed AND in-flight deals are flagged as carrying
+  obsolete language rather than corrected. The flagging half is built in `0022`
+  (`cw.run_drift`); **the superseding endpoint is still absent.**
+
+**Still open:** the four remaining acts (conflict-rule editing, concession
+promotion, rung/floor reordering, hold release), and whether the six endpoints
+are in scope for this effort at all or become a named follow-on.
+
+**And one new question the owner has been asked** — see the note below on what
+"destroy" should mean.
+
+### What `destroyed` means — **SETTLED 2026-07-27 (U12)** ✅
+
+**SETTLED: both, in that order.** The owner chose a two-act disposal — "the
+administrator can remove the whole record, but can delegate the authority to
+delete records to remove content, but keep the fact. So records deleted under #1
+can be reviewed and deleted under #2."
+
+Built in `0023`:
+
+| act | what it does | who |
+|---|---|---|
+| **redact** | clears the certificate bytes and the document pointer; keeps filename, size, **hash**, dates and every audit row | Administrator, **or a person it has delegated to** — named, reasoned, revocable, on the chain |
+| **purge** | deletes the executed agreement, its documents, certificate and signatories | **Administrator alone. Undelegable.** Only on something already redacted |
+
+**The escalation is the control**, enforced twice: the function refuses a purge
+that skipped redaction, and a table constraint refuses a *row* that records one.
+
+**Three residuals, stated rather than smoothed over:**
+
+- **The audit chain outlives a purge.** No role holds DELETE on it, it is
+  hash-chained and refuses TRUNCATE. That is why a purge is safe to offer — the
+  evidence of correct disposal survives the thing disposed of. **It also means a
+  purge is not erasure of every trace.** A right-to-erasure request naming a
+  person would have to be discussed on its own terms.
+- **The bytes outside are not deleted.** Clearing `storage_uri` severs this
+  system's link to the stored file; it does not reach into the object store.
+  `cw.redaction_state.external_bytes_pending` says so rather than looking clean.
+- **A purge does not touch the negotiation** — `cw.agreement`, its runs,
+  decisions, positions and overrides survive. Extending it there would cascade
+  through half the schema and is a decision, not a detail.
+
 ## 10. Smaller gaps — deferred
 
 | Gap | Where |
