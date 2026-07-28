@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 80 — SOW proposal and settlement chronology was caller-controlled
+
+**Observed defect.** Governed SOW override proposals and settlements bound the
+authenticated actor but accepted caller-supplied `created_at` and `settled_on`.
+The append-only authorization record could therefore permanently misstate when
+a departure was proposed or took effect.
+
+**Fix.** The SOW actor-binding trigger now derives proposal creation time and
+settlement date from the database clock for governed writes. Owner historical
+imports retain explicit chronology.
+
+**Regression proof.** The SOW owner supplies a year-2000 proposal timestamp and
+the Legal settler supplies a year-2099 settlement date. Both stored values fall
+within the current transition date/window, and the approved SOW still executes.
+
+**Validation.**
+
+- `node backend/db/test/executed.test.mjs` — 53 passed
+- `node backend/db/test/negotiation.test.mjs` — 55 passed
+
 ## Cycle 79 — requesters could propose departures on another SOW
 
 **Observed defect.** The SOW-override insert policy allowed every requester

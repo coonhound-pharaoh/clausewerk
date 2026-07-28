@@ -655,12 +655,17 @@ await test('a proposed departure nobody has approved authorises nothing', async 
     'row-level security',
     'a requester proposed a master departure on somebody else\'s SOW');
   const proposed = await queryAs('requester',
-    `insert into cw.sow_override (sow_id, category_key, reason, proposed_by)
+    `insert into cw.sow_override
+       (sow_id,category_key,reason,proposed_by,created_at)
      values ('AG-102','data','Customer requires their own DPA wording',
-             'impostor@cw')
-     returning proposed_by`, [], 'buyer@cw');
+             'impostor@cw','2000-01-01T00:00:00Z')
+     returning proposed_by,
+       created_at > now() - interval '1 minute' and created_at <= now()
+         as created_time_is_fresh`, [], 'buyer@cw');
   eq(proposed[0].proposed_by, 'buyer@cw',
     'the caller-supplied proposer entered the permanent override record');
+  eq(proposed[0].created_time_is_fresh, true,
+    'the caller-supplied proposal timestamp survived');
   const inForce = await rows(`select 1 from cw.sow_override_in_force where sow_id='AG-102'`);
   eq(inForce.length, 0, 'a proposal is not an authorisation');
   await throws(() => db.exec(`insert into cw.executed_agreement
@@ -727,11 +732,14 @@ await test('with everyone signed, the departure is authorised and the SOW execut
      values (${o.override_id},'required',${req.required_approver_id},'dpo@cw')`,
     [], 'dpo@cw');
   const settled = await queryAs('legal_reviewer',
-    `insert into cw.sow_override_settlement (override_id, settled_by)
-     values (${o.override_id},'impostor@cw') returning settled_by`,
+    `insert into cw.sow_override_settlement (override_id,settled_by,settled_on)
+     values (${o.override_id},'impostor@cw','2099-01-01')
+     returning settled_by, settled_on=current_date as settled_today`,
     [], 'legal@cw');
   eq(settled[0].settled_by, 'legal@cw',
     'the caller-supplied settler entered the permanent override record');
+  eq(settled[0].settled_today, true,
+    'the caller-supplied settlement date survived');
 
   const inForce = await rowsAsLegal(`select category_key from cw.sow_override_in_force
                               where sow_id='AG-102'`);

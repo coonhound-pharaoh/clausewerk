@@ -175,8 +175,10 @@ begin
   if cw.app_role() is not null then
     if tg_table_name = 'sow_override' then
       new.proposed_by := cw.app_actor();
+      new.created_at := now();
     else
       new.settled_by := cw.app_actor();
+      new.settled_on := current_date;
     end if;
   end if;
   return new;
