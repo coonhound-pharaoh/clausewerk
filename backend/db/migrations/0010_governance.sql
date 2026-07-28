@@ -289,6 +289,18 @@ begin
         using errcode = 'check_violation';
     end if;
   end if;
+  -- This function is SECURITY DEFINER, so current_user is the owner inside it.
+  -- The session's SET ROLE value is the reliable governed/owner boundary here.
+  if nullif(current_setting('role', true), 'none') is not null
+     and new.approver is distinct from cw.app_actor() then
+    raise exception
+      'approval by % cannot be recorded by signed-in actor %',
+      new.approver, cw.app_actor()
+      using errcode = 'insufficient_privilege';
+  end if;
+  if nullif(current_setting('role', true), 'none') is not null then
+    new.approved_on := current_date;
+  end if;
   return new;
 end $$;
 

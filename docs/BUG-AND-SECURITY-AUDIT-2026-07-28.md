@@ -4,6 +4,30 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 70 — a Legal session could manufacture named approvals
+
+**Observed defect.** The concession-approval gate checked that the supplied name
+matched the configured requester, attorney, or required approver, but did not
+check that the signed-in actor was that person. A single Legal-role session
+could therefore insert other people's approvals and satisfy the settlement
+gate. It could also forge the append-only approval date.
+
+**Fix.** Governed approval inserts now require the configured approver to equal
+the signed session actor and derive `approved_on` from the database date. The
+SECURITY DEFINER trigger uses the session's `SET ROLE` value to preserve the
+owner-import boundary.
+
+**Regression proof.** A Legal reviewer attempting to record the configured
+requester's approval is refused. The requester and assigned attorney can still
+record their own approvals, and a year-2000 approval date is overwritten.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs` — 47 passed
+- `node backend/db/test/negotiation.test.mjs` — 55 passed
+- `node backend/db/test/review-queue.test.mjs` — 45 passed
+- `node backend/db/test/ladder.test.mjs` — 56 passed
+
 ## Cycle 69 — concession actions accepted forged effective dates
 
 **Observed defect.** Settlement and withdrawal rows correctly bound the

@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S84 — A named approval must be the signed actor's own act — SETTLED 2026-07-28
+A governed concession approval is accepted only when its configured approver is
+the signed session actor. Its effective date comes from the database. Owner
+imports retain explicit historical attribution.
+
 ## S83 — Governed concession action dates are database-derived — SETTLED 2026-07-28
 Application settlements and withdrawals bind their effective date to the
 database clock alongside the authenticated actor. Historical owner imports

@@ -196,12 +196,24 @@ await test('an approval must name the person the record names', async () => {
 });
 
 await test('the Requester and the attorney approve, each by name', async () => {
+  await throws(() => queryAs('legal_reviewer',
+    `insert into cw.concession_approval
+       (concession_id,approver_kind,approver,approved_on)
+     values (${C1},'requester','${BUYER}','2000-01-01')`,
+    [], 'legal@clausewerk'), 'cannot be recorded by signed-in actor',
+    'a Legal-role session manufactured the configured requester approval');
   await mustWrite('requester',
-    `insert into cw.concession_approval (concession_id,approver_kind,approver)
-     values (${C1},'requester','${BUYER}') returning approval_id`, [], BUYER);
+    `insert into cw.concession_approval
+       (concession_id,approver_kind,approver,approved_on)
+     values (${C1},'requester','${BUYER}','2000-01-01')
+     returning approval_id, approved_on=current_date as approved_today`, [], BUYER);
   await mustWrite('legal_reviewer',
     `insert into cw.concession_approval (concession_id,approver_kind,approver)
-     values (${C1},'attorney','${ATTY}') returning approval_id`);
+     values (${C1},'attorney','${ATTY}') returning approval_id`, [], ATTY);
+  const approval = await one(`select approved_on=current_date as approved_today
+                              from cw.concession_approval
+                              where concession_id=${C1} and approver='${BUYER}'`);
+  eq(approval.approved_today, true, 'the caller-supplied approval date survived');
   const m = await queryAs('legal_reviewer',
     `select * from cw.concession_missing_approvers($1)`, [C1]);
   eq(m.length, 0, 'nobody outstanding');
@@ -244,7 +256,7 @@ await test('with no Required Approver configured, two approvals are enough', asy
      values (${C2},'requester','${BUYER}') returning approval_id`, [], BUYER);
   await mustWrite('legal_reviewer',
     `insert into cw.concession_approval (concession_id,approver_kind,approver)
-     values (${C2},'attorney','${ATTY}') returning approval_id`);
+     values (${C2},'attorney','${ATTY}') returning approval_id`, [], ATTY);
   await mustWrite('legal_reviewer',
     `insert into cw.concession_settlement (concession_id,settled_by)
      values (${C2},'legal@clausewerk') returning concession_id`);
@@ -268,7 +280,7 @@ await test('adding a Required Approver changes the outcome', async () => {
      values (${C3},'requester','${BUYER}') returning approval_id`, [], BUYER);
   await mustWrite('legal_reviewer',
     `insert into cw.concession_approval (concession_id,approver_kind,approver)
-     values (${C3},'attorney','${ATTY}') returning approval_id`);
+     values (${C3},'attorney','${ATTY}') returning approval_id`, [], ATTY);
   await throws(() => queryAs('legal_reviewer',
     `insert into cw.concession_settlement (concession_id,settled_by)
      values ($1,'legal@clausewerk')`, [C3]),
@@ -323,7 +335,7 @@ await test('once the Required Approver signs, it settles', async () => {
     `insert into cw.concession_approval
        (concession_id,approver_kind,required_approver_id,approver)
      values (${C3},'required',${ra.required_approver_id},'dpo@clausewerk')
-     returning approval_id`);
+     returning approval_id`, [], 'dpo@clausewerk');
   await mustWrite('legal_reviewer',
     `insert into cw.concession_settlement (concession_id,settled_by)
      values (${C3},'legal@clausewerk') returning concession_id`);
@@ -375,7 +387,7 @@ await test('the same machine proposal settles once humans have signed it', async
      values (${CM},'requester','${BUYER}') returning approval_id`, [], BUYER);
   await mustWrite('legal_reviewer',
     `insert into cw.concession_approval (concession_id,approver_kind,approver)
-     values (${CM},'attorney','${ATTY}') returning approval_id`);
+     values (${CM},'attorney','${ATTY}') returning approval_id`, [], ATTY);
   await mustWrite('legal_reviewer',
     `insert into cw.concession_settlement (concession_id,settled_by)
      values (${CM},'legal@clausewerk') returning concession_id`);
