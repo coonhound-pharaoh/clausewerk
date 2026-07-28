@@ -737,11 +737,19 @@ create policy decide_ticket on cw.review_ticket for update
 create policy read_scoped on cw.review_segment for select using (
   exists (select 1 from cw.review_ticket t where t.ticket_id = review_segment.ticket_id));
 create policy write_scoped on cw.review_segment for insert
-  with check (cw.app_role() in ('requester','legal_reviewer','legal_admin'));
+  with check (
+    cw.app_role() in ('requester','legal_reviewer','legal_admin')
+    and exists (
+      select 1 from cw.review_ticket t
+       where t.ticket_id = review_segment.ticket_id));
 create policy read_scoped on cw.review_candidate for select using (
   exists (select 1 from cw.review_ticket t where t.ticket_id = review_candidate.ticket_id));
 create policy write_scoped on cw.review_candidate for insert
-  with check (cw.app_role() in ('requester','legal_reviewer','legal_admin'));
+  with check (
+    cw.app_role() in ('requester','legal_reviewer','legal_admin')
+    and exists (
+      select 1 from cw.review_ticket t
+       where t.ticket_id = review_candidate.ticket_id));
 
 -- Minting from a verified ticket. ADR-0003 puts this act on the reviewer:
 -- "Verify … mints a clause with derived rationale, a Policy-DERIVED-* citation,

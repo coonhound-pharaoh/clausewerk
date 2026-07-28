@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S71 — Review-evidence writes inherit parent scope — SETTLED 2026-07-28
+Redline segments and review candidates may be appended only when the caller can
+see the parent review ticket through its RLS policy. A requester cannot modify
+another opener’s review evidence by guessing a ticket ID.
+
 ## S70 — Requester review tickets are deal-owner scoped — SETTLED 2026-07-28
 A requester may open an agreement-linked review ticket only on a deal they own.
 Agreement-less tickets and Legal cross-deal review remain available; a foreign

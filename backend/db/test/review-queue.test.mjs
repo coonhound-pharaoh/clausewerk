@@ -454,6 +454,28 @@ await test('the redline segments survive as they arrived', async () => {
   eq(s[1].kind, 'del');
 });
 
+await test('a requester cannot append evidence to another opener’s ticket', async () => {
+  const id = (await one(
+    `select ticket_id from cw.review_ticket order by ticket_id limit 1`)).ticket_id;
+  await throws(() => queryAs('requester', `
+    insert into cw.review_segment (ticket_id,seq,kind,text)
+    values (${id},98,'ins','foreign redline')`,
+    [], 'somebody.else@clausewerk'), 'row-level security');
+  await throws(() => queryAs('requester', `
+    insert into cw.review_candidate
+      (ticket_id,seq,clause_id,version,disposition)
+    values (${id},98,'DP-H-014',1,'suppressed')`,
+    [], 'somebody.else@clausewerk'), 'row-level security');
+  const n = await one(`
+    select
+      (select count(*) from cw.review_segment
+        where ticket_id=${id} and seq=98)::int as segments,
+      (select count(*) from cw.review_candidate
+        where ticket_id=${id} and seq=98)::int as candidates`);
+  eq([n.segments, n.candidates], [0, 0],
+     'foreign child writes must leave neither review-evidence table changed');
+});
+
 await test('a segment cannot be edited after the fact', async () => {
   const id = (await one(`select ticket_id from cw.review_ticket order by ticket_id limit 1`)).ticket_id;
   await throws(() => db.exec(

@@ -4,6 +4,23 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 57 — requesters could append evidence to foreign review tickets
+
+**Observed defect.** Insert policies for `review_segment` and
+`review_candidate` checked only the caller’s role. A requester who knew a
+foreign ticket ID could append redline text or candidate references to another
+person’s review evidence despite being unable to read the parent ticket.
+
+**Fix.** Both child-table insert policies now require the parent review ticket
+to be visible through its own RLS policy, in addition to the permitted role.
+
+**Regression proof.** A foreign requester attempts both child writes against a
+real ticket. Each is refused by RLS and both child-table counts remain zero.
+
+**Validation.**
+
+- `node backend/db/test/review-queue.test.mjs` — 45 passed
+
 ## Cycle 56 — requesters could open review tickets on foreign deals
 
 **Observed defect.** The review-ticket insert policy checked only the role. A
