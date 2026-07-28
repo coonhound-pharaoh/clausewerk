@@ -213,6 +213,10 @@ create trigger agreement_attorney_no_update
   before update on cw.agreement_attorney
   for each row execute function cw.governance_config_no_update();
 
+create trigger required_approver_no_update
+  before update on cw.required_approver
+  for each row execute function cw.governance_config_no_update();
+
 create table cw.concession_approval (
   approval_id   bigserial primary key,
   concession_id bigint not null references cw.concession(concession_id),

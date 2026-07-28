@@ -265,6 +265,35 @@ await test('adding a Required Approver changes the outcome', async () => {
     'the Data Protection Officer was configured a moment ago and now blocks it');
 });
 
+await test('required-approver changes are audited removal and addition', async () => {
+  await throws(() => queryAs('legal_admin', `
+    update cw.required_approver
+       set approver='somebody-else@clausewerk',
+           label='Quiet replacement',
+           added_by='forged-adder@clausewerk'
+     where agreement_id='AG-002' and approver='dpo@clausewerk'`,
+    [], 'legal@clausewerk'), 'cannot be updated in place');
+  await queryAs('legal_admin', `
+    delete from cw.required_approver
+     where agreement_id='AG-002' and approver='dpo@clausewerk'`,
+    [], 'legal@clausewerk');
+  const replacement = await queryAs('legal_admin', `
+    insert into cw.required_approver
+      (agreement_id,body,label,approver,added_by)
+    values ('AG-002','privacy','Data Protection Officer','dpo@clausewerk',
+            'forged-adder@clausewerk')
+    returning added_by`, [], 'legal@clausewerk');
+  eq(replacement[0].added_by, 'legal@clausewerk');
+  const events = await rows(`
+    select event_type from cw.audit_event
+     where subject='AG-002'
+       and event_type in ('required_approver_added','required_approver_removed')
+     order by seq desc limit 2`);
+  eq(events.map(e => e.event_type),
+     ['required_approver_added','required_approver_removed'],
+     'replacement must leave both governance changes in the audit chain');
+});
+
 await test('a requester cannot settle round the Required Approver on their own deal', async () => {
   // The fail-open shape this guards against: a caller who cannot SEE the
   // required-approver configuration must not therefore be told nobody is

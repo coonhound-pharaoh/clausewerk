@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S67 — Required-approver replacement is remove-plus-add — SETTLED 2026-07-28
+Required-approver configuration cannot be updated in place. Replacement is an
+audited removal followed by an actor-bound addition, preserving attribution for
+both governance facts.
+
 ## S66 — Attorney reassignment is remove-plus-add — SETTLED 2026-07-28
 Agreement-attorney configuration cannot be updated in place. Reassignment is
 an audited removal followed by an actor-bound addition, so both the old and new

@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 53 — required-approver replacement bypassed audit
+
+**Observed defect.** A Legal admin could update a `required_approver` row in
+place, silently replacing the person, governance body, label, and `added_by`.
+That bypassed both insert-time actor binding and the existing audited
+removal/addition path.
+
+**Fix.** In-place required-approver updates now raise. Replacement must use the
+already-audited delete followed by an actor-bound insert.
+
+**Regression proof.** A real Legal admin’s silent replacement is refused. A
+delete-plus-insert succeeds, binds `added_by` to the authenticated actor, and
+leaves ordered removal and addition events while settlement enforcement still
+requires the configured person.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs` — 46 passed
+
 ## Cycle 52 — attorney reassignment bypassed provenance and audit
 
 **Observed defect.** A Legal admin could update an `agreement_attorney` row in
