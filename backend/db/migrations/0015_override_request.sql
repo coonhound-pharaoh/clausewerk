@@ -488,6 +488,64 @@ create trigger override_request_evidence_no_edit
   before update on cw.override_request
   for each row execute function cw.override_request_evidence_immutable();
 
+create or replace function cw.override_request_transition_guard() returns trigger
+language plpgsql as $$
+declare derived_state text;
+begin
+  if new.state is not distinct from old.state then
+    if new.closed_at is distinct from old.closed_at then
+      raise exception
+        'override request % closure time is part of its terminal decision and '
+        'cannot be rewritten', old.request_id
+        using errcode = 'restrict_violation';
+    end if;
+    return new;
+  end if;
+
+  if old.state = 'requested' and new.state = 'socialised' then
+    if new.closed_at is not null
+       or not exists (
+         select 1 from cw.override_socialisation s
+          where s.request_id = old.request_id) then
+      raise exception
+        'override request % cannot become socialised without its audience and window',
+        old.request_id using errcode = 'restrict_violation';
+    end if;
+    return new;
+  end if;
+
+  if old.state = 'socialised' and new.state in ('approved','rejected') then
+    if exists (
+         select 1 from cw.override_finding f
+          where f.request_id = old.request_id and f.decision is null) then
+      raise exception
+        'override request % cannot close while findings remain undecided',
+        old.request_id using errcode = 'restrict_violation';
+    end if;
+    select case when exists (
+             select 1 from cw.override_finding f
+              where f.request_id = old.request_id and f.decision = 'approved')
+           then 'approved' else 'rejected' end
+      into derived_state;
+    if new.state is distinct from derived_state or new.closed_at is null then
+      raise exception
+        'override request % terminal state is derived as %, not %',
+        old.request_id, derived_state, new.state
+        using errcode = 'restrict_violation';
+    end if;
+    return new;
+  end if;
+
+  raise exception
+    'override request % cannot move directly from % to %; use the governed workflow',
+    old.request_id, old.state, new.state
+    using errcode = 'restrict_violation';
+end $$;
+
+create trigger override_request_state_transition
+  before update on cw.override_request
+  for each row execute function cw.override_request_transition_guard();
+
 create or replace function cw.override_no_delete() returns trigger
 language plpgsql as $$
 begin

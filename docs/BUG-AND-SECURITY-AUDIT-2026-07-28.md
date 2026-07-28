@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 61 — override workflow states were directly assertable
+
+**Observed defect.** A requester could directly update an untouched override
+request to `socialised` or `withdrawn` and supply `closed_at`, despite having no
+audience, socialisation window, per-finding decisions, governed withdrawal
+path, or audit event.
+
+**Fix.** A transition trigger now requires a socialisation row for
+`requested → socialised`, derives terminal approval/rejection from completed
+findings, refuses unsupported transitions, and prevents later closure-time
+rewrites.
+
+**Regression proof.** Direct requester attempts to assert both `socialised` and
+`withdrawn` are refused, leaving the request in its original open state. The
+complete governed socialisation and decision workflow still passes.
+
+**Validation.**
+
+- `node backend/db/test/override.test.mjs` — 35 passed
+
 ## Cycle 60 — override-request evidence was rewriteable
 
 **Observed defect.** The update privilege required by override workflow

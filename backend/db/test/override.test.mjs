@@ -168,6 +168,21 @@ await test('a requester cannot rewrite an open override’s evidence', async () 
      'the original request evidence must survive the refused rewrite');
 });
 
+await test('a requester cannot assert workflow states directly', async () => {
+  await throws(() => queryAs('requester', `
+    update cw.override_request set state='socialised'
+     where request_id=${REQ}`, [], DANA),
+    'without its audience and window');
+  await throws(() => queryAs('requester', `
+    update cw.override_request set state='withdrawn', closed_at=now()
+     where request_id=${REQ}`, [], DANA),
+    'use the governed workflow');
+  const r = await one(`
+    select state, closed_at from cw.override_request where request_id=${REQ}`);
+  eq([r.state, r.closed_at], ['requested', null],
+     'unsupported state claims must leave the request untouched');
+});
+
 await test('a request on its own passes NOTHING', async () => {
   // The whole product, in one assertion. If this ever returns a row for a
   // request that has only been asked for, the blanket button is back.

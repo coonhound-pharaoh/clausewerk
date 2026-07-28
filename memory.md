@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S75 — Override state is evidence-derived — SETTLED 2026-07-28
+An override becomes socialised only after its audience and window exist, and
+becomes approved or rejected only from completed per-finding decisions.
+Unsupported direct states are refused and a terminal closure time is immutable.
+
 ## S74 — Override-request evidence is immutable — SETTLED 2026-07-28
 After an override request opens, its run, agreement, requester identity,
 opening time, justification, and commercial pressure cannot be rewritten. The
