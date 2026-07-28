@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 35 — agreement-share evidence accepted false actors
+
+**Observed defect.** Legal callers could explicitly override `shared_by` and
+supply any `revoked_by` when sharing or unsharing an executed agreement. The
+false revoker was also copied into the audit chain, while the false sharer was
+shown in the reading room as permanent attribution.
+
+**Fix.** The existing before-write share trigger binds both fields to
+`cw.app_actor()` for application-role sessions before it creates audit events.
+Owner writes remain available for migrations and historical imports.
+
+**Regression proof.** The reading-room suite supplies
+`impostor@clausewerk` for both operations and verifies the stored fields and
+audit payload contain the authenticated Legal actors.
+
+**Validation.**
+
+- `node backend/db/test/reading-room.test.mjs`
+- Result: 23 passed, 0 failed.
+
 ## Cycle 34 — legal-hold evidence accepted false actors
 
 **Observed defect.** The roles allowed to open and release legal holds could

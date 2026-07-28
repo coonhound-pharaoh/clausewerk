@@ -119,8 +119,9 @@ await test('before any share, a viewer sees NO signed agreement at all', async (
 let SHARE;
 await test('a legal reviewer shares one, with a stated purpose', async () => {
   const r = await mustWrite('legal_reviewer',
-    `insert into cw.agreement_share (agreement_id, shared_with, purpose)
-     values ('AG-1', '${SAM}', 'socialising the data-privacy terms')
+    `insert into cw.agreement_share (agreement_id, shared_with, shared_by, purpose)
+     values ('AG-1', '${SAM}', 'impostor@clausewerk',
+             'socialising the data-privacy terms')
      returning share_id, shared_by`, [], PAT);
   SHARE = r[0].share_id;
   eq(r[0].shared_by, PAT, 'the share does not name who made it');
@@ -263,17 +264,21 @@ console.log('\nunsharing is recorded, and the reach closes');
 await test('revoking a share closes the viewer\'s access', async () => {
   await mustWrite('legal_admin',
     `update cw.agreement_share
-        set revoked_by = '${LEGAL}', revoked_at = now()
-      where share_id = ${SHARE} returning share_id`, [], LEGAL);
+        set revoked_by = 'impostor@clausewerk', revoked_at = now()
+      where share_id = ${SHARE} returning share_id, revoked_by`, [], LEGAL)
+    .then(r => eq(r[0].revoked_by, LEGAL,
+      'the caller-supplied revoker entered the permanent share record'));
   const seen = await queryAs('viewer',
     `select agreement_id from cw.executed_agreement`, [], SAM);
   eq(seen, [], 'a revoked share still opens the agreement');
 });
 
 await test('and it is on the chain', async () => {
-  const e = await one(`select subject, payload->>'with' as who
+  const e = await one(`select subject, payload->>'with' as who,
+                              payload->>'by' as revoked_by
                        from cw.audit_event where event_type='agreement_unshared'`);
   eq([e.subject, e.who], ['AG-1', SAM]);
+  eq(e.revoked_by, LEGAL, 'the caller-supplied revoker entered the audit chain');
 });
 
 await test('the row survives — that they COULD see it does not stop being true', async () => {

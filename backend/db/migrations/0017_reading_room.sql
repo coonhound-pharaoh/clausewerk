@@ -73,6 +73,17 @@ comment on table cw.agreement_share is
 create or replace function cw.audit_agreement_share() returns trigger
 language plpgsql as $$
 begin
+  -- A governed application write is attributed to the authenticated person,
+  -- never to a second identity supplied alongside the SQL. The owner has no
+  -- application role and remains able to import historical share records.
+  if cw.app_role() is not null then
+    if tg_op = 'INSERT' then
+      new.shared_by := cw.app_actor();
+    elsif old.revoked_at is null and new.revoked_at is not null then
+      new.revoked_by := cw.app_actor();
+    end if;
+  end if;
+
   if tg_op = 'INSERT' then
     perform cw.audit('agreement_shared', new.agreement_id,
       jsonb_build_object('with', new.shared_with, 'purpose', new.purpose));
