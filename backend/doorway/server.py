@@ -150,8 +150,10 @@ class Handler(BaseHTTPRequestHandler):
             if self._serve_static(parsed.path):
                 return
 
-        selector = {k: v[0] for k, v in parse_qs(parsed.query).items()
-                    if k in QUERY_KEYS and v}
+        selector, refused = self._query(parsed.query)
+        if refused is not None:
+            self._respond(refused)
+            return
 
         self._respond(self.app.handle("GET", self._endpoint(parsed.path),
                                       token=self._token(), query=selector))
@@ -187,6 +189,17 @@ class Handler(BaseHTTPRequestHandler):
         collide. The prefix is stripped here and nowhere else: App knows nothing
         about it, and the test suites address endpoints by their real names."""
         return path[4:] if path.startswith("/api/") else path
+
+    def _query(self, raw: str) -> tuple[dict[str, str], Response | None]:
+        parsed = parse_qs(raw)
+        for key in QUERY_KEYS:
+            if len(parsed.get(key, [])) > 1:
+                return {}, Response(400, {"error": f"{key} was supplied more than once"})
+        return {
+            key: values[0]
+            for key, values in parsed.items()
+            if key in QUERY_KEYS and values
+        }, None
 
     def _token(self) -> str | None:
         values = self.headers.get_all("authorization", [])

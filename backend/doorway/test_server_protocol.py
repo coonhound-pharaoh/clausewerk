@@ -73,3 +73,13 @@ def test_an_explicit_development_origin_is_granted(monkeypatch):
     handler._cors()
 
     assert ("access-control-allow-origin", "http://127.0.0.1:5173") in sent
+
+
+def test_duplicate_document_selectors_are_refused():
+    handler = handler_with_headers()
+
+    query, refused = handler._query("run=RUN-1&run=RUN-2")
+
+    assert query == {}
+    assert refused is not None
+    assert refused.status == 400
