@@ -182,6 +182,7 @@ class NotADocx(ValueError):
 MAX_PART_BYTES = 16 * 1024 * 1024        # one part of the archive, decompressed
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024     # the whole archive, decompressed
 MAX_ELEMENT_DEPTH = 256                  # nested elements in document.xml
+MAX_ELEMENTS = 100_000                    # total elements in document.xml
 
 
 class _BoundedDepthBuilder(ET.TreeBuilder):
@@ -198,14 +199,20 @@ class _BoundedDepthBuilder(ET.TreeBuilder):
         super().__init__()
         self._limit = limit
         self._depth = 0
+        self._elements = 0
 
     def start(self, tag, attrs):
         self._depth += 1
+        self._elements += 1
         if self._depth > self._limit:
             raise NotADocx(
                 f"word/document.xml nests more than {self._limit} elements deep "
                 f"— refused"
             )
+        if self._elements > MAX_ELEMENTS:
+            raise NotADocx(
+                f"word/document.xml contains more than {MAX_ELEMENTS} elements "
+                f"— refused")
         return super().start(tag, attrs)
 
     def end(self, tag):

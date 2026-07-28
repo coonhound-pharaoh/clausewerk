@@ -16,6 +16,7 @@ import pytest
 from engine.docx import (
     CONTENT_TYPES,
     DOC_RELS,
+    MAX_ELEMENTS,
     RELS,
     STYLES,
     W,
@@ -707,6 +708,19 @@ def test_deeply_nested_xml_is_refused_promptly(nesting_bomb):
         f"refused, but only after {elapsed:.1f}s — that is long enough to mean "
         f"the whole document was parsed rather than abandoned at the first "
         f"over-deep element")
+
+
+def test_a_shallow_element_flood_is_refused_before_building_the_tree():
+    document = (
+        f'<w:document xmlns:w="{W}"><w:body>'
+        + "<w:r/>" * (MAX_ELEMENTS + 1)
+        + "</w:body></w:document>")
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("word/document.xml", document)
+
+    with pytest.raises(NotADocx, match="more than 100000 elements"):
+        parse_redlines(buf.getvalue())
 
 
 def test_a_doctype_is_refused():

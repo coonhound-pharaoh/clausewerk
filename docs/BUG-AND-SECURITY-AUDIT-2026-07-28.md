@@ -77,6 +77,25 @@ under the same name and must raise `NotADocx`.
 - `python -m pytest engine -q` — 198 passed; the expected duplicate-name
   warning comes from constructing the hostile regression fixture.
 
+## Cycle 10 — shallow XML element flood
+
+**Observed defect.** DOCX parsing bounded decompressed bytes and nesting depth
+but not total element count. A shallow document containing hundreds of
+thousands of empty elements stays below the byte and depth limits while
+expanding into a disproportionately large in-memory tree.
+
+**Fix.** Count elements in the streaming tree builder and abandon
+`word/document.xml` after 100,000 elements, before completing the tree.
+
+**Regression proof.** A compressed shallow fixture contains 100,001 run
+elements and must raise `NotADocx` at the element budget.
+
+**Validation.**
+
+- `python -m pytest engine/test_docx.py -q -k "shallow_element_flood"`
+- `python -m py_compile engine/docx.py engine/test_docx.py`
+- `python -m pytest engine -q`
+
 ## Cycle 8 — recursive model-provider JSON escaped the adapter
 
 **Observed defect.** A deeply nested but size-bounded provider reply caused

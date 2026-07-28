@@ -2512,3 +2512,8 @@ interrupt the caller's governed work.
 An uploaded Word archive may not contain the same member name twice. Duplicate
 parts are ambiguous across ZIP readers and are refused before any contract text
 is selected or parsed.
+
+## S24 — DOCX XML has an element budget — SETTLED 2026-07-28
+The streaming Word XML parser refuses document.xml after 100,000 elements as
+well as after 256 levels of nesting. A shallow element flood cannot force the
+service to finish building an unbounded object tree.
