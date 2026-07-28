@@ -118,6 +118,10 @@ MIME = {
 }
 
 
+def _reject_non_finite_json(value: str) -> None:
+    raise ValueError(f"{value} is not a JSON number")
+
+
 class Handler(BaseHTTPRequestHandler):
     # Set by serve() before the server starts.
     app: App = None  # type: ignore[assignment]
@@ -194,8 +198,8 @@ class Handler(BaseHTTPRequestHandler):
         if len(raw) != length:
             return None, Response(400, {"error": "that request arrived incomplete"})
         try:
-            parsed = json.loads(raw or b"null")
-        except (json.JSONDecodeError, UnicodeDecodeError):
+            parsed = json.loads(raw or b"null", parse_constant=_reject_non_finite_json)
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
             # Malformed JSON is the caller's mistake, not a refusal. Saying
             # "refused" here would send somebody to argue about permissions.
             return None, Response(400, {"error": "that request was not valid JSON"})

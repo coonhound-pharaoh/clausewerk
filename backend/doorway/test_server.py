@@ -675,6 +675,24 @@ def test_chunked_request_is_refused_instead_of_desynchronising_the_connection():
     assert not app.seen
 
 
+@pytest.mark.parametrize("token", ("NaN", "Infinity", "-Infinity"))
+def test_non_finite_json_numbers_are_refused(token):
+    app = Records(Response(200, {"ok": True}))
+    payload = f'{{"value": {token}}}'.encode()
+
+    with stub_serving(app) as base:
+        request = urllib.request.Request(
+            base + "/api/anything", method="POST", data=payload,
+            headers={"content-type": "application/json"})
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            urllib.request.urlopen(request)
+        body = json.loads(refused.value.read())
+
+    assert refused.value.code == 400
+    assert body["error"] == "that request was not valid JSON"
+    assert not app.seen
+
+
 # A DECLARED LENGTH LARGER THAN WHAT ARRIVES is guarded in `_read_document`
 # (the short-read check) and is deliberately NOT tested here: proving it needs a
 # client that promises bytes and then stops, which leaves the socket waiting for

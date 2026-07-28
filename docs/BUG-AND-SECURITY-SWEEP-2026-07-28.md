@@ -29,3 +29,16 @@ Only the explicitly supported fixed-length request framing reaches the app.
 **Proof.**
 `test_chunked_request_is_refused_instead_of_desynchronising_the_connection`
 sends a real chunked request and proves it receives 400 without dispatch.
+
+## 3. Non-finite numbers crossed the JSON boundary
+
+**Risk.** Python accepts `NaN`, `Infinity`, and `-Infinity` as JSON even though
+the JSON standard and PostgreSQL do not. These special values also make normal
+range comparisons unreliable, so a malformed caller value could survive one
+check and fail much later as a service error.
+
+**Fix.** The doorway's single JSON parser now rejects all non-finite constants
+as malformed JSON.
+
+**Proof.** `test_non_finite_json_numbers_are_refused` covers all three spellings
+and proves each gets 400 before application dispatch.
