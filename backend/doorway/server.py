@@ -199,7 +199,7 @@ class Handler(BaseHTTPRequestHandler):
             return None, Response(400, {"error": "that request arrived incomplete"})
         try:
             parsed = json.loads(raw or b"null", parse_constant=_reject_non_finite_json)
-        except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError, RecursionError):
             # Malformed JSON is the caller's mistake, not a refusal. Saying
             # "refused" here would send somebody to argue about permissions.
             return None, Response(400, {"error": "that request was not valid JSON"})

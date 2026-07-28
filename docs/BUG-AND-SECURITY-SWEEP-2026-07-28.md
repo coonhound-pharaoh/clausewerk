@@ -42,3 +42,17 @@ as malformed JSON.
 
 **Proof.** `test_non_finite_json_numbers_are_refused` covers all three spellings
 and proves each gets 400 before application dispatch.
+
+## 4. Deep JSON escaped request-error handling
+
+**Risk.** A deeply nested JSON body below the byte limit exhausted Python's
+parser depth. The exception skipped the malformed-input branch and reached the
+last-resort 500 handler, giving an unauthenticated caller a repeatable internal
+failure path.
+
+**Fix.** Parser-depth exhaustion is now treated like every other unreadable JSON
+body and refused with 400.
+
+**Proof.**
+`test_excessively_nested_json_is_a_bad_request_not_a_service_failure` sends
+2,000 nested levels and proves the app is never called.
