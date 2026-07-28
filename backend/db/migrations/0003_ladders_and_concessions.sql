@@ -35,6 +35,9 @@ begin
   if cw.app_role() = 'requester' then
     new.requester := cw.app_actor();
   end if;
+  if cw.app_role() is not null then
+    new.created_at := now();
+  end if;
   return new;
 end $$;
 

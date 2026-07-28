@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 85 — agreement creation time was caller-controlled
+
+**Observed defect.** A requester opening an agreement was bound as its owner,
+but could supply the immutable `created_at` timestamp. This allowed a governed
+deal record and its lifecycle history to claim it existed at an arbitrary time.
+
+**Fix.** The agreement insert trigger now derives `created_at` from the
+database clock for every governed role while preserving legal-admin assignment
+of the requester and owner-mode historical imports.
+
+**Regression proof.** A requester opens a deal with a year-2099 timestamp and a
+forged owner. The row stores the authenticated requester and a timestamp inside
+the current statement window.
+
+**Validation.**
+
+- `node backend/db/test/roles.test.mjs` — 20 passed
+- `node backend/db/test/executed.test.mjs` — 53 passed
+
 ## Cycle 84 — concession proposal chronology was caller-controlled
 
 **Observed defect.** Governed concession proposals bound the authenticated

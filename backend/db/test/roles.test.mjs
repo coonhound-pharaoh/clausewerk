@@ -230,11 +230,16 @@ await test('a viewer can still read clause text', async () => {
 
 await test('a requester can still open a deal of their own', async () => {
   const opened = await queryAs('requester',
-    `insert into cw.agreement (agreement_id,counterparty,requester)
-     values ('AG-NEW','Fabrikam','rival@clausewerk')
-     returning requester`, [], 'buyer@clausewerk');
+    `insert into cw.agreement (agreement_id,counterparty,requester,created_at)
+     values ('AG-NEW','Fabrikam','rival@clausewerk','2099-01-01 00:00:00+00')
+     returning requester,
+               created_at between statement_timestamp() - interval '5 seconds'
+                              and statement_timestamp() as created_now`,
+    [], 'buyer@clausewerk');
   assert(opened[0].requester === 'buyer@clausewerk',
     `a requester injected a deal into ${opened[0].requester}'s ownership scope`);
+  assert(opened[0].created_now,
+    'a requester supplied the immutable agreement creation time');
 });
 
 await test('a legal reviewer can still record their own act', async () => {
