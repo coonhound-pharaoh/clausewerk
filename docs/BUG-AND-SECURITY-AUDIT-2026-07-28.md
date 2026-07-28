@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 90 — advisory-judgment creation time was caller-controlled
+
+**Observed defect.** Advisory-assessment inserts bound the authenticated
+requester but accepted caller-supplied `created_at`. Because model judgments
+are append-only evidence, a caller could permanently forge when a judgment was
+requested and recorded.
+
+**Fix.** The advisory requester-binding trigger now derives `created_at` from
+the database clock for governed writes. Owner historical imports remain
+explicit.
+
+**Regression proof.** A legal admin records a judgment with a forged requester
+and a year-2099 timestamp. The stored requester is authenticated and the
+timestamp falls inside the current statement window.
+
+**Validation.**
+
+- `node backend/db/test/advisory.test.mjs` — 20 passed
+- `node backend/db/test/review-queue.test.mjs` — 45 passed
+
 ## Cycle 89 — draft creation and expiry chronology was caller-controlled
 
 **Observed defect.** Governed clause-draft inserts bound the authenticated

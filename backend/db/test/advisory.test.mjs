@@ -117,12 +117,14 @@ const record = (id, { outcome = 'recorded', score = 0.4, basis = 'a stated basis
   queryAs(role, `
     insert into cw.advisory_assessment
       (ticket_id, baseline_text, compared_text, judgment_kind, outcome, score,
-       basis, absent_reason, model, model_version, prompt, requested_by)
+       basis, absent_reason, model, model_version, prompt, requested_by,created_at)
     values (${id}, ${q(AI_TEXT)}, ${q(APPROVED)}, 'semantic_difference',
             ${q(outcome)}, ${score === null ? 'null' : score}, ${q(basis)},
             ${q(absent)}, ${q(model)}, ${q(version)}, ${q(prompt)},
-            'forged-requester@clausewerk')
-    returning assessment_id, requested_by`, [], who);
+            'forged-requester@clausewerk','2099-01-01 00:00:00+00')
+    returning assessment_id, requested_by,
+              created_at between statement_timestamp() - interval '5 seconds'
+                             and statement_timestamp() as created_now`, [], who);
 
 // ════════════════════════════════════════════════════════════════════════════
 // A judgment is written once and never rewritten
@@ -135,6 +137,8 @@ await test('a judgment can be recorded', async () => {
   assert(r[0].assessment_id, 'nothing came back from the insert');
   eq(r[0].requested_by, LEGAL,
      'append-only provenance must name the authenticated requester');
+  eq(r[0].created_now, true,
+     'append-only provenance must use the database recording time');
 });
 
 await test('a recorded judgment cannot be rewritten', async () => {
