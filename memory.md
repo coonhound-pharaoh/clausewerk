@@ -5,6 +5,12 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S64 — Published supersessions are append-only — SETTLED 2026-07-28
+A supersession changes live clause selectability and is historical evidence.
+After publication it cannot be updated, deleted, or truncated, including
+through owner-level maintenance paths; corrections require new wording and a
+new decision.
+
 ## S63 — Supersession approval binds actor to session — SETTLED 2026-07-28
 Application-role supersession inserts bind `approver` to `cw.app_actor()`. The
 irreversible library decision and its audit event cannot name a second

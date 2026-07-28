@@ -386,6 +386,31 @@ await test('superseding marks the predecessor superseded, not retired', async ()
                        where clause_id='DP-H-014' and version=2`);
   eq(s.state, 'active'); eq(s.selectable, true);
 });
+await test('a published supersession cannot be rewritten', async () => {
+  await throws(() => queryAs('legal_admin', `
+    update cw.supersession
+       set reason='quietly changed after approval',
+           predecessor_disposition='run_off',
+           approver='somebody-else@clausewerk'
+     where clause_id='DP-H-014' and predecessor_version=1`,
+    [], 'test@clausewerk'), 'immutable');
+  const s = await one(`select reason, predecessor_disposition, approver
+                         from cw.supersession
+                        where clause_id='DP-H-014' and predecessor_version=1`);
+  eq(s.reason, 'Added SCC module for post-2026 transfers');
+  eq(s.predecessor_disposition, 'retire_now');
+  eq(s.approver, 'test@clausewerk');
+});
+await test('a published supersession cannot be deleted or truncated', async () => {
+  await throws(() => db.exec(`delete from cw.supersession
+                              where clause_id='DP-H-014' and predecessor_version=1`),
+    'cannot be deleted');
+  await throws(() => db.exec('truncate cw.supersession'),
+    'cannot be truncated');
+  const s = await one(`select count(*)::int n from cw.supersession
+                        where clause_id='DP-H-014' and predecessor_version=1`);
+  eq(s.n, 1, 'the history must remain after both refused removal paths');
+});
 await test('a version can be superseded at most once', async () => {
   await throws(() => db.exec(`insert into cw.supersession
     (clause_id,predecessor_version,successor_version,reason,approver)

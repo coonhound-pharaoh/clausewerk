@@ -235,6 +235,39 @@ create trigger supersession_bind_approver
   before insert on cw.supersession
   for each row execute function cw.bind_supersession_approver();
 
+-- A supersession changes which approved wording can be selected. Once
+-- published, every field is historical evidence and corrections are new
+-- clause versions and a new decision, never edits to the old decision.
+create or replace function cw.supersession_immutable() returns trigger
+language plpgsql as $$
+begin
+  raise exception
+    'supersession % (%@v% to v%) is immutable; publish a new clause version '
+    'and decision instead',
+    old.id, old.clause_id, old.predecessor_version, old.successor_version
+    using errcode = 'restrict_violation';
+end $$;
+
+create trigger supersession_no_edit
+  before update on cw.supersession
+  for each row execute function cw.supersession_immutable();
+
+create or replace function cw.supersession_no_delete() returns trigger
+language plpgsql as $$
+begin
+  raise exception
+    'supersession % cannot be deleted: clause history must stay resolvable',
+    old.id using errcode = 'restrict_violation';
+end $$;
+
+create trigger supersession_no_delete
+  before delete on cw.supersession
+  for each row execute function cw.supersession_no_delete();
+
+create trigger supersession_no_truncate
+  before truncate on cw.supersession
+  for each statement execute function cw.no_truncate();
+
 create or replace view cw.clause_version_state as
 select
   v.clause_id,

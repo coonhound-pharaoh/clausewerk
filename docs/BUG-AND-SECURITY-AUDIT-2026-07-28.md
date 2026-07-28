@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 50 — supersession history was rewriteable and removable
+
+**Observed defect.** A published supersession controls which clause version is
+selectable, but every decision field could be updated after approval. The
+database owner could also delete or truncate the records without an explicit
+guard. None of those changes emitted a supersession audit event, so clause
+history could silently change or disappear.
+
+**Fix.** Supersession rows are now append-only: before-update and before-delete
+triggers refuse row mutation and removal, and a statement trigger refuses
+truncate. Each refusal applies even to owner-level maintenance paths.
+
+**Regression proof.** A real Legal admin attempts to rewrite the reason,
+disposition, and approver, while owner-level statements attempt delete and
+truncate. Every operation is refused and the original decision remains intact.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 80 passed
+- `node backend/db/test/writer-sql.test.mjs` — 16 passed
+
 ## Cycle 49 — supersessions accepted false approvers
 
 **Observed defect.** A Legal admin superseding approved language could supply
