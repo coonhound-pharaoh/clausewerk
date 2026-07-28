@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 101 — category short codes could invalidate existing clause IDs
+
+**Observed defect.** Clause inserts enforce that an ID prefix matches its
+category's short code, but legal admins could later update the category short
+code. That update touches no clause row, so every existing stable ID could be
+made to disagree with its category while bypassing the clause-side trigger.
+
+**Fix.** A category update trigger now refuses short-code changes once any
+clause uses the category. Empty categories remain correctable before use.
+
+**Regression proof.** A legal admin attempts to change Data Privacy from `DP`
+to `XX` after `DP-*` clauses exist. The update is refused and `DP` remains the
+stored code.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 86 passed
+- `node backend/db/test/writer-sql.test.mjs` — 16 passed
+
 ## Cycle 100 — clause-identity creation time remained rewritable
 
 **Observed defect.** Governed clause creation now derived `created_at`, but the

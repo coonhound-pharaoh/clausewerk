@@ -89,6 +89,14 @@ await test('short code format is enforced', async () => {
   await throws(() => db.exec(`insert into cw.category (key,label,short) values ('x','X','abc')`));
 });
 
+await test('a category short code cannot invalidate existing clause IDs', async () => {
+  await throws(() => queryAs('legal_admin', `
+    update cw.category set short='XX' where key='data'`,
+    [], 'test@clausewerk'), 'embedded in existing clause IDs');
+  const r = await one(`select short from cw.category where key='data'`);
+  eq(r.short, 'DP', 'the category code changed underneath its clause IDs');
+});
+
 // ── WP-23 · the ID must agree with the category (finding D8) ────────────────
 console.log('\nclause ids agree with their category (WP-23, finding D8)');
 

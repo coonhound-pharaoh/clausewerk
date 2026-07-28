@@ -31,6 +31,26 @@ create table cw.clause (
 
 create index on cw.clause (category_key, severity);
 
+-- A category's short code is embedded in every clause ID under it. Once a
+-- clause exists, changing the code would invalidate those stable identities
+-- without touching the clause rows or firing their consistency trigger.
+create or replace function cw.category_short_after_use_immutable() returns trigger
+language plpgsql as $$
+begin
+  if new.short is distinct from old.short
+     and exists (select 1 from cw.clause where category_key = old.key) then
+    raise exception
+      'category % short code % is embedded in existing clause IDs and cannot '
+      'be changed to %',
+      old.key, old.short, new.short using errcode = 'restrict_violation';
+  end if;
+  return new;
+end $$;
+
+create trigger category_short_after_use_immutable
+  before update on cw.category
+  for each row execute function cw.category_short_after_use_immutable();
+
 -- ════════════════════════════════════════════════════════════════════════════
 -- THE ID MUST AGREE WITH THE CATEGORY (WP-23 · finding D8)
 -- ════════════════════════════════════════════════════════════════════════════
