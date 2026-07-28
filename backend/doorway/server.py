@@ -102,6 +102,10 @@ MAX_BODY = 1_000_000
 # is no such setting and inventing one would settle the question quietly.
 MAX_DOCUMENT_BYTES = 10_000_000
 
+# One incomplete client must not own one server thread forever. This covers
+# request headers and bodies as well as a client that stops reading a response.
+REQUEST_TIMEOUT_SECONDS = 30
+
 # The COMPLETE list of what a browser may name in a query string, in the same
 # spirit as reads.READS: one greppable line, so adding a second key is a visible
 # act rather than a condition buried in a handler. Anything else the browser
@@ -129,6 +133,10 @@ class Handler(BaseHTTPRequestHandler):
 
     server_version = "clausewerk"
     sys_version = ""
+
+    def setup(self) -> None:
+        super().setup()
+        self.connection.settimeout(REQUEST_TIMEOUT_SECONDS)
 
     # ── The request ─────────────────────────────────────────────────────────
 

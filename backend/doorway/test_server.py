@@ -783,6 +783,25 @@ def test_authenticated_origin_cannot_be_embedded_for_clickjacking():
             assert reply.headers["x-frame-options"] == "DENY"
 
 
+def test_incomplete_client_cannot_hold_a_server_thread_forever():
+    app = Records(Response(200, {"ok": True}))
+    held = server_module.REQUEST_TIMEOUT_SECONDS
+    server_module.REQUEST_TIMEOUT_SECONDS = 0.1
+    try:
+        with stub_serving(app) as base:
+            parsed = urllib.parse.urlparse(base)
+            with socket.create_connection(
+                    (parsed.hostname, parsed.port), timeout=2) as client:
+                client.sendall(b"POST /api/sign-in HTTP/1.1\r\nHost: localhost\r\n")
+                client.settimeout(2)
+                assert client.recv(1) == b"", (
+                    "the server kept an incomplete request connected")
+    finally:
+        server_module.REQUEST_TIMEOUT_SECONDS = held
+
+    assert not app.seen
+
+
 # A DECLARED LENGTH LARGER THAN WHAT ARRIVES is guarded in `_read_document`
 # (the short-read check) and is deliberately NOT tested here: proving it needs a
 # client that promises bytes and then stops, which leaves the socket waiting for

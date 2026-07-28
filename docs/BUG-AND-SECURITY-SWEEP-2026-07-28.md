@@ -116,3 +116,16 @@ its real buttons, causing a signed-in person to perform an unintended act.
 
 **Proof.** `test_authenticated_origin_cannot_be_embedded_for_clickjacking`
 verifies the policy on both API response branches.
+
+## 10. Incomplete clients could hold server threads forever
+
+**Risk.** Accepted sockets had no read or write deadline. A client could send
+only part of a request and keep its dedicated server thread occupied forever;
+enough slow connections would exhaust the doorway without authenticating.
+
+**Fix.** Every accepted connection now has a 30-second I/O timeout covering
+headers, bodies, and response writes.
+
+**Proof.** `test_incomplete_client_cannot_hold_a_server_thread_forever` lowers
+the configured deadline for the test, sends only half a header, and proves the
+connection closes without application dispatch.
