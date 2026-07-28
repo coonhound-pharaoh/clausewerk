@@ -193,15 +193,32 @@ class Handler(BaseHTTPRequestHandler):
         token = credentials.strip()
         return token if separator and scheme.casefold() == "bearer" and token else None
 
-    def _read_body(self) -> tuple[dict | None, Response | None]:
-        if self.headers.get("transfer-encoding"):
-            return None, Response(400, {"error": "transfer encoding is not supported"})
+    def _content_length(self) -> tuple[int | None, Response | None]:
+        """Return one unambiguous request length.
+
+        Multiple Content-Length fields are refused even when their values agree.
+        An intermediary is allowed to combine or choose between them differently
+        from this server; accepting either spelling would make the request
+        boundary depend on which hop was asked.
+        """
+        values = self.headers.get_all("content-length", [])
+        if len(values) > 1:
+            return None, Response(400, {"error": "content length is ambiguous"})
         try:
-            length = int(self.headers.get("content-length") or 0)
+            length = int(values[0]) if values else 0
         except ValueError:
             return None, Response(400, {"error": "unreadable request"})
         if length < 0:
             return None, Response(400, {"error": "content length cannot be negative"})
+        return length, None
+
+    def _read_body(self) -> tuple[dict | None, Response | None]:
+        if self.headers.get("transfer-encoding"):
+            return None, Response(400, {"error": "transfer encoding is not supported"})
+        length, refused = self._content_length()
+        if refused is not None:
+            return None, refused
+        assert length is not None
         if length > MAX_BODY:
             return None, Response(413, {"error": "that request is too large"})
         if length <= 0:
@@ -253,12 +270,10 @@ class Handler(BaseHTTPRequestHandler):
         """
         if self.headers.get("transfer-encoding"):
             return None, Response(400, {"error": "transfer encoding is not supported"})
-        try:
-            length = int(self.headers.get("content-length") or 0)
-        except ValueError:
-            return None, Response(400, {"error": "unreadable request"})
-        if length < 0:
-            return None, Response(400, {"error": "content length cannot be negative"})
+        length, refused = self._content_length()
+        if refused is not None:
+            return None, refused
+        assert length is not None
         if length > MAX_DOCUMENT_BYTES:
             # Refused UNREAD, which is the entire point of checking the header
             # first: a service that reads a gigabyte before deciding it did not
