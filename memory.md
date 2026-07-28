@@ -2522,3 +2522,8 @@ service to finish building an unbounded object tree.
 Unsupported compression and encrypted ZIP members are malformed Word uploads,
 not internal service failures. The document parser translates their zipfile
 exceptions into NotADocx at the archive boundary.
+
+## S26 — Redline segments preserve Word line breaks — SETTLED 2026-07-28
+Kept, inserted, and deleted runs retain w:br as newline characters when
+reconstructing original and accepted redline text. Review cannot silently join
+lines the vendor kept separate.

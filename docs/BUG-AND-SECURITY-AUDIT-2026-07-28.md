@@ -113,6 +113,25 @@ fields patched to unsupported method 99 and must raise `NotADocx`.
 - `python -m pytest engine/test_docx.py -q -k "unsupported_zip_compression"`
 - `python -m py_compile engine/docx.py engine/test_docx.py`
 
+## Cycle 12 — line breaks vanished from redline text
+
+**Observed defect.** The redline parser extracted text nodes but ignored
+`w:br` elements inside kept, inserted, and deleted runs. Its accepted and
+original text could therefore differ from the vendor's actual proposed text.
+
+**Fix.** Extract each run in document order and preserve Word line-break
+elements as newline characters for every segment kind.
+
+**Regression proof.** One changed paragraph carries a line break in its kept,
+deleted, and inserted runs; both reconstructed texts and all three segments
+must retain those breaks.
+
+**Validation.**
+
+- `python -m pytest engine/test_docx.py -q -k "line_breaks_survive"`
+- `python -m py_compile engine/docx.py engine/test_docx.py`
+- `python -m pytest engine -q`
+
 ## Cycle 8 — recursive model-provider JSON escaped the adapter
 
 **Observed defect.** A deeply nested but size-bounded provider reply caused

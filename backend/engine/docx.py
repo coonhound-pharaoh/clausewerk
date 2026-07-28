@@ -480,9 +480,14 @@ def _runs_of(parent: ET.Element, kind: str) -> list[Segment]:
     tag = f"{{{W}}}delText" if kind == "del" else f"{{{W}}}t"
     out = []
     for r in parent.iter(f"{{{W}}}r"):
-        for t in r.iter(tag):
-            if t.text:
-                out.append(Segment(kind, t.text))
+        pieces: list[str] = []
+        for node in r.iter():
+            if node.tag == tag and node.text:
+                pieces.append(node.text)
+            elif node.tag == BR:
+                pieces.append("\n")
+        if pieces:
+            out.append(Segment(kind, "".join(pieces)))
     return out
 
 
@@ -519,9 +524,7 @@ def parse_redlines(data: bytes, *, context_chars: int = 160) -> tuple[Redline, .
                 if tag == P:
                     continue                       # its own paragraph
                 if tag == R:
-                    for t in child.iter(T):
-                        if t.text:
-                            segments.append(Segment("keep", t.text))
+                    segments.extend(_runs_of(child, "keep"))
                 elif tag in (INS, MOVE_TO):
                     # A move-to is an arrival: for adjudication it is an insertion.
                     segments.extend(_runs_of(child, "ins"))

@@ -374,6 +374,26 @@ def test_deleted_text_is_not_part_of_the_document():
 # not as verified Word fidelity.
 
 
+def test_line_breaks_survive_in_every_redline_segment_kind():
+    document = (
+        f'<w:document xmlns:w="{W}"><w:body><w:p>'
+        '<w:r><w:t>A</w:t><w:br/><w:t>B</w:t></w:r>'
+        '<w:del><w:r><w:delText>C</w:delText><w:br/>'
+        '<w:delText>D</w:delText></w:r></w:del>'
+        '<w:ins><w:r><w:t>E</w:t><w:br/><w:t>F</w:t></w:r></w:ins>'
+        '</w:p></w:body></w:document>')
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml", document)
+
+    redline = parse_redlines(buf.getvalue())[0]
+
+    assert redline.original_text == "A\nBC\nD"
+    assert redline.accepted_text == "A\nBE\nF"
+    assert [segment.text for segment in redline.segments] == [
+        "A\nB", "C\nD", "E\nF"]
+
+
 def containered_docx(inner: str) -> bytes:
     """One paragraph whose runs are wrapped in whatever container is passed in."""
     document = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
