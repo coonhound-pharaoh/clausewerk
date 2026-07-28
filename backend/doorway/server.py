@@ -346,7 +346,11 @@ class Handler(BaseHTTPRequestHandler):
         """Decode one static path without accepting malformed percent escapes."""
         if re.search(r"%(?![0-9A-Fa-f]{2})", path):
             return None, Response(400, {"error": "the path is not valid URL encoding"})
-        return unquote(path).lstrip("/") or "index.html", None
+        try:
+            decoded = unquote(path, errors="strict")
+        except UnicodeDecodeError:
+            return None, Response(400, {"error": "the path is not valid UTF-8"})
+        return decoded.lstrip("/") or "index.html", None
 
     def _serve_static(self, path: str) -> bool:
         """Serve a file from the static root, or report that there is none.
