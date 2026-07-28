@@ -2497,3 +2497,8 @@ Malformed escapes are refused before they can become literal identifier text.
 Only expected database refusals and caller data errors may leave as 4xx
 responses. Broken statements and other unexpected psycopg errors are logged
 with their diagnostic detail and returned as redacted 500 service failures.
+
+## S21 — Model replies are memory-bounded — SETTLED 2026-07-28
+The advisory adapter accepts at most one megabyte from the model provider. It
+reads one sentinel byte beyond the limit and records an absent judgment instead
+of parsing or retaining an oversized reply.

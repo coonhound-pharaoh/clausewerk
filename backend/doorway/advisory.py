@@ -69,6 +69,7 @@ MODEL_VARIABLE = "CLAUSEWERK_OPENAI_MODEL"
 DEFAULT_MODEL = "gpt-4o-mini"
 ENDPOINT = "https://api.openai.com/v1/chat/completions"
 TIMEOUT_SECONDS = 20
+MAX_RESPONSE_BYTES = 1_000_000
 
 # What the provenance record says when the call never got far enough for the
 # provider to name a build. Not blank: a blank in a provenance column reads as
@@ -166,7 +167,11 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
 
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as reply:
-            payload = json.loads(reply.read().decode("utf-8"))
+            raw = reply.read(MAX_RESPONSE_BYTES + 1)
+            if len(raw) > MAX_RESPONSE_BYTES:
+                return _absent("the model's reply was too large to accept",
+                               model=model, prompt=prompt, inputs=inputs)
+            payload = json.loads(raw.decode("utf-8"))
     except urllib.error.HTTPError as refused:
         # The provider's own status, not its body: a body can carry account
         # detail, and this string is written into an evidence row.

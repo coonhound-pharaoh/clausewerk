@@ -26,6 +26,8 @@ it fails on correct work.
 
 from __future__ import annotations
 
+from io import BytesIO
+
 import psycopg
 import pytest
 
@@ -172,6 +174,23 @@ def test_the_adapter_never_raises_at_its_caller(monkeypatch):
 
 
 # ── 2. The pipeline, end to end, with no model in the world ─────────────────
+
+
+def test_the_adapter_bounds_the_providers_response(monkeypatch):
+    class Reply(BytesIO):
+        def close(self):
+            pass
+
+    monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
+    oversized = Reply(b"x" * (advisory.MAX_RESPONSE_BYTES + 1))
+    monkeypatch.setattr(advisory.urllib.request, "urlopen",
+                        lambda request, timeout: oversized)
+
+    judgment = advisory.judge_semantic_difference(AI_TEXT, APPROVED)
+
+    assert judgment.outcome == "absent"
+    assert "too large" in judgment.absent_reason
+    assert oversized.tell() == advisory.MAX_RESPONSE_BYTES + 1
 
 
 def test_a_judgment_asked_for_without_a_model_is_answered_not_refused(people, db):

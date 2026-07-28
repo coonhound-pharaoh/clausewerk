@@ -41,6 +41,23 @@ produce a redacted 500 while retaining its diagnostic detail only in stderr.
 - `python -m pytest doorway/test_refusals.py -q`
 - `python -m py_compile doorway/refusals.py doorway/test_refusals.py`
 
+## Cycle 7 — unbounded model-provider response
+
+**Observed defect.** The advisory adapter read the provider's entire HTTP
+response into memory before parsing it. A malfunctioning or compromised
+provider could exhaust the service with an arbitrarily large response.
+
+**Fix.** Read at most one byte beyond a one-megabyte response budget. If that
+sentinel byte exists, discard the reply and record an absent judgment.
+
+**Regression proof.** A fake provider sends one byte over the limit; the adapter
+reads only the bounded amount and returns an absence naming the oversized reply.
+
+**Validation.**
+
+- `python -m pytest doorway/test_advisory.py -q -k "adapter"`
+- `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
+
 ## Cycle 5 — malformed query percent escapes
 
 **Observed defect.** Query parsing accepted malformed percent escapes literally.
