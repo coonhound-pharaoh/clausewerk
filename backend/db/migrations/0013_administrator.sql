@@ -513,6 +513,7 @@ begin
   -- are exempt because the owner performs them holding no application identity.
   if not new.is_bootstrap then
     new.acted_by := cw.app_actor();
+    new.acted_at := now();
   end if;
 
   select * into acct from cw.account where person = new.person;

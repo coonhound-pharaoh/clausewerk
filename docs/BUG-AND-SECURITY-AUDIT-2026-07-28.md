@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 74 — role actions accepted forged immutable timestamps
+
+**Observed defect.** Non-bootstrap role grants, countersigns, and revocations
+bound `acted_by` to the signed actor but accepted caller-supplied `acted_at`.
+The append-only access history could therefore be backdated or future-dated,
+distorting access reviews and dormancy reporting.
+
+**Fix.** The role-grant rules trigger now derives `acted_at` from the database
+clock whenever it binds a governed actor. Bootstrap rows retain their explicit
+owner-authored historical semantics.
+
+**Regression proof.** An Administrator supplies a year-2000 grant timestamp and
+a Legal admin supplies a year-2099 countersign timestamp. Both rows store times
+within the current transition window while countersign and revocation behavior
+remains unchanged.
+
+**Validation.**
+
+- `node backend/db/test/role-grant.test.mjs` — 42 passed
+- `node backend/db/test/administrator.test.mjs` — 46 passed
+
 ## Cycle 73 — delegation authority timestamps were caller-controlled
 
 **Observed defect.** Records-delegation writes bound the Administrator actor but

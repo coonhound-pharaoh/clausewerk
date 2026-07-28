@@ -73,8 +73,9 @@ const account = (person, name, role) => execAs('administrator',
 
 const grant = async (person, role, reason = 'joining the team') =>
   (await queryAs('administrator',
-    `insert into cw.role_grant (action,person,role,reason)
-     values ('granted',$1,$2,$3) returning grant_id`, [person, role, reason], ADMIN))[0].grant_id;
+    `insert into cw.role_grant (action,person,role,reason,acted_at)
+     values ('granted',$1,$2,$3,'2000-01-01T00:00:00Z')
+     returning grant_id`, [person, role, reason], ADMIN))[0].grant_id;
 
 const effective = async (person) => {
   const r = await rows(`select role from cw.effective_role where person=$1`, [person]);
@@ -154,6 +155,11 @@ let PAT_GRANT;
 await test('a proposed legal reviewer confers NOTHING before countersign', async () => {
   await account(PAT, 'Pat Nkemi', 'legal_reviewer');
   PAT_GRANT = await grant(PAT, 'legal_reviewer', 'joining the contracts team');
+  const g = await one(`select acted_at > now() - interval '1 minute'
+                             and acted_at <= now() as acted_time_is_fresh
+                        from cw.role_grant where grant_id=${PAT_GRANT}`);
+  eq(g.acted_time_is_fresh, true,
+    'the caller-supplied grant timestamp survived');
   eq(await effective(PAT), null,
     'an uncountersigned Legal grant conferred a role');
 });
@@ -198,9 +204,14 @@ await test('no other role can countersign either', async () => {
 
 await test('a legal admin countersigns, and the role is effective immediately', async () => {
   await mustWrite('legal_admin',
-    `insert into cw.role_grant (action,person,role,grant_ref)
-     values ('countersigned','${PAT}','legal_reviewer',${PAT_GRANT})
-     returning grant_id`, [], LEGAL);
+    `insert into cw.role_grant (action,person,role,grant_ref,acted_at)
+     values ('countersigned','${PAT}','legal_reviewer',${PAT_GRANT},
+             '2099-01-01T00:00:00Z')
+     returning grant_id,
+       acted_at > now() - interval '1 minute' and acted_at <= now()
+         as acted_time_is_fresh`, [], LEGAL)
+    .then(r => eq(r[0].acted_time_is_fresh, true,
+      'the caller-supplied countersign timestamp survived'));
   eq(await effective(PAT), 'legal_reviewer');
 });
 
