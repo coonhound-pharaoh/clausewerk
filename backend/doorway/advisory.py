@@ -164,8 +164,10 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
 
     request = urllib.request.Request(
         ENDPOINT, data=body, method="POST",
-        headers={"content-type": "application/json",
-                 "authorization": f"Bearer {key.strip()}"})
+        headers={"content-type": "application/json"})
+    # urllib's default redirect handler copies ordinary headers to the new
+    # request, even when the host changes. An API key belongs only at ENDPOINT.
+    request.add_unredirected_header("Authorization", f"Bearer {key.strip()}")
 
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as reply:

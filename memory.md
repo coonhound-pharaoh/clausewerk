@@ -2557,3 +2557,8 @@ omitted field alone falls back to the requested model.
 HTTP protocol exceptions, including IncompleteRead, follow the advisory
 unreachable-provider path. A truncated response cannot interrupt the governed
 request that asked for an optional judgment.
+
+## S33 — Provider authorization never follows redirects — SETTLED 2026-07-28
+The model API key is an unredirected HTTP header. Python sends it to the
+configured provider endpoint and omits it from redirect requests, including
+redirects to a different host.

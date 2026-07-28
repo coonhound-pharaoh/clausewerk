@@ -58,6 +58,24 @@ reads only the bounded amount and returns an absence naming the oversized reply.
 - `python -m pytest doorway/test_advisory.py -q -k "adapter"`
 - `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
 
+## Cycle 19 — provider redirects could receive the API key
+
+**Observed defect.** Python's default HTTP redirect handler copies ordinary
+headers, including `Authorization`, into the redirected request even when its
+host changes. The OpenAI key was stored in that redirectable header set.
+
+**Fix.** Add authorization as an unredirected request header. It is sent to the
+configured endpoint but excluded from every redirect request Python constructs.
+
+**Regression proof.** Python's real redirect handler builds a request to an
+attacker host from the captured provider request; the original has the key and
+the redirected request does not.
+
+**Validation.**
+
+- `python -m pytest doorway/test_advisory.py -q -k "not_copied_to_a_redirected_host"`
+- `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
+
 ## Cycle 18 — truncated model HTTP replies escaped
 
 **Observed defect.** A truncated provider response can raise

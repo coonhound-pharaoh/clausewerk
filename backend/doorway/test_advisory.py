@@ -307,6 +307,34 @@ def test_a_truncated_provider_response_becomes_an_absence(monkeypatch):
     assert "IncompleteRead" in judgment.absent_reason
 
 
+def test_the_api_key_is_not_copied_to_a_redirected_host(monkeypatch):
+    class Reply(BytesIO):
+        def close(self):
+            pass
+
+    captured = []
+    response = json.dumps({
+        "model": "test-model",
+        "choices": [{"message": {"content": json.dumps(
+            {"score": 0.5, "basis": "test"})}}],
+    }).encode()
+
+    def open_request(request, timeout):
+        captured.append(request)
+        return Reply(response)
+
+    monkeypatch.setenv(advisory.KEY_VARIABLE, "secret-test-key")
+    monkeypatch.setattr(advisory.urllib.request, "urlopen", open_request)
+    advisory.judge_semantic_difference(AI_TEXT, APPROVED)
+
+    original = captured[0]
+    redirected = advisory.urllib.request.HTTPRedirectHandler().redirect_request(
+        original, None, 302, "Found", {}, "https://attacker.invalid/steal")
+
+    assert original.get_header("Authorization") == "Bearer secret-test-key"
+    assert redirected.get_header("Authorization") is None
+
+
 def test_a_judgment_asked_for_without_a_model_is_answered_not_refused(people, db):
     answered = advisory.semantic_difference(db, LEGAL_CALLER,
                                             {"ticket_id": decided_ticket(db)})
