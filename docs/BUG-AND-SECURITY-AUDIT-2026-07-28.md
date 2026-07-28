@@ -96,6 +96,24 @@ elements and must raise `NotADocx` at the element budget.
 - `python -m py_compile engine/docx.py engine/test_docx.py`
 - `python -m pytest engine -q`
 
+## Cycle 13 — Word tabs vanished from parsed text
+
+**Observed defect.** `w:tab` elements were ignored by both ordinary document
+reading and redline segment extraction. Words separated by a displayed tab in
+Word were silently joined.
+
+**Fix.** Preserve Word tab elements as tab characters in readable, kept,
+inserted, and deleted text.
+
+**Regression proof.** A changed paragraph carries tabs in all three segment
+kinds; the visible, accepted, and original representations must retain them.
+
+**Validation.**
+
+- `python -m pytest engine/test_docx.py -q -k "tabs_survive"`
+- `python -m py_compile engine/docx.py engine/test_docx.py`
+- `python -m pytest engine -q`
+
 ## Cycle 11 — unsupported ZIP features escaped DOCX parsing
 
 **Observed defect.** An uploaded DOCX using an unsupported compression method

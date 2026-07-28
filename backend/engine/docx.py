@@ -306,6 +306,7 @@ P = f"{{{W}}}p"
 R = f"{{{W}}}r"
 T = f"{{{W}}}t"
 BR = f"{{{W}}}br"
+TAB = f"{{{W}}}tab"
 DEL_TEXT = f"{{{W}}}delText"
 INS = f"{{{W}}}ins"
 DEL = f"{{{W}}}del"
@@ -353,6 +354,8 @@ def _visible_text(p: ET.Element) -> str:
                 # Read back as one, or the round trip loses the line break and
                 # the character counter flags approved text as stray.
                 parts.append("\n")
+            elif tag == TAB:
+                parts.append("\t")
             elif tag == DEL_TEXT:
                 continue          # deleted text reached directly, same rule
             else:
@@ -486,6 +489,8 @@ def _runs_of(parent: ET.Element, kind: str) -> list[Segment]:
                 pieces.append(node.text)
             elif node.tag == BR:
                 pieces.append("\n")
+            elif node.tag == TAB:
+                pieces.append("\t")
         if pieces:
             out.append(Segment(kind, "".join(pieces)))
     return out

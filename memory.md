@@ -2527,3 +2527,8 @@ exceptions into NotADocx at the archive boundary.
 Kept, inserted, and deleted runs retain w:br as newline characters when
 reconstructing original and accepted redline text. Review cannot silently join
 lines the vendor kept separate.
+
+## S27 — Word tabs survive document parsing — SETTLED 2026-07-28
+The document and redline readers preserve w:tab as a tab character across
+visible, kept, inserted, and deleted text. Displayed separation cannot vanish
+from the text Legal reviews.

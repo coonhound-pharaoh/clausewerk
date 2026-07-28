@@ -394,6 +394,26 @@ def test_line_breaks_survive_in_every_redline_segment_kind():
         "A\nB", "C\nD", "E\nF"]
 
 
+def test_tabs_survive_in_readable_and_redline_text():
+    document = (
+        f'<w:document xmlns:w="{W}"><w:body><w:p>'
+        '<w:r><w:t>A</w:t><w:tab/><w:t>B</w:t></w:r>'
+        '<w:del><w:r><w:delText>C</w:delText><w:tab/>'
+        '<w:delText>D</w:delText></w:r></w:del>'
+        '<w:ins><w:r><w:t>E</w:t><w:tab/><w:t>F</w:t></w:r></w:ins>'
+        '</w:p></w:body></w:document>')
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml", document)
+    data = buf.getvalue()
+
+    redline = parse_redlines(data)[0]
+
+    assert paragraphs(data) == ["A\tBE\tF"]
+    assert redline.original_text == "A\tBC\tD"
+    assert redline.accepted_text == "A\tBE\tF"
+
+
 def containered_docx(inner: str) -> bytes:
     """One paragraph whose runs are wrapped in whatever container is passed in."""
     document = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
