@@ -56,6 +56,7 @@ const rowsAsAuditor = (s) => queryAs('auditor', s, [], 'auditor@cw');
 const oneAsAuditor = async (s) => (await rowsAsAuditor(s))[0];
 
 const H1 = 'a'.repeat(64), H2 = 'b'.repeat(64), R1 = 'c'.repeat(64);
+const H3 = 'e'.repeat(64), R2 = 'f'.repeat(64);
 // A result hash is a SHA-256 (WP-23 added the shape check to cw.run, to match
 // cw.snapshot and cw.ruleset). These fixtures used 'h' and 'deadbeef' as
 // stand-ins, which the constraint now correctly refuses.
@@ -88,6 +89,25 @@ await db.exec(`
   insert into cw.ruleset_member (ruleset_id,rule_id,version) values ('${R1}','GL-001',1);`);
 
 console.log('\nrun records');
+
+await test('governed snapshot and ruleset timestamps come from the database', async () => {
+  const snapshot = await queryAs('legal_admin',
+    `insert into cw.snapshot (snapshot_id,created_at)
+     values ('${H3}','2099-01-01 00:00:00+00')
+     returning created_at between statement_timestamp() - interval '5 seconds'
+                            and statement_timestamp() as created_now`,
+    [], 'legal@cw');
+  const ruleset = await queryAs('legal_admin',
+    `insert into cw.ruleset (ruleset_id,created_at)
+     values ('${R2}','2000-01-01 00:00:00+00')
+     returning created_at between statement_timestamp() - interval '5 seconds'
+                            and statement_timestamp() as created_now`,
+    [], 'legal@cw');
+  eq(snapshot[0].created_now, true,
+    'the caller-supplied snapshot creation time entered permanent evidence');
+  eq(ruleset[0].created_now, true,
+    'the caller-supplied ruleset creation time entered permanent evidence');
+});
 
 await test('a run records both pins', async () => {
   await db.exec(`insert into cw.run

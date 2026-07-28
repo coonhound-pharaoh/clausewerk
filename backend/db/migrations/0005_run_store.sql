@@ -67,6 +67,22 @@ create table cw.ruleset (
   created_at timestamptz not null default now()
 );
 
+create or replace function cw.bind_run_store_created_at() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    new.created_at := now();
+  end if;
+  return new;
+end $$;
+
+create trigger snapshot_bind_created_at
+  before insert on cw.snapshot
+  for each row execute function cw.bind_run_store_created_at();
+create trigger ruleset_bind_created_at
+  before insert on cw.ruleset
+  for each row execute function cw.bind_run_store_created_at();
+
 create table cw.ruleset_member (
   ruleset_id text not null references cw.ruleset(ruleset_id),
   rule_id    text not null,

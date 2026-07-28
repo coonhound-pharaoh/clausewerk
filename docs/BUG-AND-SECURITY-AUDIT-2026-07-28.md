@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 87 — snapshot and ruleset creation times were caller-controlled
+
+**Observed defect.** Governed writers could supply `created_at` when inserting
+content-addressed snapshots and rulesets. These rows are immutable provenance
+pins, so a caller could permanently forge when the pinned inputs were stored.
+
+**Fix.** Shared insert triggers now derive snapshot and ruleset creation times
+from the database clock for governed writes. Owner historical imports retain
+their explicit timestamps.
+
+**Regression proof.** A legal admin submits year-2099 and year-2000 creation
+times for a snapshot and ruleset. Both stored timestamps fall inside their
+current database statement windows.
+
+**Validation.**
+
+- `node backend/db/test/run-store.test.mjs` — 45 passed
+- `node backend/db/test/writer-sql.test.mjs` — 16 passed
+
 ## Cycle 86 — assembly-run creation time was caller-controlled
 
 **Observed defect.** Governed run inserts bound the authenticated creator but
