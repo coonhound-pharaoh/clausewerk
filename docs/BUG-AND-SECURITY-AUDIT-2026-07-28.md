@@ -4,6 +4,24 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 88 — review-ticket creation time was caller-controlled
+
+**Observed defect.** Review-ticket inserts bound the authenticated opener but
+accepted caller-supplied `created_at`. A requester could therefore forge the
+opening time of an immutable review and separation-of-duties record.
+
+**Fix.** The review-queue actor trigger now derives ticket `created_at` from the
+database clock for governed writes. Owner historical imports remain explicit.
+
+**Regression proof.** A requester opens a ticket with a year-2099 timestamp and
+a forged opener. The stored opener is the authenticated requester and the
+timestamp falls inside the current statement window.
+
+**Validation.**
+
+- `node backend/db/test/review-queue.test.mjs` — 45 passed
+- `node backend/db/test/self-approval.test.mjs` — 9 passed
+
 ## Cycle 87 — snapshot and ruleset creation times were caller-controlled
 
 **Observed defect.** Governed writers could supply `created_at` when inserting

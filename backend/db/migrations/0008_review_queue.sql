@@ -169,6 +169,7 @@ begin
       new.created_by := cw.app_actor();
     elsif tg_table_name = 'review_ticket' then
       new.opened_by := cw.app_actor();
+      new.created_at := now();
       if cw.app_role() = 'requester'
          and new.agreement_id is not null
          and not cw.owns_agreement(new.agreement_id) then

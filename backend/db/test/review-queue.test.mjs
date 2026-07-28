@@ -89,14 +89,20 @@ console.log('\nthe front door (WP-16b)');
 await test('a requester can open an ordinary ticket (positive control)', async () => {
   const r = await queryAs('requester', `
     insert into cw.review_ticket
-      (agreement_id,category_key,severity,reason_code,provenance_badge,proposed_text,opened_by)
+      (agreement_id,category_key,severity,reason_code,provenance_badge,
+       proposed_text,opened_by,created_at)
     values ('AG-001','data','High','human-escalated','VENDOR LANGUAGE',
             'Supplier shall notify Customer within seventy-two (72) hours.',
-            'forged-opener@clausewerk')
-    returning ticket_id, state, opened_by`, [], 'buyer@clausewerk');
+            'forged-opener@clausewerk','2099-01-01 00:00:00+00')
+    returning ticket_id, state, opened_by,
+              created_at between statement_timestamp() - interval '5 seconds'
+                             and statement_timestamp() as created_now`,
+    [], 'buyer@clausewerk');
   eq(r[0].state, 'pending', 'a ticket opens pending');
   eq(r[0].opened_by, 'buyer@clausewerk',
      'and it records the authenticated opener, not caller-supplied attribution');
+  eq(r[0].created_now, true,
+     'and it records the database time, not a caller-supplied timestamp');
 });
 
 await test('a requester cannot open a ticket on another buyer’s agreement', async () => {
