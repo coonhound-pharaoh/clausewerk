@@ -26,6 +26,7 @@ it fails on correct work.
 
 from __future__ import annotations
 
+import http.client
 import json
 from io import BytesIO
 
@@ -283,6 +284,27 @@ def test_the_adapter_refuses_structured_model_provenance(monkeypatch, reported_m
 
     assert judgment.outcome == "absent"
     assert judgment.model_version == advisory.UNKNOWN_VERSION
+
+
+def test_a_truncated_provider_response_becomes_an_absence(monkeypatch):
+    class Truncated:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, amount):
+            raise http.client.IncompleteRead(b'{"choices":', 100)
+
+    monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
+    monkeypatch.setattr(advisory.urllib.request, "urlopen",
+                        lambda request, timeout: Truncated())
+
+    judgment = advisory.judge_semantic_difference(AI_TEXT, APPROVED)
+
+    assert judgment.outcome == "absent"
+    assert "IncompleteRead" in judgment.absent_reason
 
 
 def test_a_judgment_asked_for_without_a_model_is_answered_not_refused(people, db):

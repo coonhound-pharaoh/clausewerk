@@ -58,6 +58,23 @@ reads only the bounded amount and returns an absence naming the oversized reply.
 - `python -m pytest doorway/test_advisory.py -q -k "adapter"`
 - `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
 
+## Cycle 18 — truncated model HTTP replies escaped
+
+**Observed defect.** A truncated provider response can raise
+`http.client.IncompleteRead`. That protocol exception is not an `OSError`, so it
+escaped the advisory adapter instead of recording an absence.
+
+**Fix.** Treat standard-library HTTP protocol exceptions as unreachable-provider
+outcomes alongside URL, timeout, and operating-system failures.
+
+**Regression proof.** A fake response raises `IncompleteRead` from its bounded
+read; the adapter must return an absence naming that failure type.
+
+**Validation.**
+
+- `python -m pytest doorway/test_advisory.py -q -k "truncated_provider"`
+- `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
+
 ## Cycle 17 — structured model provenance was stringified
 
 **Observed defect.** A provider's object, array, number, boolean, or blank

@@ -2552,3 +2552,8 @@ cannot escape the advisory adapter as AttributeError.
 Provider-reported model identity is accepted only as nonblank text. Structured
 or scalar non-text provenance cannot be stringified into an audit record; an
 omitted field alone falls back to the requested model.
+
+## S32 — Truncated model HTTP replies are absences — SETTLED 2026-07-28
+HTTP protocol exceptions, including IncompleteRead, follow the advisory
+unreachable-provider path. A truncated response cannot interrupt the governed
+request that asked for an optional judgment.

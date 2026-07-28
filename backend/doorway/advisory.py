@@ -50,6 +50,7 @@ no new package: adding a dependency is a decision, and nobody made it.
 
 from __future__ import annotations
 
+import http.client
 import json
 import math
 import os
@@ -178,7 +179,8 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
         # detail, and this string is written into an evidence row.
         return _absent(f"the model provider refused the call (HTTP {refused.code})",
                        model=model, prompt=prompt, inputs=inputs)
-    except (urllib.error.URLError, TimeoutError, OSError) as unreachable:
+    except (urllib.error.URLError, http.client.HTTPException,
+            TimeoutError, OSError) as unreachable:
         return _absent(f"the model could not be reached ({type(unreachable).__name__})",
                        model=model, prompt=prompt, inputs=inputs)
     except (ValueError, json.JSONDecodeError, RecursionError):
