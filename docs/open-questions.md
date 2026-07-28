@@ -400,6 +400,158 @@ is not obvious.
 
 *(Answered above: neither. The flag, not the reason — U13, built in `0024`.)*
 
+## 11. The Administrator can read every run's rows and neither run screen
+
+**ANSWERED, 2026-07-27. Built in migration `0026`.**
+
+> *"Seeing an alarm you can't investigate is worse than either alternative."*
+
+`0013` gave the Administrator every assembly's findings — an explicit read rule
+on the run table plus grants on all three run tables. Neither summary was ever
+granted: `cw.run_summary` (what was assembled, when, whether it is clear to sign)
+and `cw.run_contract` (which clause went in for which risk) predate the role by
+two migrations, and `0005_run_store.sql:293-297` names the roles that existed at
+the time. It was an omission, not a judgement. `0025` deliberately left it open
+rather than settling a role's boundary inside a scoping migration, on the
+precedent `0018_library_and_ladder_views.sql:170-190` set for this same role.
+
+**`0026` is TWO changes, and it has to be.** The grant alone would have been
+worse than the gap: `0025` scoped both views in their own `WHERE` clause and
+'administrator' is not in either, so the role would have passed the privilege
+check, matched no branch, and been answered **zero rows** — the screen telling
+the one person who can see every finding in the company that nothing has ever
+been assembled. That is the identical shape as §9 above, where it shipped. So
+`0026` grants the views *and* admits the role to their scoping clauses, and the
+tests assert a row count rather than the absence of an error.
+
+## 12. Requesters can see each other's concessions and positions
+
+**ANSWERED, 2026-07-27 — and the answer inverts the finding. Not a defect.**
+
+> *"Colleagues need to be able to work on each other's work when one is out sick
+> or on vacation without needing a lot of work. Instead, they should be able to
+> hide 'confidential' deals from each other if necessary."*
+
+**What was found.** Five screens readable by a requester —
+`cw.concession_in_force`, `cw.concession_state`, `cw.position_current`,
+`cw.position_revival` and `cw.renewal_drift` — show every requester all the rows
+rather than their own. It has the shape this system has paid for four times: a
+screen built over a protected table does not inherit the protection.
+
+**Why it is not a defect.** Cover is the point. A buyer on holiday should not
+take their deals offline with them, and a colleague picking one up should not
+need an access request to do it. Those five screens are doing the right thing by
+accident, and narrowing them would have broken working practice to satisfy a
+pattern.
+
+**What replaces it — and it is a bigger piece of work than the finding was.**
+Openness becomes the default and confidentiality becomes an explicit, per-deal
+act: a deal can be marked confidential, and a marked deal is hidden from
+colleagues who are not on it. Four things need deciding before it can be built:
+
+- who may mark a deal confidential, and who may unmark it — and whether
+  unmarking is a recorded act, the way every other reversal in this system is
+- whether Legal, the Auditor and the Administrator still see a confidential
+  deal (almost certainly yes — the Auditor's whole job is that nothing is
+  invisible, and the Administrator now sees every assembly by §11 above)
+- what a colleague sees: nothing at all, or a marked-confidential placeholder.
+  A silent disappearance means somebody covering for a colleague cannot tell a
+  hidden deal from one that does not exist
+- whether the marking travels down to the concessions and positions underneath,
+  or is asked of each
+
+**Scope.** This is no longer a scoping fix to five screens; it is a new
+capability touching the deal record, every screen that lists deals, and the
+concession and negotiation family. It needs its own plan. **Nothing is blocked
+on it** — today's behaviour is the wanted behaviour, minus the ability to opt
+out.
+
+**SETTLED, 2026-07-27, in two passes. The final shape is below.**
+
+The first answer was that a confidential deal should be invisible outright —
+*"if you know something exists it's still not very confidential."* Three places
+were then shown to leak its existence anyway, and the answer moved:
+
+> *"Ok fine then we just mark it confidential. That solves it fine."*
+
+**THE SHAPE, AS UNDERSTOOD — flagged plainly because everything else hangs off
+it, and it is the opposite of the first answer.** A confidential deal **still
+appears** in a colleague's list, as an entry marked confidential. What is hidden
+is everything about it: counterparty, value, contents, concessions, positions.
+Its *existence* is not hidden, and that is the deliberate trade — because the
+alternative could not actually be delivered.
+
+Why the trade is the right one rather than a retreat: a deal that vanishes
+leaves a hole where it was, and holes are legible. Reference numbers run in
+order, so a gap names the missing deal. Totals stop reconciling. A colleague
+covering for somebody cannot tell "not allowed to see it" from "already done",
+and closes the wrong thing. Marking it confidential removes all three at once —
+nothing is missing, so nothing has to be explained.
+
+**If this reading is wrong and true invisibility is still wanted, say so before
+anything is built** — the numbering convention below is the part that becomes
+unchangeable.
+
+**Counts belong to management.**
+
+> *"Only certain views (like management) should see the count of open deals."*
+
+So a company-wide total is a management figure, not a general one. Everyone
+else's counts cover what they can actually see, and will therefore be lower than
+the real number. That discrepancy is now BY DESIGN and must be labelled as such
+on the screen — an unexplained number that does not reconcile is exactly what
+sends somebody looking for the deal it is hiding. Note that a requester's own
+tiles ("my deals open") are their own work and are unaffected.
+
+**The Auditor is not automatically exempt.**
+
+> *"The auditor will need to have approval to see everything."*
+
+The strongest of the three answers, and it dissolves the fork rather than
+choosing a side. The permanent record does not carry a hole — but reaching the
+confidential part of it is itself a governed, recorded act rather than a
+standing privilege. "Nothing is invisible to the Auditor" becomes "nothing is
+invisible to the Auditor, and looking leaves a trace."
+
+Three things still to decide when this is built, none blocking:
+
+- **who approves it** — Legal, or the deal's owner, or two people. The
+  countersign pattern already in the schema is the obvious model
+- **per deal or standing** — approval to see one confidential deal, or to see
+  all of them for a period. A standing grant is far easier to build and is
+  indistinguishable from exemption after a week
+- **whether it expires**, and what happens to an investigation in progress when
+  it does
+
+**The buyer manager role is SHELVED.**
+
+> *"Valid point on the buyer manager role. I'll shelf that one for now."*
+
+Sketched as an escalation step between a buyer and Legal who confirms the
+confidential flag and sees their reports' deals. Set aside on the cost that
+decided it: the system holds no organisational structure at all, so "their
+reports" is new data somebody must keep correct, and a stale reporting line is a
+silent access error — nothing appears to go wrong. The two-person confirmation
+half of the idea survives on its own and does not need the role.
+
+**What is now unchangeable-if-got-wrong, and therefore first.** Deal reference
+numbers. `cw.agreement.agreement_id` is free text with no format rule and no
+sequence, so nothing forces `AG-0001, AG-0002` — but people number in order and
+the prototype's own placeholder is `AG-001`. Under the settled shape above a
+sequence gap no longer reveals anything, because the deal is still listed. That
+makes this less urgent than it was, not resolved: it becomes urgent again the
+moment anybody argues for true invisibility. References end up printed on signed
+contracts, so the convention is close to permanent once real ones carry it.
+
+**A related consequence, flagged rather than acted on.** The same principle
+argues against narrowing that already exists elsewhere: a requester currently
+sees only *their own* assembled contracts, because the run table's read rule has
+said so since `0005`. Migration `0025` made the two assembly screens agree with
+that rule rather than bypass it — it did not invent the narrowing. If
+openness-by-default is the house rule, that rule is a candidate to change too,
+and it is a deliberate decision rather than a tidy-up: it would widen who sees
+every assembled contract in the company. Not touched.
+
 ## 10. Smaller gaps — deferred
 
 | Gap | Where |
