@@ -128,6 +128,14 @@ language plpgsql
 security definer set search_path = cw, pg_temp as $$
 declare nid bigint; chosen text; prior_run text; n int; caller_role text;
 begin
+  -- The session decides who may open the renewal, so the permanent opened_by
+  -- and baseline_chosen_by fields must name that same person.
+  if p_actor is distinct from cw.app_actor() then
+    raise exception
+      'the renewal actor must match the signed-in person; % cannot act as %',
+      cw.app_actor(), p_actor using errcode = 'insufficient_privilege';
+  end if;
+
   -- ── The ownership check 0027's policies cannot reach (NC-03) ──────────────
   -- The first statement in the function, so nothing is read and nothing is
   -- written before it is known that the caller may. Two branches, the same two

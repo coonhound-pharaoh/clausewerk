@@ -2626,3 +2626,8 @@ authority or place another person’s name on an irreversible disposal event.
 The retention-destruction actor must equal `cw.app_actor()` before hold and date
 checks. An administrator-role connection cannot place another person’s name on
 the destruction decision or its audit event.
+
+## S46 — Renewal opening binds actor to session — SETTLED 2026-07-28
+The renewal actor must equal `cw.app_actor()` before ownership and baseline
+checks. The session-authorized person is also the person recorded in
+`opened_by` and `baseline_chosen_by`.

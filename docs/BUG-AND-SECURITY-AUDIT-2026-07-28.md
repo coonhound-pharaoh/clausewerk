@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 32 — renewal decisions could be attributed to another person
+
+**Observed defect.** `cw.open_renewal` authorizes the session actor against the
+deal, but separately accepted an actor argument for `opened_by` and
+`baseline_chosen_by`. An authorized requester or Legal caller could therefore
+put somebody else’s name on the renewal and baseline decision.
+
+**Fix.** Bind the renewal actor argument to `cw.app_actor()` before the
+ownership check or any write.
+
+**Regression proof.** A requester attempts to open their own renewal under
+another requester’s name and is refused with no negotiation row created.
+Requester and both Legal role controls still open correctly attributed
+renewals, and both baseline paths remain reachable.
+
+**Validation.**
+
+- `node backend/db/test/negotiation.test.mjs`
+- Result: 55 passed, 0 failed.
+
 ## Cycle 31 — retention destruction actors could be impersonated
 
 **Observed defect.** `cw.retention_destroy` permanently records its actor

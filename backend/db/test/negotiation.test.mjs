@@ -264,7 +264,8 @@ await test('the baseline is a settled owner decision, and says who settled it', 
 let NEG_A;
 await test('by default a renewal opens from the executed agreement’s positions', async () => {
   const r = await queryAs('legal_reviewer',
-    `select cw.open_renewal('AG-010','AG-001','legal@clausewerk') as id`);
+    `select cw.open_renewal('AG-010','AG-001','legal@clausewerk') as id`,
+    [], 'legal@clausewerk');
   NEG_A = r[0].id;
   const n = await one(`select baseline, renews_agreement_id, baseline_chosen_by
                        from cw.negotiation where negotiation_id=$1`, [NEG_A]);
@@ -283,7 +284,8 @@ let NEG_B;
 await test('library standard is reachable as an explicit, recorded choice', async () => {
   const r = await queryAs('legal_reviewer',
     `select cw.open_renewal('AG-011','AG-001','legal@clausewerk','library_standard',
-                            'ours','Legal asked to reset to standard') as id`);
+                            'ours','Legal asked to reset to standard') as id`,
+    [], 'legal@clausewerk');
   NEG_B = r[0].id;
   const n = await one(`select baseline, baseline_note from cw.negotiation
                        where negotiation_id=$1`, [NEG_B]);
@@ -342,13 +344,15 @@ await test('the drift report sits alongside the baseline it exists to compensate
 
 await test('an unknown baseline is refused rather than quietly defaulted', async () => {
   await throws(() => queryAs('legal_reviewer',
-    `select cw.open_renewal('AG-021','AG-001','legal@clausewerk','whatever')`),
+    `select cw.open_renewal('AG-021','AG-001','legal@clausewerk','whatever')`,
+    [], 'legal@clausewerk'),
     'unknown renewal baseline: whatever');
 });
 
 await test('a renewal cannot claim to renew an agreement that was never executed', async () => {
   await throws(() => queryAs('legal_reviewer',
-    `select cw.open_renewal('AG-022','AG-010','legal@clausewerk')`),
+    `select cw.open_renewal('AG-022','AG-010','legal@clausewerk')`,
+    [], 'legal@clausewerk'),
     'has no executed run to renew from');
 });
 
@@ -640,6 +644,16 @@ await db.exec(`
     ('AG-311','Contoso','${OTHER}'),
     ('AG-312','Contoso','${OTHER}'),
     ('AG-313','Contoso','${OTHER}');`);
+
+await test('a renewal cannot be attributed to another person', async () => {
+  await throws(() => queryAs('requester',
+    `select cw.open_renewal('AG-310','AG-001','${OTHER}')`, [], BUYER),
+    'renewal actor must match the signed-in person',
+    'a requester opened a renewal under another person’s name');
+  const n = await one(
+    `select count(*)::int as c from cw.negotiation where agreement_id='AG-310'`);
+  eq(n.c, 0, 'the impersonation refusal wrote a negotiation');
+});
 
 await test('a requester opens a renewal on their own deal, unchanged', async () => {
   // The control for the refusal below, and the U1 assertion at the same time:
