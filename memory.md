@@ -2467,3 +2467,9 @@ Mike: OpenAI is the model provider for this project's in-product AI judgments, c
 efficiency. D-8 was procurement only (in-product AI judgment itself was settled intent, U14e).
 The adapter seam (NC-25) is built provider-thin so this remains one integration point; the key is
 Mike's to supply and never lands in the repository.
+
+## S15 — Duplicate media-type fields fail closed — SETTLED 2026-07-28
+The HTTP doorway rejects a POST carrying more than one Content-Type field before
+reading its body. Which parser handles a request must not depend on which
+duplicate field an HTTP hop chooses. This follows the same fail-closed rule
+already used for duplicate Content-Length and Authorization fields.

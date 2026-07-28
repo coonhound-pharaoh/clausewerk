@@ -170,6 +170,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         assert parsed is not None
 
+        if self._content_type_is_ambiguous():
+            self._respond(Response(400, {"error": "content type is ambiguous"}))
+            return
+
         if self._is_document():
             upload, refused = self._read_document()
             if refused is not None:
@@ -288,6 +292,10 @@ class Handler(BaseHTTPRequestHandler):
     def _content_type(self) -> str:
         """The media type alone, lowercased, without its parameters."""
         return (self.headers.get("content-type") or "").split(";")[0].strip().lower()
+
+    def _content_type_is_ambiguous(self) -> bool:
+        """Two media-type fields must never choose two different request paths."""
+        return len(self.headers.get_all("content-type", [])) > 1
 
     def _is_document(self) -> bool:
         """Is this POST carrying a document rather than a record?

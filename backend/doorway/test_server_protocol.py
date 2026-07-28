@@ -53,6 +53,22 @@ def test_duplicate_authorization_fields_never_select_an_identity():
     assert handler._token() is None
 
 
+def test_duplicate_content_types_are_refused_as_ambiguous():
+    handler = handler_with_headers(
+        ("Content-Type", "application/json"),
+        ("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        body=b"{}",
+    )
+    handler.path = "/api/sign-in"
+    answered = []
+    handler._respond = answered.append
+
+    handler.do_POST()
+
+    assert answered[0].status == 400
+    assert handler.rfile.tell() == 0
+
+
 def test_cross_origin_read_access_is_not_granted_by_default(monkeypatch):
     monkeypatch.delenv("CW_ORIGIN", raising=False)
     handler = handler_with_headers()
