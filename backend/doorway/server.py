@@ -226,6 +226,11 @@ class Handler(BaseHTTPRequestHandler):
         raw = values[0] if values else "0"
         if re.fullmatch(r"[0-9]+", raw) is None:
             return None, Response(400, {"error": "unreadable request"})
+        # Keep conversion itself bounded. Python deliberately refuses
+        # pathologically long decimal strings; allowing that ValueError to
+        # escape would turn an invalid request into a 500.
+        if len(raw) > 20:
+            return None, Response(400, {"error": "unreadable request"})
         length = int(raw)
         if length < 0:
             return None, Response(400, {"error": "content length cannot be negative"})

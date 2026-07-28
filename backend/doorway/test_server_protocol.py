@@ -83,3 +83,13 @@ def test_duplicate_document_selectors_are_refused():
     assert query == {}
     assert refused is not None
     assert refused.status == 400
+
+
+def test_pathologically_long_content_length_is_a_caller_error_not_a_crash():
+    handler = handler_with_headers(("Content-Length", "9" * 5000), body=b"")
+
+    body, refused = handler._read_body()
+
+    assert body is None
+    assert refused is not None
+    assert refused.status == 400
