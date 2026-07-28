@@ -104,3 +104,13 @@ def test_ignored_query_fields_cannot_grow_without_bound():
     assert query == {}
     assert refused is not None
     assert refused.status == 400
+
+
+def test_malformed_percent_escape_is_not_treated_as_a_filename():
+    handler = handler_with_headers()
+
+    relative, refused = handler._static_relative("/assets/%ZZ/app.js")
+
+    assert relative is None
+    assert refused is not None
+    assert refused.status == 400

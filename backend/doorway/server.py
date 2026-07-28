@@ -342,6 +342,12 @@ class Handler(BaseHTTPRequestHandler):
             value = value.split(";")[0].strip()
         return value or None
 
+    def _static_relative(self, path: str) -> tuple[str | None, Response | None]:
+        """Decode one static path without accepting malformed percent escapes."""
+        if re.search(r"%(?![0-9A-Fa-f]{2})", path):
+            return None, Response(400, {"error": "the path is not valid URL encoding"})
+        return unquote(path).lstrip("/") or "index.html", None
+
     def _serve_static(self, path: str) -> bool:
         """Serve a file from the static root, or report that there is none.
 
@@ -350,7 +356,11 @@ class Handler(BaseHTTPRequestHandler):
         be defeated by writing it differently.
         """
         root = self.static_root.resolve()
-        relative = unquote(path).lstrip("/") or "index.html"
+        relative, refused = self._static_relative(path)
+        if refused is not None:
+            self._respond(refused)
+            return True
+        assert relative is not None
         target = (root / relative).resolve()
 
         if target != root and root not in target.parents:
