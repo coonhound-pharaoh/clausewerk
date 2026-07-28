@@ -592,6 +592,18 @@ def test_malformed_document_xml_fails_clearly():
 # defect rather than a formality.
 
 
+def test_duplicate_document_parts_are_refused_as_ambiguous():
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml",
+                   f'<w:document xmlns:w="{W}"><w:body/></w:document>')
+        z.writestr("word/document.xml",
+                   f'<w:document xmlns:w="{W}"><w:body><w:p/></w:body></w:document>')
+
+    with pytest.raises(NotADocx, match="duplicate member names"):
+        parse_redlines(buf.getvalue())
+
+
 def _padded_zip(members) -> bytes:
     """A small archive whose members expand to a great deal more.
 

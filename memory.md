@@ -2507,3 +2507,8 @@ of parsing or retaining an oversized reply.
 Excessive JSON nesting from the model provider is handled at both parsing
 layers. A RecursionError records an unreadable absent judgment and cannot
 interrupt the caller's governed work.
+
+## S23 — Duplicate DOCX parts fail closed — SETTLED 2026-07-28
+An uploaded Word archive may not contain the same member name twice. Duplicate
+parts are ambiguous across ZIP readers and are refused before any contract text
+is selected or parsed.

@@ -58,6 +58,25 @@ reads only the bounded amount and returns an absence naming the oversized reply.
 - `python -m pytest doorway/test_advisory.py -q -k "adapter"`
 - `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
 
+## Cycle 9 — ambiguous duplicate DOCX members
+
+**Observed defect.** A ZIP can contain two entries with the same
+`word/document.xml` name. Python selects one entry while another DOCX reader may
+select the other, allowing one upload to represent different negotiated text.
+
+**Fix.** Reject an archive containing any exact duplicate member name before
+reading or parsing its document part.
+
+**Regression proof.** A DOCX fixture carries two different document XML entries
+under the same name and must raise `NotADocx`.
+
+**Validation.**
+
+- `python -m pytest engine/test_docx.py -q -k "duplicate_document_parts"`
+- `python -m py_compile engine/docx.py engine/test_docx.py`
+- `python -m pytest engine -q` — 198 passed; the expected duplicate-name
+  warning comes from constructing the hostile regression fixture.
+
 ## Cycle 8 — recursive model-provider JSON escaped the adapter
 
 **Observed defect.** A deeply nested but size-bounded provider reply caused

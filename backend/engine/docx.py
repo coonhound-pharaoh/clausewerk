@@ -245,7 +245,19 @@ def _document_xml(data: bytes) -> ET.Element:
     # Failures here get a message a buyer can act on rather than a stack trace.
     try:
         with zipfile.ZipFile(BytesIO(data)) as z:
-            declared = sum(i.file_size for i in z.infolist())
+            members = z.infolist()
+            seen_names: set[str] = set()
+            duplicates: set[str] = set()
+            for member in members:
+                if member.filename in seen_names:
+                    duplicates.add(member.filename)
+                seen_names.add(member.filename)
+            if duplicates:
+                raise NotADocx(
+                    "the archive contains duplicate member names: "
+                    + ", ".join(sorted(duplicates))
+                    + " — different readers could select different contract text")
+            declared = sum(i.file_size for i in members)
             if declared > MAX_ARCHIVE_BYTES:
                 # Second line: a bomb split across many members, each of them
                 # individually under the per-part cap.
