@@ -123,6 +123,16 @@ def test_ignored_query_fields_cannot_grow_without_bound():
     assert refused.status == 400
 
 
+def test_invalid_utf8_query_selector_is_not_replaced_into_another_identifier():
+    handler = handler_with_headers()
+
+    query, refused = handler._query("run=%FF")
+
+    assert query == {}
+    assert refused is not None
+    assert refused.status == 400
+
+
 def test_malformed_percent_escape_is_not_treated_as_a_filename():
     handler = handler_with_headers()
 

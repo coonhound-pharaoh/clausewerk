@@ -23,6 +23,23 @@ and DOCX media types, asserts a 400 response, and proves no body byte was read.
 - `python -m pytest doorway/test_server_protocol.py -q`
 - `python -m py_compile doorway/server.py doorway/test_server_protocol.py`
 
+## Cycle 4 — invalid UTF-8 query selectors
+
+**Observed defect.** Query parsing used replacement decoding. An invalid
+selector such as `run=%FF` was silently changed into a Unicode replacement
+character before the authorization-scoped lookup.
+
+**Fix.** Decode query fields with strict UTF-8 and classify decoding or field
+count failures as malformed caller input.
+
+**Regression proof.** The protocol suite requires `run=%FF` to return no
+selector and a 400 response.
+
+**Validation.**
+
+- `python -m pytest doorway/test_server_protocol.py -q`
+- `python -m py_compile doorway/server.py doorway/test_server_protocol.py`
+
 ## Cycle 3 — embedded NUL in static paths
 
 **Observed defect.** A `%00` escape decoded into an embedded NUL and was passed

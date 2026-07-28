@@ -2483,3 +2483,8 @@ erase evidence that a security-sensitive document selector was duplicated.
 Static URL decoding rejects an embedded NUL before filesystem resolution.
 Malformed `%00` input receives a bounded 400 response rather than escaping as
 an internal service failure.
+
+## S18 — Query identifiers decode strictly — SETTLED 2026-07-28
+Query-string selectors use strict UTF-8 decoding. Invalid bytes are refused as
+malformed input rather than replaced into a different identifier before an
+authorization-scoped lookup.
