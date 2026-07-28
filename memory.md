@@ -5,6 +5,12 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S63 — Supersession approval binds actor to session — SETTLED 2026-07-28
+Application-role supersession inserts bind `approver` to `cw.app_actor()`. The
+irreversible library decision and its audit event cannot name a second
+caller-supplied identity; owner-mode migrations and historical imports retain
+explicit attribution.
+
 ## S62 — Clause-tag publication binds author to session — SETTLED 2026-07-28
 Application-role inserts bind clause-tag `tagged_by` to `cw.app_actor()`.
 Policy-driving tag provenance and its audit event cannot name a second

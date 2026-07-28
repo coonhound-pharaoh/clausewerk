@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 49 — supersessions accepted false approvers
+
+**Observed defect.** A Legal admin superseding approved language could supply
+any person as `approver`. The field and audit event describe a deliberate Legal
+authorization, so the caller could place another person’s name on an
+irreversible library decision.
+
+**Fix.** A before-insert trigger binds `approver` to `cw.app_actor()` for
+governed sessions. Database-owner migrations and historical imports preserve
+explicit attribution.
+
+**Regression proof.** A real `cw_legal_admin` supersedes a clause version while
+naming a forged approver, and the inserted record must name the authenticated
+actor while the predecessor and successor states remain correct.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 78 passed
+- `node backend/db/test/writer-sql.test.mjs` — 16 passed
+
 ## Cycle 48 — clause tags accepted false authors
 
 **Observed defect.** A Legal admin attaching a policy-driving clause tag could

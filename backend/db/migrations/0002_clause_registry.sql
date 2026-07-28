@@ -218,6 +218,23 @@ create table cw.supersession (
 --   retired    · withdrawn, not replaced
 --   expired    · lapsed on its own date
 --   active     · current approved position
+-- Supersession is an authorising act, not an assignment. Governed publication
+-- records the authenticated Legal actor and cannot put a colleague's name on
+-- the decision. Owner-mode migrations and historical imports retain explicit
+-- attribution.
+create or replace function cw.bind_supersession_approver() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    new.approver := cw.app_actor();
+  end if;
+  return new;
+end $$;
+
+create trigger supersession_bind_approver
+  before insert on cw.supersession
+  for each row execute function cw.bind_supersession_approver();
+
 create or replace view cw.clause_version_state as
 select
   v.clause_id,
