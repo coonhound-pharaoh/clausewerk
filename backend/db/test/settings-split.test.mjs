@@ -240,11 +240,15 @@ console.log('\nwatcher lists: who is told, never who decides');
 
 await test('an administrator adds a watcher, and it is audited', async () => {
   const w = await mustWrite('administrator',
-    `insert into cw.override_watcher (category_key,person,added_by)
-     values ('data','${PAT}','impostor@clausewerk')
-     returning watcher_id, added_by`, [], ADMIN);
+    `insert into cw.override_watcher (category_key,person,added_by,added_at)
+     values ('data','${PAT}','impostor@clausewerk','2000-01-01T00:00:00Z')
+     returning watcher_id, added_by,
+       added_at > now() - interval '1 minute' and added_at <= now()
+         as added_time_is_fresh`, [], ADMIN);
   eq(w[0].added_by, ADMIN,
     'the caller-supplied adder entered the permanent watcher record');
+  eq(w[0].added_time_is_fresh, true,
+    'the caller-supplied watcher timestamp survived');
   const e = await one(`select subject, payload->>'person' as p,
                               payload->>'by' as added_by, actor_role
                        from cw.audit_event where event_type='watcher_added'`);
@@ -270,8 +274,15 @@ await test('a category with nobody watching it is a visible gap, not a silence',
   await db.exec(`insert into cw.category (key,label,short) values ('tax','Tax','TX')`);
   await execAs('administrator',
     `update cw.override_watcher
-        set removed_by='impostor@clausewerk', removed_at=now()
+        set removed_by='impostor@clausewerk',
+            removed_at='2099-01-01T00:00:00Z'
      where person='${LEGAL}' and category_key is null`, ADMIN);
+  const removed = await one(`select removed_at > now() - interval '1 minute'
+                                   and removed_at <= now() as removed_time_is_fresh
+                              from cw.override_watcher
+                             where person='${LEGAL}' and category_key is null`);
+  eq(removed.removed_time_is_fresh, true,
+    'the caller-supplied watcher removal timestamp survived');
   const gaps = await rows(
     `select category_key from cw.watcher_coverage where watcher_count=0 order by category_key`);
   eq(gaps.map(g => g.category_key), ['ip','liab','tax'],

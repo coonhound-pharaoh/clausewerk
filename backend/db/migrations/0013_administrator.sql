@@ -1155,8 +1155,10 @@ begin
   if cw.app_role() is not null then
     if tg_op = 'INSERT' then
       new.added_by := cw.app_actor();
+      new.added_at := now();
     elsif old.removed_at is null and new.removed_at is not null then
       new.removed_by := cw.app_actor();
+      new.removed_at := now();
     end if;
   end if;
 

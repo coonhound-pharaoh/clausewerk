@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 75 — watcher coverage changes accepted forged timestamps
+
+**Observed defect.** Override-watcher additions and removals bound the
+Administrator actor but accepted caller-supplied lifecycle timestamps. Because
+`removed_at IS NULL` determines live notification coverage, the permanent
+oversight history could misstate when a person was added or silenced.
+
+**Fix.** Governed watcher additions and removals now derive their timestamps
+from the database clock alongside the authenticated Administrator. Owner
+historical imports retain explicit timestamps.
+
+**Regression proof.** An Administrator supplies a year-2000 addition time and a
+year-2099 removal time. Both stored values fall within the current transition
+window, while coverage gaps and override socialisation remain correct.
+
+**Validation.**
+
+- `node backend/db/test/settings-split.test.mjs` — 24 passed
+- `node backend/db/test/override.test.mjs` — 37 passed
+
 ## Cycle 74 — role actions accepted forged immutable timestamps
 
 **Observed defect.** Non-bootstrap role grants, countersigns, and revocations
