@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 44 — advisory judgments accepted false requesters
+
+**Observed defect.** A permitted caller could explicitly set
+`advisory_assessment.requested_by` to another person. The value is permanent,
+appears on the metrics board, and attributes an append-only model judgment, so
+the database contradicted its own claim that requester identity came from the
+connection.
+
+**Fix.** A before-insert trigger now binds `requested_by` to `cw.app_actor()`
+for application-role sessions while preserving explicit attribution for
+database-owner historical imports.
+
+**Regression proof.** Every advisory test insert now supplies a forged
+requester; the positive control requires the returned immutable row to name the
+authenticated Legal actor.
+
+**Validation.**
+
+- `node backend/db/test/advisory.test.mjs` — 19 passed
+
 ## Cycle 43 — review-queue provenance accepted false actors
 
 **Observed defect.** Governed inserts could supply arbitrary values for

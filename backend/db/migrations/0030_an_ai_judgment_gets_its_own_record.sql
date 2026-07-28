@@ -153,6 +153,23 @@ create index advisory_assessment_by_ticket
 -- Settled house shape (0011): this RAISES rather than quietly doing nothing.
 -- `do instead nothing` would let an application bug that rewrites a judgment
 -- look exactly like success.
+-- The person who requested a model judgment is observed from the governed
+-- session. A DEFAULT only fills an omitted value; without this trigger a caller
+-- could permanently attribute an append-only judgment to somebody else.
+-- Owner-mode historical imports retain explicit attribution.
+create or replace function cw.bind_advisory_requester() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    new.requested_by := cw.app_actor();
+  end if;
+  return new;
+end $$;
+
+create trigger advisory_assessment_bind_requester
+  before insert on cw.advisory_assessment
+  for each row execute function cw.bind_advisory_requester();
+
 create or replace function cw.advisory_append_only() returns trigger
 language plpgsql as $$
 begin

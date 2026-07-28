@@ -5,6 +5,12 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S58 — Advisory provenance binds requester to session — SETTLED 2026-07-28
+Application-role inserts bind advisory-assessment `requested_by` to
+`cw.app_actor()`. An append-only model judgment cannot permanently attribute
+the request to a second caller-supplied identity; owner-mode historical imports
+retain explicit attribution.
+
 ## S57 — Review-queue provenance binds actors to session — SETTLED 2026-07-28
 Application-role inserts bind draft `created_by` and review-ticket `opened_by`
 to `cw.app_actor()`. The opener identity used by self-review controls is
