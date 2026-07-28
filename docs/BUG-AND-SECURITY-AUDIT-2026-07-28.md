@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 45 — override requests accepted false requesters
+
+**Observed defect.** Requesters hold direct insert privilege on
+`override_request` and could explicitly supply another person as
+`requested_by`. That immutable identity controls requester read scope and the
+rule preventing a reviewer from deciding their own request, so forgery could
+hide a request and mislead the separation control.
+
+**Fix.** A before-insert trigger binds `requested_by` to `cw.app_actor()` for
+all application-role sessions. Database-owner imports preserve explicit
+historical attribution.
+
+**Regression proof.** A real requester directly inserts an override request
+while naming a Legal reviewer and the stored row must instead name the
+authenticated requester.
+
+**Validation.**
+
+- `node backend/db/test/override.test.mjs` — 32 passed
+
 ## Cycle 44 — advisory judgments accepted false requesters
 
 **Observed defect.** A permitted caller could explicitly set

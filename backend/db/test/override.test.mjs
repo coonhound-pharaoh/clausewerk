@@ -129,6 +129,16 @@ await test('a requester opens a request, and it is recorded with its justificati
   eq([e.actor, e.actor_role, e.actor_kind, e.n], [DANA, 'requester', 'human', '2']);
 });
 
+await test('a direct insert cannot forge the override requester', async () => {
+  const r = await queryAs('requester', `
+    insert into cw.override_request
+      (run_id,agreement_id,requested_by,justification,commercial_pressure)
+    values ('RUN-1','AG-1','${PAT}','${JUST}','forged attribution check')
+    returning request_id, requested_by`, [], DANA);
+  eq(r[0].requested_by, DANA,
+     'the opener used for scope and self-decision checks must come from the session');
+});
+
 await test('a request on its own passes NOTHING', async () => {
   // The whole product, in one assertion. If this ever returns a row for a
   // request that has only been asked for, the blanket button is back.

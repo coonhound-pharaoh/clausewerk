@@ -66,6 +66,23 @@ create table cw.override_request (
 
 create index override_request_by_run on cw.override_request (run_id);
 
+-- The opener identity controls requester read scope and the no-self-decision
+-- rule. A DEFAULT is not enforcement: direct INSERT is granted to requesters,
+-- so bind every governed insert to the authenticated actor. Owner-mode imports
+-- retain their explicitly supplied historical requester.
+create or replace function cw.bind_override_requester() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    new.requested_by := cw.app_actor();
+  end if;
+  return new;
+end $$;
+
+create trigger override_request_bind_requester
+  before insert on cw.override_request
+  for each row execute function cw.bind_override_requester();
+
 comment on table cw.override_request is
   'A request to pass a blocking finding. Carries the findings, a mandatory '
   'justification and the commercial pressure cited. It opens no gate — only an '

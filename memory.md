@@ -5,6 +5,12 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S59 — Override requests bind requester to session — SETTLED 2026-07-28
+Application-role inserts bind override-request `requested_by` to
+`cw.app_actor()`. The identity used for requester scope and the no-self-decision
+control cannot be redirected through direct SQL; owner-mode historical imports
+retain explicit attribution.
+
 ## S58 — Advisory provenance binds requester to session — SETTLED 2026-07-28
 Application-role inserts bind advisory-assessment `requested_by` to
 `cw.app_actor()`. An append-only model judgment cannot permanently attribute
