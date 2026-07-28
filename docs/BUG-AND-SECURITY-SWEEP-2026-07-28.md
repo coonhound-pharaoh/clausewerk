@@ -68,3 +68,15 @@ with 400.
 
 **Proof.** `test_negative_content_length_is_refused_before_dispatch` sends the
 invalid header over a raw socket and proves there is no application call.
+
+## 6. Valid bearer authentication could be discarded
+
+**Risk.** HTTP authentication scheme names are case-insensitive, but the doorway
+recognized only the exact text `Bearer`. A conforming client or intermediary
+using `bearer` caused a valid session to be treated as absent.
+
+**Fix.** The scheme is compared case-insensitively while empty credentials and
+all non-bearer schemes remain rejected.
+
+**Proof.** `test_bearer_authentication_scheme_is_case_insensitive` exercises the
+wire and mixed-case parser result.

@@ -425,7 +425,8 @@ class Records:
     def handle(self, method, path, token=None, body=None, query=None,
                upload=None):
         self.seen.append({"method": method, "path": path,
-                          "body": body, "query": query, "upload": upload})
+                          "token": token, "body": body, "query": query,
+                          "upload": upload})
         return self.answer
 
 
@@ -726,6 +727,21 @@ def test_negative_content_length_is_refused_before_dispatch():
     assert b" 400 " in reply.split(b"\r\n", 1)[0]
     assert b"content length cannot be negative" in reply
     assert not app.seen
+
+
+def test_bearer_authentication_scheme_is_case_insensitive():
+    app = Records(Response(200, {"ok": True}))
+
+    with stub_serving(app) as base:
+        request = urllib.request.Request(
+            base + "/api/me", method="GET",
+            headers={"authorization": "bearer session-token"})
+        with urllib.request.urlopen(request) as reply:
+            assert reply.status == 200
+
+    assert app.seen[-1]["method"] == "GET"
+    assert app.seen[-1]["path"] == "/me"
+    assert app.seen[-1]["token"] == "session-token"
 
 
 # A DECLARED LENGTH LARGER THAN WHAT ARRIVES is guarded in `_read_document`

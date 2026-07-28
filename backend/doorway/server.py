@@ -181,7 +181,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _token(self) -> str | None:
         header = self.headers.get("authorization") or ""
-        return header[7:] if header.startswith("Bearer ") else None
+        scheme, separator, credentials = header.partition(" ")
+        token = credentials.strip()
+        return token if separator and scheme.casefold() == "bearer" and token else None
 
     def _read_body(self) -> tuple[dict | None, Response | None]:
         if self.headers.get("transfer-encoding"):
