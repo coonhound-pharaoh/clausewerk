@@ -180,6 +180,8 @@ class Handler(BaseHTTPRequestHandler):
         return header[7:] if header.startswith("Bearer ") else None
 
     def _read_body(self) -> tuple[dict | None, Response | None]:
+        if self.headers.get("transfer-encoding"):
+            return None, Response(400, {"error": "transfer encoding is not supported"})
         try:
             length = int(self.headers.get("content-length") or 0)
         except ValueError:
@@ -233,6 +235,8 @@ class Handler(BaseHTTPRequestHandler):
         malformed upload made a mistake, and "we broke" would send them to
         argue with somebody about a bug that is not there.
         """
+        if self.headers.get("transfer-encoding"):
+            return None, Response(400, {"error": "transfer encoding is not supported"})
         try:
             length = int(self.headers.get("content-length") or 0)
         except ValueError:

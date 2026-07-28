@@ -653,6 +653,28 @@ def test_truncated_json_is_refused_before_it_reaches_the_app():
     assert not app.seen
 
 
+def test_chunked_request_is_refused_instead_of_desynchronising_the_connection():
+    """The doorway has no chunk decoder, so it must not pretend it has one."""
+    app = Records(Response(200, {"ok": True}))
+
+    with stub_serving(app) as base:
+        parsed = urllib.parse.urlparse(base)
+        with socket.create_connection((parsed.hostname, parsed.port), timeout=5) as client:
+            client.sendall(
+                b"POST /api/sign-in HTTP/1.1\r\n"
+                b"Host: localhost\r\n"
+                b"Content-Type: application/json\r\n"
+                b"Transfer-Encoding: chunked\r\n"
+                b"Connection: close\r\n\r\n"
+                b"2\r\n{}\r\n0\r\n\r\n"
+            )
+            reply = client.makefile("rb").read()
+
+    assert b" 400 " in reply.split(b"\r\n", 1)[0]
+    assert b"transfer encoding is not supported" in reply
+    assert not app.seen
+
+
 # A DECLARED LENGTH LARGER THAN WHAT ARRIVES is guarded in `_read_document`
 # (the short-read check) and is deliberately NOT tested here: proving it needs a
 # client that promises bytes and then stops, which leaves the socket waiting for

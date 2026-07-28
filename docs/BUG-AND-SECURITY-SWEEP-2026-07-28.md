@@ -16,3 +16,16 @@ count and returns 400 before parsing or dispatching an incomplete request.
 **Proof.** `test_truncated_json_is_refused_before_it_reaches_the_app` sends a
 declared 20-byte body containing only `{}` and closes the write side. It proves
 the response is 400 and the application receives nothing.
+
+## 2. Unsupported chunked requests could desynchronise parsing
+
+**Risk.** The doorway does not decode HTTP chunked request bodies, but previously
+accepted the `Transfer-Encoding` header. It dispatched an empty body while the
+encoded bytes remained unread, creating an ambiguous request boundary.
+
+**Fix.** JSON and document receivers now reject every transfer-encoded request.
+Only the explicitly supported fixed-length request framing reaches the app.
+
+**Proof.**
+`test_chunked_request_is_refused_instead_of_desynchronising_the_connection`
+sends a real chunked request and proves it receives 400 without dispatch.
