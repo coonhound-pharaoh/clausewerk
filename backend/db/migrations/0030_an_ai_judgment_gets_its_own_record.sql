@@ -305,7 +305,7 @@ create policy record_judgment on cw.advisory_assessment for insert
 revoke all on cw.advisory_assessment from public;
 grant select, insert on cw.advisory_assessment
   to cw_requester, cw_legal_reviewer, cw_legal_admin;
-grant select on cw.advisory_assessment to cw_auditor, cw_administrator;
+grant select on cw.advisory_assessment to cw_auditor;
 grant usage, select on sequence cw.advisory_assessment_assessment_id_seq
   to cw_requester, cw_legal_reviewer, cw_legal_admin;
 

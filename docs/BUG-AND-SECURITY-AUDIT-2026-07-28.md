@@ -4,6 +4,28 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 114 — advisory evidence crossed its explicit administrator boundary
+
+**Observed defect.** The advisory-record migration explicitly reserved
+Administrator access for a later owner decision, but nevertheless granted that
+role direct SELECT. Because Administrators can read every review ticket, the
+ticket-scoped RLS policy then exposed every copied baseline and compared
+contract text, model prompt, and judgment record to that role.
+
+**Fix.** The contradictory Administrator grant is removed. Requester and Legal
+access remains ticket-scoped, Audit retains its explicit evidence-reading duty,
+and the migration's documented owner-decision boundary now matches its grants.
+
+**Regression proof.** A real Administrator database role is refused when it
+selects the sensitive advisory text and prompt columns. The existing role tests
+continue to prove that an auditor can read the record, cannot append one, and a
+viewer cannot read it at all.
+
+**Validation.**
+
+- `node backend/db/test/advisory.test.mjs` — 21 passed
+- `node backend/db/test/administrator.test.mjs` — 46 passed
+
 ## Cycle 113 — requesters could read every clause draft
 
 **Observed defect.** Review tickets and their evidence were deal-scoped, but

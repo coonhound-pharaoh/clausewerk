@@ -342,6 +342,15 @@ await test('a viewer cannot read the record at all', async () => {
     'a viewer read the judgments');
 });
 
+await test('an administrator cannot read advisory text before an owner decision', async () => {
+  const id = await decidedTicket();
+  await record(id);
+  await refused(() => queryAs('administrator',
+    'select baseline_text, compared_text, prompt from cw.advisory_assessment',
+    [], ADMIN),
+    'an administrator read copied contract text and model prompts');
+});
+
 await test('an auditor may read a judgment but not record one', async () => {
   const id = await decidedTicket();
   await record(id);
