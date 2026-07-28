@@ -5,6 +5,10 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S82 — Governed legal-hold dates are database-derived — SETTLED 2026-07-28
+Application opening and release actions bind both the authenticated actor and
+the database's current date. Owner writes retain historical-import flexibility.
+
 ## S81 — Review decision time is database-derived — SETTLED 2026-07-28
 Every review-ticket decision transition records the database's current time.
 Direct table callers cannot backdate or future-date the review evidence.

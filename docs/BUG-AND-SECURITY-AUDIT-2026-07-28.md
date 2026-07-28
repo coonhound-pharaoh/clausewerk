@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 68 — forged legal-hold dates could misstate retention state
+
+**Observed defect.** Application Legal users were attributed by the database,
+but could still supply `opened_on` and `released_on`. In particular, a
+future-dated release was treated as released immediately because an open hold is
+identified by a null release date, potentially unblocking retention destruction
+before the represented release date.
+
+**Fix.** Governed application writes now bind both the opening and release dates
+to the database's current date alongside the authenticated actor. Owner writes
+remain available for migrations and historical imports.
+
+**Regression proof.** A Legal reviewer supplies a year-2000 opening date and a
+Legal admin supplies a year-2099 release date. Both stored dates and the release
+audit event record the database's current date.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs` — 47 passed
+- `node backend/db/test/redaction.test.mjs` — 22 passed
+
 ## Cycle 67 — direct ticket decisions accepted forged timestamps
 
 **Observed defect.** The review-ticket transition supplied the current time only

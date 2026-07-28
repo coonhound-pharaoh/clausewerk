@@ -691,8 +691,10 @@ begin
   if cw.app_role() is not null then
     if tg_op = 'INSERT' then
       new.opened_by := cw.app_actor();
+      new.opened_on := current_date;
     elsif old.released_on is null and new.released_on is not null then
       new.released_by := cw.app_actor();
+      new.released_on := current_date;
     end if;
   end if;
   return new;

@@ -474,14 +474,17 @@ await test('a legal hold names its matter', async () => {
 
 await test('opening a hold is a named, audited act', async () => {
   await mustWrite('legal_reviewer',
-    `insert into cw.legal_hold (agreement_id,matter_ref,opened_by)
-     values ('AG-001','Northwind v. Us, 2026-CV-4417','impostor@clausewerk')
+    `insert into cw.legal_hold (agreement_id,matter_ref,opened_by,opened_on)
+     values ('AG-001','Northwind v. Us, 2026-CV-4417','impostor@clausewerk','2000-01-01')
      returning hold_id`, [], 'legal@clausewerk');
   const e = await one(`select payload from cw.audit_event
                        where event_type='legal_hold_opened' and subject='AG-001'`);
   eq(e.payload.matter_ref, 'Northwind v. Us, 2026-CV-4417');
   eq(e.payload.opened_by, 'legal@clausewerk',
     'the caller-supplied name entered the permanent audit record');
+  const h = await one(`select opened_on=current_date as opened_today
+                       from cw.legal_hold where agreement_id='AG-001'`);
+  eq(h.opened_today, true, 'the caller-supplied opening date survived the bind');
   const u = await one(`select cw.agreement_under_hold('AG-001') as held`);
   eq(u.held, true);
 });
@@ -539,12 +542,15 @@ await test('only a legal admin releases a hold', async () => {
 
 await test('releasing a hold is an audited act', async () => {
   await mustWrite('legal_admin',
-    `update cw.legal_hold set released_by='impostor@clausewerk', released_on=current_date
+    `update cw.legal_hold set released_by='impostor@clausewerk', released_on='2099-01-01'
      where agreement_id='AG-001' and matter_ref like 'Northwind%'
      returning hold_id`, [], 'legal@clausewerk');
   const e = await one(`select payload from cw.audit_event
                        where event_type='legal_hold_released'`);
   eq(e.payload.released_by, 'legal@clausewerk');
+  const today = await one(`select current_date::text as value`);
+  eq(e.payload.released_on, today.value,
+    'a caller-supplied future release date survived the bind');
   assert(e.payload.matter_ref.startsWith('Northwind'),
     'which matter stopped holding it is the useful half');
 });
