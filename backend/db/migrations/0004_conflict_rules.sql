@@ -195,6 +195,13 @@ create trigger conflict_rule_bind_approver
 create or replace function cw.conflict_rule_immutable() returns trigger
 language plpgsql as $$
 begin
+  if old.retired and new.retired_reason is distinct from old.retired_reason then
+    raise exception
+      'conflict_rule %@v% retirement evidence is immutable; publish a new '
+      'version for a new policy decision',
+      old.rule_id, old.version
+      using errcode = 'restrict_violation';
+  end if;
   if old.retired and not new.retired then
     raise exception
       'conflict_rule %@v% is retired; bringing it back into force is a new '
@@ -208,7 +215,9 @@ begin
      or new.title is distinct from old.title
      or new.detail is distinct from old.detail
      or new.effective_on is distinct from old.effective_on
-     or new.approved_by is distinct from old.approved_by then
+     or new.approved_by is distinct from old.approved_by
+     or new.approved_on is distinct from old.approved_on
+     or new.created_at is distinct from old.created_at then
     raise exception 'conflict_rule %@v% is immutable; publish a new version instead',
       old.rule_id, old.version using errcode = 'restrict_violation';
   end if;

@@ -412,6 +412,23 @@ await test('a retired conflict rule cannot be brought back by an edit', async ()
   const r = await rows(`select rule_id from cw.active_conflict_rule where rule_id='JUR-001'`);
   eq(r.length, 0, 'and it is still out of force');
 });
+await test('conflict rule publication and retirement evidence cannot be rewritten', async () => {
+  await throws(() => queryAs('legal_admin', `
+    update cw.conflict_rule
+       set retired_reason='A more convenient explanation',
+           approved_on='2000-01-01',
+           created_at='2099-01-01 00:00:00+00'
+     where rule_id='JUR-001' and version=1`,
+    [], 'test@clausewerk'), 'retirement evidence is immutable');
+  const r = await one(`select retired_reason, approved_on=current_date as approved_today,
+                              created_at between now() - interval '1 minute'
+                                             and now() as created_now
+                       from cw.conflict_rule
+                       where rule_id='JUR-001' and version=1`);
+  eq(r.retired_reason, 'Replaced by policy');
+  eq(r.approved_today, true);
+  eq(r.created_now, true);
+});
 
 // ── ADR-0009 · four-state model and supersession ────────────────────────────
 console.log('\nsupersession and state (ADR-0009)');

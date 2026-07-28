@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 98 — conflict-rule provenance and retirement evidence remained rewritable
+
+**Observed defect.** Conflict-rule immutability protected the predicate and
+effective date but omitted `approved_on`, `created_at`, and the retirement
+rationale after retirement. A legal admin could rewrite permanent publication
+chronology or replace the recorded reason a policy rule was withdrawn.
+
+**Fix.** The conflict-rule immutability trigger now freezes approval date and
+creation time on every published version and freezes retirement rationale once
+the rule is retired. The initial retirement transition remains permitted.
+
+**Regression proof.** After retiring a rule, a legal admin attempts to replace
+its rationale and move both publication timestamps. The update is refused and
+all original evidence remains unchanged.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 83 passed
+- `python -m pytest backend/engine/test_validation.py -q` — 26 passed
+
 ## Cycle 97 — clause retirement evidence remained rewritable
 
 **Observed defect.** Retirement was one-way, but an already retired clause
