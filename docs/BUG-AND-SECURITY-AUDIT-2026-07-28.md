@@ -58,6 +58,23 @@ reads only the bounded amount and returns an absence naming the oversized reply.
 - `python -m pytest doorway/test_advisory.py -q -k "adapter"`
 - `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
 
+## Cycle 16 — non-object provider envelope raised
+
+**Observed defect.** A syntactically valid top-level JSON array, string, number,
+or null reached `payload.get()` and raised `AttributeError`, violating the
+adapter's guarantee that advisory failures never interrupt governed work.
+
+**Fix.** Require a JSON object provider envelope before reading model
+provenance or choices; otherwise record an absent judgment.
+
+**Regression proof.** Four valid non-object JSON types must each return an
+absence naming the wrong envelope shape.
+
+**Validation.**
+
+- `python -m pytest doorway/test_advisory.py -q -k "non_object_provider"`
+- `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
+
 ## Cycle 15 — structured model basis was stringified
 
 **Observed defect.** A list, object, number, or boolean in the model's `basis`

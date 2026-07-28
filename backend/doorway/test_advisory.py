@@ -248,6 +248,22 @@ def test_the_adapter_does_not_stringify_a_structured_basis(monkeypatch, basis):
     assert judgment.basis is None
 
 
+@pytest.mark.parametrize("payload", [[], "answer", 7, None])
+def test_the_adapter_refuses_a_non_object_provider_envelope(monkeypatch, payload):
+    class Reply(BytesIO):
+        def close(self):
+            pass
+
+    monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
+    monkeypatch.setattr(advisory.urllib.request, "urlopen",
+                        lambda request, timeout: Reply(json.dumps(payload).encode()))
+
+    judgment = advisory.judge_semantic_difference(AI_TEXT, APPROVED)
+
+    assert judgment.outcome == "absent"
+    assert "not a JSON object" in judgment.absent_reason
+
+
 def test_a_judgment_asked_for_without_a_model_is_answered_not_refused(people, db):
     answered = advisory.semantic_difference(db, LEGAL_CALLER,
                                             {"ticket_id": decided_ticket(db)})

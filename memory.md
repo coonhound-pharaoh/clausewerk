@@ -2542,3 +2542,8 @@ can become a recorded judgment.
 The model basis may be text or absent. Objects, arrays, numbers, and booleans
 are malformed replies and cannot be converted into plausible-looking stored
 explanations.
+
+## S30 — Model provider envelopes must be objects — SETTLED 2026-07-28
+A syntactically valid JSON array, scalar, or null is not a provider response
+envelope. It records an absent judgment before any object fields are read and
+cannot escape the advisory adapter as AttributeError.

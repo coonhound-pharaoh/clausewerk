@@ -185,6 +185,10 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
         return _absent("the model's reply was not readable",
                        model=model, prompt=prompt, inputs=inputs)
 
+    if not isinstance(payload, dict):
+        return _absent("the model answered, but its response was not a JSON object",
+                       model=model, prompt=prompt, inputs=inputs)
+
     version = str(payload.get("model") or model)
     try:
         content = payload["choices"][0]["message"]["content"]
