@@ -44,6 +44,7 @@ language plpgsql as $$
 begin
   if cw.app_role() is not null then
     new.tagged_by := cw.app_actor();
+    new.tagged_on := current_date;
   end if;
   return new;
 end $$;

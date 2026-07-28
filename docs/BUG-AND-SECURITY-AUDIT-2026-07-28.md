@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 93 — clause-tag publication date was caller-controlled
+
+**Observed defect.** Governed clause-tag inserts bound the authenticated Legal
+author but accepted caller-supplied `tagged_on`. Because tags are immutable
+policy inputs to conflict evaluation, their publication history could be
+backdated or future-dated permanently.
+
+**Fix.** The clause-tag attribution trigger now derives `tagged_on` from the
+database clock for governed writes. Owner historical imports remain explicit.
+
+**Regression proof.** A legal admin publishes a tag with a year-2000 date and a
+forged author. The stored author is authenticated and the tag date is the
+current database date.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 81 passed
+- `node backend/db/test/writer-sql.test.mjs` — 16 passed
+
 ## Cycle 92 — conflict-rule approval chronology was caller-controlled
 
 **Observed defect.** Governed conflict-rule publication bound the authenticated

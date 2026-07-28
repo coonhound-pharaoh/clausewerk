@@ -197,11 +197,14 @@ await test('versions insert', async () => {
 });
 await test('a clause tag records the authenticated Legal author', async () => {
   const r = await queryAs('legal_admin', `
-    insert into cw.clause_tag (clause_id,version,tag,tagged_by)
-    values ('DP-H-014',1,'audit:cycle48','forged-tagger@clausewerk')
-    returning tagged_by`, [], 'test@clausewerk');
+    insert into cw.clause_tag (clause_id,version,tag,tagged_by,tagged_on)
+    values ('DP-H-014',1,'audit:cycle48','forged-tagger@clausewerk','2000-01-01')
+    returning tagged_by, tagged_on=current_date as tagged_today`,
+    [], 'test@clausewerk');
   eq(r[0].tagged_by, 'test@clausewerk',
      'policy-driving tag provenance must come from the governed session');
+  eq(r[0].tagged_today, true,
+     'policy-driving tag date must come from the database clock');
 });
 await test('a published clause tag cannot be rewritten or removed', async () => {
   await throws(() => queryAs('legal_admin', `
