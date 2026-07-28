@@ -296,6 +296,11 @@ create trigger audit_run after insert on cw.run
 alter table cw.run          enable row level security;
 alter table cw.run_decision enable row level security;
 alter table cw.run_finding  enable row level security;
+alter table cw.snapshot              enable row level security;
+alter table cw.snapshot_member       enable row level security;
+alter table cw.snapshot_ladder_rung  enable row level security;
+alter table cw.ruleset               enable row level security;
+alter table cw.ruleset_member        enable row level security;
 
 -- A run names a vendor and what we agreed with them; scoped like concessions.
 create policy read_scoped on cw.run for select using (
@@ -313,6 +318,46 @@ create policy write_scoped on cw.run_decision for insert
 create policy read_scoped on cw.run_finding for select using (
   exists (select 1 from cw.run r where r.run_id = run_finding.run_id));
 create policy write_scoped on cw.run_finding for insert
+  with check (cw.app_role() in ('requester','legal_reviewer','legal_admin'));
+
+-- Snapshot and ruleset rows are content-addressed and may be shared by many
+-- runs. A requester may read a pin only when at least one run visible through
+-- cw.run references it. Legal, Audit, and the Administrator retain their
+-- explicit whole-store read duties. Inserts remain role-scoped because a pin
+-- must be stored before the run that references it can be inserted.
+create policy read_scoped on cw.snapshot for select using (
+  cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+  or exists (select 1 from cw.run r
+              where r.snapshot_id = snapshot.snapshot_id));
+create policy write_scoped on cw.snapshot for insert
+  with check (cw.app_role() in ('requester','legal_reviewer','legal_admin'));
+
+create policy read_scoped on cw.snapshot_member for select using (
+  cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+  or exists (select 1 from cw.run r
+              where r.snapshot_id = snapshot_member.snapshot_id));
+create policy write_scoped on cw.snapshot_member for insert
+  with check (cw.app_role() in ('requester','legal_reviewer','legal_admin'));
+
+create policy read_scoped on cw.snapshot_ladder_rung for select using (
+  cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+  or exists (select 1 from cw.run r
+              where r.snapshot_id = snapshot_ladder_rung.snapshot_id));
+create policy write_scoped on cw.snapshot_ladder_rung for insert
+  with check (cw.app_role() in ('requester','legal_reviewer','legal_admin'));
+
+create policy read_scoped on cw.ruleset for select using (
+  cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+  or exists (select 1 from cw.run r
+              where r.ruleset_id = ruleset.ruleset_id));
+create policy write_scoped on cw.ruleset for insert
+  with check (cw.app_role() in ('requester','legal_reviewer','legal_admin'));
+
+create policy read_scoped on cw.ruleset_member for select using (
+  cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+  or exists (select 1 from cw.run r
+              where r.ruleset_id = ruleset_member.ruleset_id));
+create policy write_scoped on cw.ruleset_member for insert
   with check (cw.app_role() in ('requester','legal_reviewer','legal_admin'));
 
 grant select, insert on cw.snapshot, cw.snapshot_member, cw.snapshot_ladder_rung,

@@ -4,6 +4,28 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 112 — run pins exposed cross-deal evidence
+
+**Observed defect.** Snapshot and ruleset tables granted direct SELECT to
+requesters but had no row-level security. A requester database connection could
+enumerate snapshot headers, pinned clause pools and ladders, and ruleset
+membership unrelated to any run or deal they could see.
+
+**Fix.** All five content-addressed pin tables now enforce RLS. Requesters see a
+pin only when a run visible through `cw.run` references it; Legal, Audit, and
+Administrator retain their explicit whole-store read duties. Role-scoped
+inserts remain available before the referencing run is recorded.
+
+**Regression proof.** Two requesters receive runs with distinct snapshots and
+rulesets. The first requester sees only their run's header, members, ladder
+rungs, ruleset, and rule members, while the auditor still sees the complete
+store.
+
+**Validation.**
+
+- `node backend/db/test/run-store.test.mjs` — 47 passed
+- `node backend/db/test/writer-sql.test.mjs` — 16 passed
+
 ## Cycle 111 — published ladder classifications were rewritable
 
 **Observed defect.** Rungs were validated against their parent ladder's

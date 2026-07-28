@@ -365,15 +365,43 @@ await test('a requester sees only their own runs', async () => {
   await db.exec(`reset role;
     insert into cw.agreement (agreement_id,counterparty,requester)
       values ('AG-002','Contoso','other@cw');
+    insert into cw.snapshot (snapshot_id,taken_on)
+      values ('${H2}','2026-07-26');
+    insert into cw.snapshot_member (snapshot_id,clause_id,version,selectable)
+      values ('${H2}','DP-H-052',1,true);
+    insert into cw.snapshot_ladder_rung
+      (snapshot_id,category_key,severity,rung,clause_id,version,is_floor)
+      values ('${H2}','data','High',0,'DP-H-052',1,true);
     insert into cw.run (run_id,agreement_id,vendor,manifest,manifest_source,
                         snapshot_id,ruleset_id,result_hash,engine_version,gate_open,created_by)
-      values ('RUN-002','AG-002','Contoso','{}','llm','${H1}','${R1}','${RH}',
+      values ('RUN-002','AG-002','Contoso','{}','llm','${H2}','${R2}','${RH}',
               'clausewerk-engine/3',true,'other@cw');
     select set_config('cw.role','requester',false);
     select set_config('cw.actor','buyer@cw',false);`);
   await db.exec(`set role cw_requester;`);
   const r = await rows(`select run_id from cw.run order by run_id`);
   eq(r.map(x => x.run_id), ['RUN-001'], "a buyer must not see another buyer's runs");
+});
+
+await test('a requester sees only pins referenced by their visible runs', async () => {
+  const snapshots = await rows(`select snapshot_id from cw.snapshot order by snapshot_id`);
+  eq(snapshots.map(x => x.snapshot_id), [H1],
+    "a requester enumerated another deal's snapshot headers");
+  const members = await rows(
+    `select distinct snapshot_id from cw.snapshot_member order by snapshot_id`);
+  eq(members.map(x => x.snapshot_id), [H1],
+    "a requester enumerated another deal's pinned clause pool");
+  const ladders = await rows(
+    `select distinct snapshot_id from cw.snapshot_ladder_rung order by snapshot_id`);
+  eq(ladders.map(x => x.snapshot_id), [H1],
+    "a requester enumerated another deal's pinned ladder");
+  const rulesets = await rows(`select ruleset_id from cw.ruleset order by ruleset_id`);
+  eq(rulesets.map(x => x.ruleset_id), [R1],
+    'a requester enumerated rulesets unrelated to their runs');
+  const ruleMembers = await rows(
+    `select distinct ruleset_id from cw.ruleset_member order by ruleset_id`);
+  eq(ruleMembers.map(x => x.ruleset_id), [R1],
+    'a requester enumerated rule pins unrelated to their runs');
 });
 
 await test('an auditor sees every run', async () => {
@@ -387,6 +415,21 @@ await test('an auditor sees every run', async () => {
   const r = await one(`select count(*)::int n from cw.run`);
   eq(all.n, 3, 'the fixture holds three runs');
   eq(r.n, 3);
+});
+
+await test('an auditor sees the complete pin store', async () => {
+  const checks = [
+    ['snapshot', 3],
+    ['snapshot_member', 3],
+    ['snapshot_ladder_rung', 3],
+    ['ruleset', 2],
+    ['ruleset_member', 1],
+  ];
+  for (const [table, expected] of checks) {
+    const r = await queryAs('auditor',
+      `select count(*)::int n from cw.${table}`, [], 'auditor@cw');
+    eq(r[0].n, expected, `the auditor lost rows from cw.${table}`);
+  }
 });
 
 await test('a viewer cannot read runs', async () => {
