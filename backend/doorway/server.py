@@ -188,8 +188,11 @@ class Handler(BaseHTTPRequestHandler):
             return None, Response(413, {"error": "that request is too large"})
         if length <= 0:
             return None, None
+        raw = self.rfile.read(length)
+        if len(raw) != length:
+            return None, Response(400, {"error": "that request arrived incomplete"})
         try:
-            parsed = json.loads(self.rfile.read(length) or b"null")
+            parsed = json.loads(raw or b"null")
         except (json.JSONDecodeError, UnicodeDecodeError):
             # Malformed JSON is the caller's mistake, not a refusal. Saying
             # "refused" here would send somebody to argue about permissions.

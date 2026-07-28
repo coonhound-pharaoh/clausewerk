@@ -19,8 +19,10 @@ WHAT IS BEING PROVED
 from __future__ import annotations
 
 import json
+import socket
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from contextlib import contextmanager
 from http.server import ThreadingHTTPServer
@@ -627,6 +629,27 @@ def test_a_document_that_is_not_there_is_a_400_and_not_a_crash():
 
     assert status == 400, f"an empty upload got {status}: {body}"
     assert body.get("error") != "refused"
+    assert not app.seen
+
+
+def test_truncated_json_is_refused_before_it_reaches_the_app():
+    """A valid prefix is not the complete request the caller declared."""
+    app = Records(Response(200, {"ok": True}))
+
+    with stub_serving(app) as base:
+        host, port = urllib.parse.urlparse(base).hostname, urllib.parse.urlparse(base).port
+        with socket.create_connection((host, port), timeout=5) as client:
+            client.sendall(
+                b"POST /api/sign-in HTTP/1.0\r\n"
+                b"Content-Type: application/json\r\n"
+                b"Content-Length: 20\r\n\r\n"
+                b"{}"
+            )
+            client.shutdown(socket.SHUT_WR)
+            reply = client.makefile("rb").read()
+
+    assert b" 400 " in reply.split(b"\r\n", 1)[0]
+    assert b"arrived incomplete" in reply
     assert not app.seen
 
 
