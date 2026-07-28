@@ -174,7 +174,13 @@ def contract(db: Database, caller: Caller, query: dict) -> "Response | Download"
             # change the result hash — so this endpoint would refuse because
             # Legal retired a category, and report it as a run that does not
             # reproduce. That is the one thing this refusal must never mean.
-            manifest = manifests.manifest_from(run["manifest"])
+            try:
+                manifest = manifests.manifest_from(run["manifest"])
+            except manifests.Malformed as malformed:
+                return Response(409, {
+                    "error": "refused",
+                    "reason": f"this run's stored manifest is malformed: {malformed}",
+                    "kind": "refused_on_merits"})
             resolution = resolve(manifest, rebuilt)
 
             if resolution.result_hash != run["result_hash"]:

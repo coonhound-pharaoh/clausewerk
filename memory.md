@@ -2572,3 +2572,8 @@ as caller input and cannot become conversion failures.
 Missing clause members, inconsistent ladder members, and unknown stored
 categories all fail closed as 409 reconstruction refusals before document bytes
 are built. None may escape as an internal error or produce partial paper.
+
+## S36 — Malformed stored manifests cannot produce paper — SETTLED 2026-07-28
+A run whose stored JSON manifest no longer satisfies the manifest boundary is
+non-reproducible. Document generation returns a 409 refusal before resolution
+and never emits partial Word bytes.

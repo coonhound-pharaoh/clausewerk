@@ -266,6 +266,24 @@ def test_other_rebuild_inconsistencies_are_409s_with_no_document(
     assert not data.startswith(b"PK")
 
 
+def test_a_malformed_stored_manifest_is_a_409_with_no_document(
+    library, monkeypatch
+):
+    client, run = record_a_run(library)
+    from doorway import documents as documents_module
+
+    def refuse(_body):
+        raise documents_module.manifests.Malformed("risks are not a list")
+
+    monkeypatch.setattr(documents_module.manifests, "manifest_from", refuse)
+
+    status, _headers, data = download(library, client.token, run["run_id"])
+
+    assert status == 409
+    assert refusal(data)["kind"] == "refused_on_merits"
+    assert not data.startswith(b"PK")
+
+
 def test_a_caller_naming_a_run_that_is_not_theirs_is_refused_with_no_bytes(
     library, schema
 ):

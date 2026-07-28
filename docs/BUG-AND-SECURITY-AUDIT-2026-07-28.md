@@ -76,6 +76,23 @@ errors must each return 409 and no ZIP bytes.
 - `python -m pytest doorway/test_documents.py -q -k "other_rebuild_inconsistencies"`
 - `python -m py_compile doorway/documents.py doorway/test_documents.py`
 
+## Cycle 22 — malformed stored manifests became 500s
+
+**Observed defect.** Stored run manifests are JSONB without a database shape
+constraint. If reconstruction encounters an invalid object or risk list,
+`manifest_from` raises `Malformed` outside the endpoint's refusal handling.
+
+**Fix.** Classify malformed stored manifests as non-reproducible runs and
+return a refused-on-merits 409 before resolution or document generation.
+
+**Regression proof.** Forced malformed stored-manifest reconstruction must
+return 409 and no ZIP bytes.
+
+**Validation.**
+
+- `python -m pytest doorway/test_documents.py -q -k "malformed_stored_manifest"`
+- `python -m py_compile doorway/documents.py doorway/test_documents.py`
+
 ## Cycle 20 — malformed ticket IDs escaped integer conversion
 
 **Observed defect.** `str.isdigit()` accepts some Unicode numeral characters
