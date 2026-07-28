@@ -464,6 +464,30 @@ create trigger override_finding_decided_once
   before update on cw.override_finding
   for each row execute function cw.override_finding_decided_once();
 
+-- Workflow functions move state and closed_at. Everything else is the request
+-- as it was made and must not be rewritten through the UPDATE privilege those
+-- functions need.
+create or replace function cw.override_request_evidence_immutable() returns trigger
+language plpgsql as $$
+begin
+  if new.request_id is distinct from old.request_id
+     or new.run_id is distinct from old.run_id
+     or new.agreement_id is distinct from old.agreement_id
+     or new.requested_by is distinct from old.requested_by
+     or new.requested_at is distinct from old.requested_at
+     or new.justification is distinct from old.justification
+     or new.commercial_pressure is distinct from old.commercial_pressure then
+    raise exception
+      'override request % evidence is immutable; only its workflow state may move',
+      old.request_id using errcode = 'restrict_violation';
+  end if;
+  return new;
+end $$;
+
+create trigger override_request_evidence_no_edit
+  before update on cw.override_request
+  for each row execute function cw.override_request_evidence_immutable();
+
 create or replace function cw.override_no_delete() returns trigger
 language plpgsql as $$
 begin

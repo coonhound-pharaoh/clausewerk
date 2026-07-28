@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S74 — Override-request evidence is immutable — SETTLED 2026-07-28
+After an override request opens, its run, agreement, requester identity,
+opening time, justification, and commercial pressure cannot be rewritten. The
+update path exists only for governed workflow state.
+
 ## S73 — Override findings inherit request scope — SETTLED 2026-07-28
 An override finding may be inserted only when the requester can see its parent
 override request through RLS. Guessing another request ID cannot append

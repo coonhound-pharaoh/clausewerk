@@ -4,6 +4,24 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 60 — override-request evidence was rewriteable
+
+**Observed defect.** The update privilege required by override workflow
+functions also let a requester rewrite the parent run, agreement, requester
+identity, opening time, justification, and commercial pressure after submission.
+Those fields drive scope and are the immutable evidence of what was requested.
+
+**Fix.** A before-update guard now permits workflow fields only; every
+request-evidence field is immutable after opening.
+
+**Regression proof.** The authenticated requester attempts to replace ownership,
+deal scope, justification, and pressure in one update. The operation raises and
+all original values remain byte-for-byte unchanged.
+
+**Validation.**
+
+- `node backend/db/test/override.test.mjs` — 34 passed
+
 ## Cycle 59 — requesters could append findings to foreign overrides
 
 **Observed defect.** Direct `override_finding` inserts checked only that the

@@ -152,6 +152,22 @@ await test('a requester cannot append a finding to another requester’s request
     eq(held.n, 0, 'a foreign requester must leave no immutable finding');
   });
 
+await test('a requester cannot rewrite an open override’s evidence', async () => {
+  await throws(() => queryAs('requester', `
+    update cw.override_request
+       set requested_by='somebody.else@clausewerk',
+           agreement_id=null,
+           justification='A replacement justification long enough to pass.',
+           commercial_pressure='rewritten after opening'
+     where request_id=${REQ}`, [], DANA), 'evidence is immutable');
+  const r = await one(`
+    select requested_by, agreement_id, justification, commercial_pressure
+      from cw.override_request where request_id=${REQ}`);
+  eq([r.requested_by, r.agreement_id, r.justification, r.commercial_pressure],
+     [DANA, 'AG-1', JUST, 'renewal deadline'],
+     'the original request evidence must survive the refused rewrite');
+});
+
 await test('a request on its own passes NOTHING', async () => {
   // The whole product, in one assertion. If this ever returns a row for a
   // request that has only been asked for, the blanket button is back.
