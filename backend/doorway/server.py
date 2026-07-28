@@ -112,6 +112,7 @@ REQUEST_TIMEOUT_SECONDS = 30
 # act rather than a condition buried in a handler. Anything else the browser
 # sends is dropped before App.handle is called.
 QUERY_KEYS = ("run",)
+MAX_QUERY_FIELDS = 20
 
 MIME = {
     ".html": "text/html; charset=utf-8",
@@ -191,7 +192,10 @@ class Handler(BaseHTTPRequestHandler):
         return path[4:] if path.startswith("/api/") else path
 
     def _query(self, raw: str) -> tuple[dict[str, str], Response | None]:
-        parsed = parse_qs(raw)
+        try:
+            parsed = parse_qs(raw, max_num_fields=MAX_QUERY_FIELDS)
+        except ValueError:
+            return {}, Response(400, {"error": "the query string has too many fields"})
         for key in QUERY_KEYS:
             if len(parsed.get(key, [])) > 1:
                 return {}, Response(400, {"error": f"{key} was supplied more than once"})

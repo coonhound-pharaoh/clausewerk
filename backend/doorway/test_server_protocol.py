@@ -93,3 +93,14 @@ def test_pathologically_long_content_length_is_a_caller_error_not_a_crash():
     assert body is None
     assert refused is not None
     assert refused.status == 400
+
+
+def test_ignored_query_fields_cannot_grow_without_bound():
+    handler = handler_with_headers()
+    raw = "&".join(f"ignored{i}=x" for i in range(100))
+
+    query, refused = handler._query(raw)
+
+    assert query == {}
+    assert refused is not None
+    assert refused.status == 400
