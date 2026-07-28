@@ -183,6 +183,19 @@ await test('nothing can be decided before the request has been socialised', asyn
     'has not been socialised');
 });
 
+await test('a requester cannot socialise another requester’s request', async () => {
+  await throws(() => queryAs('requester',
+    `select cw.socialise_override_request($1)`, [REQ], ELI),
+    'only the requester who opened',
+    'an unrelated requester advanced another person’s override window');
+  eq((await one(
+    `select state from cw.override_request where request_id=$1`, [REQ])).state,
+    'requested', 'the refused caller changed the request anyway');
+  eq(await rows(
+    `select * from cw.override_socialisation where request_id=$1`, [REQ]), [],
+    'the refused caller created a socialisation record');
+});
+
 await test('socialising resolves a real audience and records each person', async () => {
   await execAs('administrator',
     `insert into cw.override_watcher (category_key,person,added_by)
@@ -206,6 +219,16 @@ await test('the socialisation event is a SYSTEM act, never a person\'s', async (
                        from cw.audit_event where event_type='human_override_socialise'`);
   eq(e.actor_kind, 'system', 'socialisation was recorded as a human act');
   eq(e.n, '2');
+});
+
+await test('Legal may still push a requester’s pending request along', async () => {
+  const pushed = await openRequest();
+  const n = await queryAs('legal_reviewer',
+    `select cw.socialise_override_request($1) as n`, [pushed], PAT);
+  eq(n[0].n, 2, 'Legal lost its intended socialisation path');
+  eq((await one(
+    `select state from cw.override_request where request_id=$1`, [pushed])).state,
+    'socialised');
 });
 
 await test('an override with nobody to tell is REFUSED, not quietly sent', async () => {

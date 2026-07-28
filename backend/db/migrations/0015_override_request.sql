@@ -185,12 +185,29 @@ returns int
 language plpgsql
 security definer set search_path = cw, pg_temp as $$
 declare r cw.override_request%rowtype; win text; closes timestamptz; n int;
+        caller_role text;
 begin
   select * into r from cw.override_request where request_id = p_request_id;
   if not found then
     raise exception 'no such override request: %', p_request_id
       using errcode = 'no_data_found';
   end if;
+
+  -- SECURITY DEFINER bypasses the request table's row policy, so the function
+  -- must restate the grant's two intended branches itself: Legal may push any
+  -- request along, while a requester may advance only the request they opened.
+  -- current_user cannot answer this inside a definer function; `role` is what
+  -- db.as_person() SETs, and session_user covers a direct role connection.
+  caller_role := coalesce(nullif(current_setting('role', true), 'none'),
+                          session_user);
+  if not (caller_role in ('cw_legal_reviewer', 'cw_legal_admin')
+          or (caller_role = 'cw_requester'
+              and r.requested_by = cw.app_actor())) then
+    raise exception
+      'only the requester who opened override request % or Legal may socialise it',
+      p_request_id using errcode = 'insufficient_privilege';
+  end if;
+
   if r.state <> 'requested' then
     raise exception 'override request % is already %; socialisation happens once',
       p_request_id, r.state using errcode = 'restrict_violation';

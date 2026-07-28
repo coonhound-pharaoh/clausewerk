@@ -4,6 +4,28 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 25 — requesters could socialise other people’s overrides
+
+**Observed defect.** `cw.socialise_override_request` is a security-definer
+function so it can resolve the complete notification audience. That also
+bypasses the override-request row policy, and the function did not restore an
+ownership check. Any requester who learned another request’s numeric ID could
+advance it to `socialised`, notify its audience, and start its decision window.
+
+**Fix.** Resolve the invoker role before acting. Legal retains its intended
+ability to advance any pending request, while a requester must be the person
+recorded as having opened that request.
+
+**Regression proof.** The override suite has an unrelated requester attempt the
+transition, requires an authorization failure, and proves neither state nor
+socialisation rows changed. Positive controls prove both the owner-requester
+and Legal paths still work.
+
+**Validation.**
+
+- `node backend/db/test/override.test.mjs`
+- Result: 30 passed, 0 failed.
+
 ## Cycle 24 — terminated agreements could acquire executed records
 
 **Observed defect.** The execution trigger changed an agreement from

@@ -2587,3 +2587,9 @@ bytes are produced.
 The executed-agreement insert and the `negotiating` to `executed` status move
 are one atomic act. If the agreement is no longer negotiating, the trigger
 raises and no immutable execution record is retained.
+
+## S39 — Override socialisation is owner-scoped — SETTLED 2026-07-28
+The socialisation definer may bypass row policies only to resolve the complete
+audience. Legal may advance any pending request; a requester may advance only
+the request they opened. An unrelated requester changes no state and creates no
+notification record.
