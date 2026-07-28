@@ -1,0 +1,84 @@
+{
+  "workflow_id": "cw-fix-2026-07-28",
+  "mode": "mixed",
+  "rigor": "standard",
+  "stop_after": "work packages",
+  "stage_reached": "Gate 4 — Implementation",
+  "note": "The user instructed 'Implement' after Gate 3, extending the contract's stopping point.",
+  "gates": {
+    "gate_1_objective_contract": "PASS (assumptions disclosed)",
+    "gate_2_integrated_plan": "PASS — 11 alternatives rejected on verified evidence",
+    "gate_3_work_packages": "PASS — C1 and C2 closed on evidence before implementation",
+    "gate_4_implementation": "11 of 13 packages implemented; WP-012 and WP-013 deferred as planned"
+  },
+  "agents_run": 11,
+  "packages": 13,
+  "implemented": 11,
+  "deliverable": "REVISION-PLAN-2026-07-28.md",
+  "owner_decisions_settled": {
+    "D1": "B3 — docstring corrected, code unchanged (memory.md S85)",
+    "D2": "A-1 — first HELD, then FIXED once a working database was available to test against. Actor-scoped policy plus a reserved-name constraint, migration 0033 (memory.md S106)",
+    "D3": "0032 never edited in place; any change supersedes it with a new number (S94)",
+    "D4": "WP-001 fourth row RETIRED with a written reason (S93)"
+  },
+  "conditions_closed": {
+    "C1": "The helper raises rather than returning a sentinel — writes.refuse_structured.",
+    "C2": "Guard placed in runs.py, NOT in manifest_from. Evidence: manifests._record binds only vendor and a JSON payload, so POST /manifests/check never passes manifest.value to the driver. The written decision at runs.py:141-143 stands.",
+    "C3": "applied at authoring",
+    "C4": "memory.md serialised — one author, entries S85-S94",
+    "C5": "volatile facts re-read at authoring: the memory.md head was S84, not the S67 the plan quoted",
+    "C6": "the server.py row was repaired regardless of commit state"
+  },
+  "package_status": {
+    "WP-001": "done — mutation harness repaired, 35 rows, preflight clean",
+    "WP-002": "done — docstring only, no code",
+    "WP-003": "done — refuse_structured helper, classification floor, required_if",
+    "WP-004": "done — executions.py and runs.py bind sites",
+    "WP-005": "done — reasons[0] guarded (2 sites), audit events bound (3 sites)",
+    "WP-006": "done — transaction split plus MAX_CONCURRENT_JUDGMENTS",
+    "WP-007": "done WITH DEVIATION — retry in migrate.py, no migration 0034",
+    "WP-008": "done — test_unprotected_tables.py tripwire",
+    "WP-009": "done — app.py rationale, sessions.py imports",
+    "WP-010": "done — constants relocated to sessions.py",
+    "WP-011": "done — migration 0033, actor-scoped policy + reserved identity namespace, with test_session_privacy.py",
+    "WP-012": "deferred as planned",
+    "WP-013": "deferred as planned"
+  },
+  "deviations": [
+    "WP-007 shipped no migration 0034. A later migration cannot stop 0016 re-running on every fresh database, and 0016 itself cannot be edited because its filename is already in every ledger. The retry lives in migrate.py instead. Recorded as memory.md S89.",
+    "WP-007's conditional-grant item was dropped: PRE-1 measured 12 concurrent grants with zero failures, so the grant never contended.",
+    "B1 maps to two packages (WP-003 floor, WP-004 bind sites), as the plan itself disclosed."
+  ],
+  "evidence": {
+    "engine_suite": "202 passed, unchanged",
+    "doorway_mutation_preflight": "[] clean, 35 rows",
+    "wp_007_demonstrated_failing": "2 failed against pre-fix migrate.py/setup.py; 5 passed after the fix",
+    "wp_008_demonstrated_failing": "the tripwire fails and names the offending file when a table name is planted",
+    "d3_probe": "the local developer database holds no 003x migration row",
+    "doorway_mutation_harness": "EXIT 0, 34/35 caught. First full run in an unknown length of time — the gate had been aborting in preflight, so no verdict existed before this.",
+    "doorway_suite": "723 passed, 0 failed, 0 errors (was 566 passed + 1 error)",
+    "b1_escape_caught_in_review": "WrongShape escaped writes.answer() and would have re-created the 500 the guard removes; found by reading the diff, not by the suite. Fixed, and now covered by an endpoint test demonstrated failing without the fix.",
+    "wp_011_demonstrated_failing": "with 0033 removed, 4 of the 6 boundary tests fail; the 2 that pass either way are the controls proving sign-in itself still works",
+    "demo_accounts_unaffected": "all six seeded accounts verified allowed by the reserved-namespace constraint; __signin__ verified refused"
+  },
+  "new_findings": [
+    {
+      "id": "B11",
+      "summary": "The guarantee 'an outage is blamed on the caller' is UNGUARDED — the harness scores it MISS.",
+      "detail": "Mutating away the psycopg.OperationalError branch in refusals.classify does not fail test_refusals.py::test_the_database_being_unreachable_is_not_the_callers_fault. With the branch removed, an OperationalError falls through to the generic psycopg.Error catch-all and still returns 500 'broke', so the test's status and kind assertions hold. What the mutation actually destroys is the SEPARATE reason sentence and the stderr log line, neither of which the test asserts — correctly, since the house rule forbids testing wording.",
+      "pre_existing": "PROVEN, not assumed. Re-ran the mutation against refusals.py at HEAD, with this pass's changes stashed: it also returned 500 'broke'. This is not a regression introduced here.",
+      "why_it_was_invisible": "The harness had been aborting in preflight, so all 36 doorway rows were unevaluated. Repairing the gate (WP-001) is what made this visible — which is the argument for sequencing WP-001 first, now demonstrated rather than asserted.",
+      "not_fixed_here": "Out of scope for every package in this plan. Closing it means finding an observable difference between the two paths that is not message text, or accepting the row as unguardable and retiring it with a reason. That is an owner decision of the same shape as D4."
+    }
+  ],
+  "source_reports_corrected": [
+    "bug_report.md: B3 withdrawn, B10 added, B1/B4/B5 fixes corrected",
+    "audit_results.md: A-1 both options re-costed"
+  ],
+  "memory_records": "S96-S106 (renumbered from S85-S95 at merge: a concurrent session claimed S85 and S95 while this work was in flight — condition C4, observed rather than predicted)",
+  "open": [
+    "B11 — the outage guarantee is unguarded; owner decision, same shape as D4",
+    "db/test has no SQL-side coverage of cw.session; the A-1 guarantee rests on a Python test",
+    "db/test/mutation-check.mjs staleness never probed — the first harness npm run verify runs"
+  ]
+}

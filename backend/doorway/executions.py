@@ -48,6 +48,7 @@ import psycopg
 from doorway.db import Database
 from doorway.identity import Caller
 from doorway.refusals import Refused, classify
+from doorway.writes import WrongShape, refuse_structured
 
 # ── The currency gate's query ───────────────────────────────────────────────
 #
@@ -170,6 +171,17 @@ def execute(db: Database, caller: Caller, body: dict) -> Answer:
         for field in SIGNATORY_FIELDS:
             if not str(who.get(field) or "").strip():
                 return _rejected(f"signatory {index} names no {field}")
+
+    # Shape before str(), and this is the whole point of the guard here: str()
+    # on a dict yields the plausible-looking "{'nested': [1, 2]}", which matches
+    # no row, so a malformed request would come back as a not-found and never be
+    # reported as malformed at all. The classification floor in refusals.py
+    # cannot help — the value never reaches the driver. One rule, imported.
+    try:
+        for field in ("agreement_id", "run_id"):
+            refuse_structured(field, body[field])
+    except WrongShape as wrong:
+        return _rejected(str(wrong))
 
     agreement_id = str(body["agreement_id"]).strip()
     run_id = str(body["run_id"]).strip()
@@ -320,5 +332,8 @@ def _record(request, agreement_id: str, event: str, detail: dict) -> None:
     each other for as long as the record exists.
     """
     request.write(
-        f"select cw.audit('{event}', %(agreement_id)s, %(payload)s::jsonb)",
-        {"agreement_id": agreement_id, "payload": json.dumps(detail)})
+        # Bound, not interpolated — see the note at the identical writer in
+        # runs.py.
+        "select cw.audit(%(event)s, %(agreement_id)s, %(payload)s::jsonb)",
+        {"event": event, "agreement_id": agreement_id,
+         "payload": json.dumps(detail)})

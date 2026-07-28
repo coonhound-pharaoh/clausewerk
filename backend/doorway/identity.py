@@ -45,21 +45,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from doorway.db import Database
-from doorway.sessions import EIGHT_HOURS, Sessions, parse_duration
+from doorway.sessions import (
+    EIGHT_HOURS,
+    LOOKUP_ACTOR,
+    LOOKUP_ROLE,
+    Sessions,
+    parse_duration,
+)
 
-# The role sign-in reads as, before any role is known. This is the one genuine
-# chicken-and-egg in the serving path, and it is NOT resolved by using the owner.
-#
-# cw_viewer is the least-privileged role in the system. It holds select on
-# cw.account and cw.effective_role — access is not a secret, both carry role
-# names and no contract content — and can do nothing else at all. So the worst a
-# bug on this path can do is read the staff list.
-LOOKUP_ROLE = "viewer"
-
-# A name, not a person: it is what appears as the actor on a connection that is
-# only reading the staff list to find out who somebody is. Nothing is audited
-# under it, because looking somebody up is not a governed act.
-LOOKUP_ACTOR = "__signin__"
+# LOOKUP_ROLE and LOOKUP_ACTOR moved to sessions.py, with their rationale, so
+# that sessions.py can name them too. They cannot live here: this module already
+# imports sessions.py, so importing them back the other way closes a cycle.
+# Re-exported above rather than redefined, so there is one copy of each.
 
 
 class NoSession(Exception):

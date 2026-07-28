@@ -1,0 +1,876 @@
+{
+  "change_log": [
+    "WP-001 — external blocker promoted from a risk footnote to a DECLARED prerequisite (EXT-1: the concurrent session's Phase 2 commit to backend/doorway/sessions.py must land before the two session rows are authored). Package kept whole rather than split, because splitting would require a new ID and the whole-graph gate is the same either way; the gate is now visible at the root of the dependency graph instead of buried.",
+    "WP-001 — the optional 'extract a shared preflight helper into backend/engine/mutation_check.py' arm is DELETED and moved to out_of_scope with its reason. This resolves hard-constraint-7 collision (a): engine/mutation_check.py is now owned solely by WP-002. Observed basis for dropping it: an exactly-once probe over the engine table passes today (57 rows, 0 not-exactly-once), so the helper fixed no present failure.",
+    "WP-001 — reviewer correction 10(a) NOT adopted as written, with evidence. `grep -n 'delete from cw.session where expires_at' backend/doorway/sessions.py` returns 93 and 114 on the current tree; 112 is the `as_person` line immediately above the second delete (as_person sites: 87, 112, 119, 130, 134). WP-001's original '93 and 114' was correct. All line numbers in this package are now stated as anchors-with-line-hints because the file is uncommitted and moving.",
+    "WP-001 — the duplicate-pattern collision is now stated as a specific, named, HIGH-visibility implementation constraint rather than a generic LOW risk: both deletes are the byte-identical string `delete from cw.session where expires_at <= %s`, and preflight() rejects hits > 1 as loudly as hits == 0 (mutation_check.py:493-499, verified). Replacement patterns must include surrounding unique context.",
+    "WP-001, WP-003, WP-006, WP-007, WP-010, WP-011, WP-012, WP-013 — every hardcoded memory.md sequence number removed and replaced with 'read the head of memory.md at authoring time'. Observed: the head is now S67 (SETTLED 2026-07-28); packages-v1 said S56, the Gate 3 review said S62.",
+    "WP-002 — now the sole owner of backend/engine/mutation_check.py (WP-001's competing arm removed). Prerequisites remain 'none'; the parallel-with-WP-001 instruction is retained and is now safe.",
+    "WP-002 — severity branch line reference corrected from 'around 126-136' to 124-135.",
+    "WP-003 — the false exclusion of backend/doorway/manifests.py:99 DELETED from out_of_scope. Replaced with a pointer to WP-004, which now owns that site.",
+    "WP-003 — the exported shape helper's contract is tightened: it must be usable from BOTH a returning boundary (executions.py, which builds an Answer) and a RAISING boundary (manifests.manifest_from, which raises Malformed). Specified as a raising helper plus a thin catch at the returning site, so hard constraint 3 still holds.",
+    "WP-004 — backend/doorway/manifests.py:99 ADDED as the second bind site, after independent end-to-end verification of the dataflow (see implementation_notes; every hop re-derived from source this pass). The false exclusion is deleted from out_of_scope, and the objective/title no longer claim 'the one bind site'.",
+    "WP-004 — new acceptance criterion: POST /runs with a dict-valued `value` returns 400 `rejected`, demonstrated failing pre-fix where it returns 500 `broke`. The two sites' pre-fix failure modes differ (not-found vs 500) and both criteria are stated separately.",
+    "WP-004 — the KeyError question is RESOLVED in-package rather than passed to the implementer. Observed: executions.py:112-113 REQUIRED contains both agreement_id and run_id, and the loop at 148-152 rejects None and blank strings before line 174, so no KeyError is reachable. The corresponding risk line is deleted.",
+    "WP-005 — first acceptance criterion REPLACED. The unknown-category endpoint criterion cannot fail pre-fix (verified: engine/manifest.py:110-113 appends to `dropped` iff `not categories.knows(...)`, the same condition that makes key_for raise, so dropped non-empty implies reasons non-empty). The unit-level empty-`reasons` criterion is promoted to primary; the endpoint criterion is retained but relabelled NON-REGRESSION. bug_report.md B5's 'Latent — not reachable today' is quoted in the package.",
+    "WP-006 — the acceptance discriminator is DECIDED in-package as `pg_backend_pid()` captured inside `as_person`. backend/doorway/db.py therefore genuinely stays READ ONLY, the 'confirm no concurrent package touches it' instruction is deleted, and hard-constraint-7 collision (b) with WP-011 is resolved without adding a sequencing edge.",
+    "WP-007 — the 0016:45 contention claim DOWNGRADED from Observed to Inferred. Only the statement's unconditionality is Observed (verified: the `grant cw_viewer, ... to cw_app` sits outside the DO block that ends at 0016:43). A probe against the target cluster is now a declared PREREQUISITE, and the 'must cover all three' criterion is made conditional on the probe's result.",
+    "WP-007 — migration number allocated deterministically as 0034 (see change_log entry on numbering).",
+    "WP-008 — RE-SPECIFIED as an allowlist tripwire modelled on the repository's own precedent, verified at test_executions.py:418-424 (`assert \"update cw.agreement\" not in source`). The dataflow-property criteria are replaced with: the five table names appear only in the modules on a named allowlist. Criterion 3 (hypothetical legitimate consumer) DROPPED — not executable and in direct conflict with criterion 1.",
+    "WP-009 — the type-checker acceptance criterion REPLACED by the future-import probe, decided in-package. Observed evidence added so it is not re-litigated: no pyproject.toml, setup.cfg, mypy.ini or pyrightconfig.json anywhere in the tree, and backend/package.json declares no devDependencies (only @electric-sql/pglite). Introducing a type checker is named as separate scope.",
+    "WP-011 — migration number allocated: 0033 if the owner's Decision 2 is 'supersede'. db.py collision with WP-006 resolved from WP-006's side; WP-011 remains the only package that may edit ROLE_TO_DB_ROLE, and only under Option B.",
+    "MIGRATION NUMBERING — allocated deterministically now instead of instructing two packages to coordinate. Observed: 0032_session_store.sql is the highest file on disk. WP-011 takes 0033 (its Decision 2 may consume it); WP-007 takes 0034 unconditionally, so it is safe whichever way Decision 2 goes. Both packages' 'coordinate numbers' risk lines are deleted.",
+    "WP-012 — the WP-008 prerequisite RESTATED as 'supersedes WP-008's mitigation if approved' rather than a blocking prerequisite on a package that is not implemented.",
+    "PLAN-LEVEL (recorded in WP-003 and WP-004) — the deviation from objective-contract success criterion 1 is stated explicitly: B1 maps to TWO packages (WP-003 classification floor, WP-004 bind sites) as a deliberate, justified split, not a silent contradiction. The integrated plan's validation-strategy sentence 'of which there is now exactly one' must be corrected to TWO bind sites outside Write.bind."
+  ],
+  "packages": [
+    {
+      "id": "WP-001",
+      "title": "Repair the doorway mutation harness so the verification gate is green before any fix lands",
+      "objective": "Restore `backend/doorway/mutation_check.py` to a state where `preflight()` returns an empty list, so that all 36 doorway guarantees are actually evaluated. Until this lands, no package in this plan can honestly claim a green gate, because `main()` aborts before running a single mutation.",
+      "scope": [
+        "Repoint the two stale `doorway/sessions.py` mutation rows that have database-backed equivalents (session expiry honoured; expired sessions swept on issue) at source text that exists in the current `sessions.py`. GATED on EXT-1 below.",
+        "Repoint the stale `doorway/server.py` row ('the query selector is discarded before it reaches the app') at the equivalent line inside the refactored `_query` helper. NOT gated — this repairs committed state.",
+        "Route the fourth stale row ('removing an expired session crashes if another request removed it first') to the owner as a REPOINT-or-RETIRE decision, and implement whichever the owner chooses."
+      ],
+      "out_of_scope": [
+        "Any change to product code under `backend/doorway/*.py` other than mutation-row text.",
+        "Removing or weakening the harness's serial second pass — see risks.",
+        "Adding new guarantees for defects B1–B9 or A-1; those rows belong to their own packages.",
+        "Auditing `backend/db/test/mutation-check.mjs`, the first harness `test:mutation` runs. Its staleness is unknown and is registered as an open issue, not absorbed here.",
+        "REMOVED IN THIS REVISION — extracting a shared exactly-once/named-test preflight helper importable by `backend/engine/mutation_check.py`. It collided with WP-002 Branch B on the same file and breached hard constraint 7. Observed basis for dropping rather than sequencing it: an ad-hoc exactly-once probe over the engine MUTATIONS table passes today (57 rows, 0 not-exactly-once), so the helper guards future edits and fixes no present failure. `backend/engine/mutation_check.py` is now owned solely by WP-002. If the owner wants the helper, it is a separate package in a later run."
+      ],
+      "target_files_or_sections": [
+        "backend/doorway/mutation_check.py — the MUTATIONS table only",
+        "backend/doorway/sessions.py — READ ONLY, as the source of replacement pattern text",
+        "backend/doorway/server.py — READ ONLY, as the source of replacement pattern text",
+        "memory.md — one decision record"
+      ],
+      "prerequisites": [
+        "EXT-1 (EXTERNAL, DECLARED — previously buried as a risk): the concurrent session's Phase 2 commit to `backend/doorway/sessions.py` must have landed before the two session rows are authored. Observed 2026-07-28: `git status --porcelain` shows `backend/doorway/sessions.py` (plus app.py, server.py, test_identity.py, test_retirement.py, test_sessions.py) modified and uncommitted; HEAD is 60ad1b6. Consequence, stated plainly because every package except WP-002 and WP-013 depends on WP-001: until EXT-1 clears, WP-001 cannot fully close, and therefore neither can any downstream package's `preflight() == []` criterion. The server.py row and the fourth-row disposition may proceed immediately; the two session rows may not.",
+        "No package prerequisites."
+      ],
+      "required_changes": [
+        "Row 'sessions never expire': replace the pattern with text that exists exactly once in the current `backend/doorway/sessions.py` expiry path, and name a test that exists in `backend/doorway/test_sessions.py`. GATED on EXT-1.",
+        "Row 'expired sessions pile up until each token is presented again': same treatment against the sweep-on-issue path. GATED on EXT-1.",
+        "Row 'the query selector is discarded before it reaches the app': repoint at the current `_query` implementation in `backend/doorway/server.py`. Note this row was ALREADY stale on committed `main` (commit add0554 refactored it), so this part of the package repairs committed state and is NOT gated on EXT-1.",
+        "Row 'removing an expired session crashes if another request removed it first': the two expiry deletes are idempotent and the named test `test_sessions.py::test_an_entry_removed_mid_check_is_no_session_not_a_crash` no longer exists, so there is no line whose mutation reproduces the hazard. Implement the owner's choice: repoint at a replacement guarantee, or retire the row with a written reason in `memory.md`.",
+        "Record the disposition of the fourth row in `memory.md` as a numbered decision entry. Read the head of `memory.md` at authoring time to get the next number — do not use a number quoted in any planning artifact."
+      ],
+      "implementation_notes": [
+        "Observed: executing `doorway.mutation_check.preflight()` on the untouched tree returns FIVE entries over FOUR distinct MUTATIONS rows — the delete-race row trips twice, once for a missing pattern and once for a missing test.",
+        "Observed: `main()` calls `preflight()` first and, on any entry, prints that nothing was run and returns 1 without executing a mutation (mutation_check.py:508-515). Consequence: all 36 doorway guarantees are currently unevaluated, not merely the four stale ones. No sentence of the form 'the suite would have caught that' is supportable for the doorway today.",
+        "Observed: `backend/package.json` (there is no root package.json) defines `verify` = test + test:engine + test:doorway + test:mutation, and `test:mutation` = `node db/test/mutation-check.mjs && python engine/mutation_check.py && python doorway/mutation_check.py`. Re-verified this pass: `dependencies` holds only @electric-sql/pglite and there are no devDependencies. The gate is genuinely wired.",
+        "LINE REFERENCES — CORRECTION TO THE GATE 3 REVIEW, verified this pass rather than adopted. The Gate 3 review asked that 'sessions.py:93 and :114' be corrected to '93 and :112'. That correction is WRONG on the current tree. `grep -n 'delete from cw.session where expires_at' backend/doorway/sessions.py` returns exactly lines 93 and 114. Line 112 is `with self._db.as_person(\"__signin__\", \"viewer\") as request:`, the line immediately above the second delete; the five `as_person` sites are 87, 112, 119, 130, 134. The original '93 and 114' stands. Because the file is uncommitted and still moving, the implementer must locate both deletes by ANCHOR TEXT and treat every line number in this package as a hint, not an address.",
+        "THE FIRST THING THE IMPLEMENTER WILL HIT — duplicate pattern collision, previously logged only as a generic LOW risk. Both expiry deletes are the byte-identical string `delete from cw.session where expires_at <= %s`. Observed at mutation_check.py:493-499: `preflight()` fails a pattern found MORE than once (`hits > 1`) exactly as loudly as one found zero times, with the message that it 'would mutate the first, which may be the wrong one'. A replacement pattern for either session row must therefore include enough surrounding unique context (the differing comment above each site, or the following statement) to occur exactly once. Do not reach for the bare delete string.",
+        "Observed row counts by target on the current tree: server.py 6, writes.py 6, db.py 5, executions.py 4, sessions.py 3, identity.py 2, refusals.py 2, reads.py 2, runs.py 2, app.py 1, documents.py 1, manifests.py 1, advisory.py 1 — total 36.",
+        "`memory.md` numbering: read the head of the file at authoring time. Observed 2026-07-28 this pass: the head is S67. It was S56 when packages-v1 was written and S62 at Gate 3 review; the concurrent session moves it several entries per day. Any package quoting a fixed number is stale by the time it is implemented."
+      ],
+      "validation_checks": [
+        "`python -c \"import sys; sys.path.insert(0,'backend'); from doorway.mutation_check import preflight; assert preflight() == []\"` — seconds, no database.",
+        "`python doorway/mutation_check.py` run to completion from `backend/`, exit code 0, with each repointed row returning verdict `ok` (not merely leaving the exit code at 0).",
+        "`npm run verify` from `backend/` passes end to end on a cluster with no other pytest process running."
+      ],
+      "acceptance_criteria": [
+        "`doorway.mutation_check.preflight()` returns `[]`. Today it returns 5 entries over 4 rows (verified by execution).",
+        "`python doorway/mutation_check.py` exits 0, and each of the three repointed rows returns verdict `ok` — a row scoring `miss` (no-op mutation) or `imprecise` (suite failed but not through the named test) is not a guard and does not satisfy this criterion.",
+        "The fourth row is either repointed at a guarantee that exists, or removed with a written reason recorded in `memory.md`. It is not left in place, and it is not silently deleted.",
+        "Every row in MUTATIONS names a test that exists and a pattern present exactly once in its target file. In particular, neither repointed session row uses the bare string `delete from cw.session where expires_at <= %s`, which occurs twice.",
+        "No product file under `backend/doorway/` differs from its pre-package state, and `backend/engine/mutation_check.py` is byte-identical to its pre-package state.",
+        "No acceptance assertion anywhere in this package refers to message text."
+      ],
+      "risks": [
+        "HIGH — EXT-1 is now a declared prerequisite rather than a risk, but the exposure remains: the two session rows must quote text in a file that is uncommitted and still moving. If Phase 2 is revised before it is committed, the repaired harness is stale on arrival. Mitigation: author the session rows only after the commit lands, and quote anchors that survive reformatting.",
+        "MEDIUM — the temptation on a red gate is to delete the offending rows to get green. That is the exact failure mode success criterion 6 forbids. The fourth row's disposition is an owner decision precisely so it is not resolved by deletion under time pressure.",
+        "MEDIUM — do NOT remove the harness's serial second pass as part of this repair. The second pass re-runs every row scoring `imprecise`; role collision (defect B9) is one cause among many, alongside port conflicts, OOM and slow containers. The module's own comment records that it 'is not belt-and-braces — it is what makes the parallel first pass safe to keep', and that removing it once left nine guarantees reported as guarded that were never evaluated."
+      ],
+      "rollback_or_remediation": [
+        "The package touches one file plus a memory record. `git checkout -- backend/doorway/mutation_check.py` restores the prior state; the gate returns to the red state it is in today, which is a known and documented condition rather than a regression.",
+        "If a repointed row proves flaky under the full harness (verdict `imprecise` on repeat runs), revert that single row and re-raise it as a repoint-or-retire decision alongside the fourth row, rather than weakening the test it names.",
+        "If the concurrent session's Phase 2 work lands differently than assumed, re-run `preflight()` and repoint again; the repair is cheap and idempotent."
+      ]
+    },
+    {
+      "id": "WP-002",
+      "title": "B3 — decide whether a case-variant severity belongs in `coerced` (DECISION PACKAGE, NO CODE)",
+      "objective": "Resolve the direct conflict between `bug_report.md` B3 and the repository's own passing test, and record the decision. This package produces a decision and a `memory.md` entry; it produces code only if the owner chooses the second branch. It exists and is numbered so B3 survives into the traceability matrix under success criterion 1.",
+      "scope": [
+        "Present the owner with the verified conflict between the `check_manifest` docstring and the passing test that pins the current behaviour.",
+        "Take and record a decision.",
+        "Implement whichever branch the owner chooses — most likely a docstring amendment; possibly a new distinct field."
+      ],
+      "out_of_scope": [
+        "Implementing B3 as `bug_report.md` recommends. That fix deletes a regression guard and breaches success criterion 6 as written.",
+        "Any change to `coerced`'s existing semantics."
+      ],
+      "target_files_or_sections": [
+        "backend/engine/manifest.py — the `check_manifest` docstring at lines 92-100, specifically the phrase 'every real rewrite is recorded in `coerced`'",
+        "backend/engine/manifest.py — the severity branch at lines 124-135 (corrected this revision from 'around 126-136')",
+        "backend/engine/test_manifest.py:112-125 — `test_high_is_matched_on_meaning_not_spelling`, READ ONLY unless the owner chooses the code branch",
+        "backend/engine/mutation_check.py — the row pinning the severity branch's source text. THIS PACKAGE IS THE SOLE OWNER OF THIS FILE in this plan (see change note).",
+        "memory.md — one decision record"
+      ],
+      "prerequisites": [
+        "none — and it is now genuinely none. Hard-constraint-7 collision (a) is resolved from WP-001's side: WP-001's optional shared-preflight-helper arm, which also touched `backend/engine/mutation_check.py`, has been deleted from its scope. WP-002 may be raised immediately and in parallel with WP-001 with no file contention."
+      ],
+      "required_changes": [
+        "BLOCKED PENDING OWNER DECISION. Do not author an implementable change until the question below is answered.",
+        "BRANCH A (recommended on evidence): amend the `check_manifest` docstring so that 'every real rewrite' says what the code, the passing test and the engine mutation row already agree on — a change of severity LEVEL is recorded in `coerced`; a change of SPELLING or case is not. No behavioural change; no test change; no engine harness change.",
+        "BRANCH B (if the owner wants case variants surfaced): record them in a NEW, distinct field, never in `coerced`, so that `test_high_is_matched_on_meaning_not_spelling` continues to pass unmodified. `backend/engine/mutation_check.py` pins the exact source text of the severity branch, so its affected row must be updated in this same package.",
+        "Record the decision and its rationale in `memory.md`. Read the head of the file at authoring time for the next number."
+      ],
+      "implementation_notes": [
+        "Observed: `backend/engine/test_manifest.py:112-125` asserts `[r.severity for r in checked.risks] == [HIGH, HIGH, HIGH]` AND `checked.coerced == ()` for the inputs 'HIGH', 'high' and ' High ', with the recorded rationale that recording a case variant as a rewrite 'would bury the real rewrites in noise'. The bug report's own probe output is exactly the case this test pins as CORRECT.",
+        "Observed: the test's docstring records the regression it exists to stop — a model that starts writing 'HIGH' after a prompt update silently downgrading every high risk to Standard, with the run record showing Standard 'as though the model had said so'. That defect has already happened once in this repository.",
+        "Observed: the only textual support for B3 is `backend/engine/manifest.py:96-97`, 'every real rewrite is recorded in `coerced`'. Whether a case variant is a 'real rewrite' is a product judgement about what the `coerced` field means on the screen and in the audit chain. No further code reading settles it.",
+        "Observed: an exactly-once probe over `backend/engine/mutation_check.py` shows 57 mutation rows, 0 not-exactly-once, on the current tree. Branch B breaks that; Branch A does not.",
+        "This package must be raised IMMEDIATELY and in parallel with WP-001, because it is a question rather than an edit and its answer determines whether it carries any code at all."
+      ],
+      "validation_checks": [
+        "BRANCH A: `python engine/mutation_check.py` from `backend/` exits 0 and still reports 57 mutations; the engine test suite passes unchanged.",
+        "BRANCH B: `test_high_is_matched_on_meaning_not_spelling` passes UNMODIFIED; the new field is asserted by its own test; the updated engine mutation row returns verdict `ok`.",
+        "Either branch: `memory.md` contains a numbered decision entry stating the disposition and its rationale."
+      ],
+      "acceptance_criteria": [
+        "No code lands without an owner decision recorded in `memory.md`.",
+        "If Branch A: `backend/engine/test_manifest.py` is byte-identical to its pre-package state, the engine harness still reports 57 mutations at exactly-once, and the full engine test suite passes with no test edited.",
+        "If Branch B: `test_high_is_matched_on_meaning_not_spelling` passes unmodified, case variants are reported through a NEW field rather than `coerced`, and the engine mutation row pinning the severity branch is repointed in the same package and returns verdict `ok`.",
+        "No acceptance assertion refers to message or docstring wording as a behavioural claim; the docstring edit in Branch A is documentation, validated by review rather than by test.",
+        "B3 is closed in the traceability matrix by this package regardless of which branch is chosen."
+      ],
+      "risks": [
+        "HIGH — implementing B3 as the bug report recommends deletes a regression guard against silent High-to-Standard downgrades, the exact defect `manifest.py`'s own comment records as having already occurred. It looks like a one-line fix, which is what makes it dangerous. This package exists to stop that.",
+        "MEDIUM — the package cannot be sized until the owner answers. Branch A is minutes; Branch B is a new field, a new test, an engine mutation row and a downstream audit-chain consideration.",
+        "LOW — if Branch B is chosen, the new field propagates into anything that renders or serialises a checked manifest; that surface must be enumerated before the package is sized."
+      ],
+      "rollback_or_remediation": [
+        "Branch A is a comment change; `git checkout -- backend/engine/manifest.py` reverts it with no behavioural consequence.",
+        "Branch B: revert the field, its test and the mutation row together, then re-raise the decision. Never revert the field while leaving the mutation row repointed, or the engine harness goes stale.",
+        "If the owner declines to decide, B3 is recorded in `memory.md` as an accepted open question with the conflict stated, rather than being silently dropped from the matrix."
+      ]
+    },
+    {
+      "id": "WP-003",
+      "title": "B1 classification floor and B7 `required_if` — `refusals.py` and `writes.py`",
+      "objective": "Stop a structured value in a request body reaching psycopg as a bind parameter and surfacing as a 500 'broke', and stop a `required` field being silently de-demanded by a `required_if` condition. This is the classification floor several later packages' error paths run through.",
+      "scope": [
+        "Refuse dict and list values at the write boundary in `Write.bind`, naming the offending field.",
+        "Add a narrow classification branch to `refusals.classify` keyed on ADAPTATION failure.",
+        "Fix the `required` / `required_if` interaction in `Write.bind`.",
+        "Export the shape rule as a single helper so WP-004 can consume it at BOTH of its bind sites rather than reimplementing it.",
+        "Add mutation rows for both new guarantees."
+      ],
+      "out_of_scope": [
+        "Any classification branch keyed on `sqlstate is None` — verified over-broad, see implementation notes.",
+        "`backend/doorway/runs.py`'s `agreement_id` read, which already guards at runs.py:111-112.",
+        "`backend/doorway/executions.py:174-175` and `backend/doorway/manifests.py:99` — both are WP-004's bind sites. (The previous revision wrongly excluded manifests.py:99 as 'never a psycopg parameter'; that exclusion is DELETED — see WP-004.)",
+        "Passing the driver's own sentence through to the caller on the new 400 path."
+      ],
+      "target_files_or_sections": [
+        "backend/doorway/writes.py — `Write.bind` at lines 133-153; `Field` at line 118; the `as_json=True` field at line 298",
+        "backend/doorway/refusals.py — `classify`, specifically ABOVE the catch-all `return Refused(status=400, reason=reason, kind=\"rejected\")` at line 107 and the `psycopg.Error`/`DataError` branch at lines 100-106",
+        "backend/doorway/mutation_check.py — two new rows",
+        "backend/doorway/test_writes.py, backend/doorway/test_refusals.py — new tests",
+        "memory.md — one decision record"
+      ],
+      "prerequisites": [
+        "WP-001"
+      ],
+      "required_changes": [
+        "In `Write.bind`, before blankness is computed, refuse a `dict` or `list` value for any `Field` not declared `as_json=True`, raising the module's existing refusal exception with the field NAME. Exactly one field in the whole write table is exempt: `Field(\"findings\", as_json=True)` at `writes.py:298`.",
+        "Expose that shape check as a single named helper on the module so WP-004 can import it. HELPER CONTRACT, tightened this revision: the helper must RAISE on a bad shape, not return a sentinel, because WP-004's second site (`manifests.manifest_from`) is a raising boundary that signals malformation with `Malformed`. WP-004's other site (`executions.execute`) returns an `Answer`, so it catches the helper's exception and converts. One rule, one implementation, two adapters — do not let a second copy of the rule appear anywhere (hard constraint 3).",
+        "In `refusals.classify`, insert a branch ABOVE the line-107 catch-all that recognises a psycopg adaptation failure and returns 400 `rejected`. The branch must author its OWN sentence naming the field or the parameter — it must not pass the driver's `reason` through, because `refusals.py:101-103` states that driver detail 'commonly names tables, columns and constraints, so it belongs in the log and never in the response', and the existing line-107 return violates that.",
+        "Fix B7 at `writes.py:141-144`. Verified verbatim this pass: `demanded = spec.required` is unconditionally overwritten by `demanded = body.get(other) == expected` when `required_if` is set. Change to `demanded = spec.required or (body.get(other) == expected)`, or make the combination unrepresentable in `Field`'s constructor.",
+        "Add one mutation row per new guarantee (shape refusal; adaptation classification), each with a pattern present exactly once and naming a test that exists.",
+        "Record in `memory.md` the decision that the shape rule lives at the boundary AND the classification branch exists as a floor, and why both. Read the head of `memory.md` at authoring time for the next number.",
+        "TRACEABILITY NOTE to carry into the matrix: B1 maps to TWO packages (WP-003 floor, WP-004 bind sites). This is a deliberate, justified deviation from objective-contract success criterion 1's 'exactly one package' wording, recorded here rather than left to read as a contradiction."
+      ],
+      "implementation_notes": [
+        "REJECTED APPROACH, verified: classifying `psycopg.ProgrammingError` with `sqlstate is None` as a 400 would invert the defect it fixes. Executing `psycopg._queries.PostgresQuery.convert` (psycopg 3.3.4) produces sqlstate=None for at least three distinct causes: \"cannot adapt type 'dict' using placeholder '%s'\" (the caller's fault — the B1 case), 'query parameter missing: x', and 'the query has 2 placeholders but 1 parameters were passed'. The latter two are OUR OWN SQL bugs. Telling the caller they made a mistake about a bug that is not there is exactly what `documents.py` and `server.py` exist to prevent, running backwards.",
+        "Observed: `refusals.py:100-106` sends any `psycopg.Error` that is not a `DataError` to 500 'broke' with the detail written to stderr; the final `return Refused(status=400, reason=reason, kind=\"rejected\")` at line 107 passes the raw driver/diag message straight to the caller. The new branch must not inherit that habit.",
+        "Observed: `Write.bind` is database-free, and `backend/doorway/test_writes.py` already parametrizes over `sorted(WRITES)` at lines 177, 290, 303 and 385 without the schema fixture. The shape guard therefore gets a DB-free parametrized test covering the entire write table at the cheapest level that proves the guarantee.",
+        "Pin the empty cases explicitly: `str({})` is `'{}'` and `str([])` is `'[]'`, neither of which the existing blankness check catches, so an empty dict or list currently passes through as a non-blank value.",
+        "Before editing, enumerate any existing test that asserts a 500 on a path this fix converts to a 400. Success criterion 6 forbids weakening those; if one exists, it must be re-expressed as an assertion about the new correct behaviour and the change recorded, or the package stops and escalates.",
+        "Observed: `doorway/refusals.py` already carries 2 mutation rows and `doorway/writes.py` 6. Both files are pinned by source text in `mutation_check.py`; check whether this package's edits disturb an existing pattern and repoint in the same package if so."
+      ],
+      "validation_checks": [
+        "A database-free pytest parametrized over `sorted(WRITES)` asserting dict and list refusal per non-`as_json` field, including the empty-dict and empty-list cases.",
+        "A unit test over `refusals.classify` asserting the adaptation failure returns 400 `rejected`.",
+        "A discriminating unit test asserting a missing parameter and a placeholder-count mismatch still return 500 `broke`.",
+        "A test asserting the 400 response body does not carry the driver's sentence.",
+        "A test asserting a `Field` with `required=True` AND `required_if` set is still demanded when the `required_if` condition is false.",
+        "`preflight()` returns `[]`; the two new mutation rows return verdict `ok` under the full harness.",
+        "The existing doorway test suite passes with no test deleted or weakened."
+      ],
+      "acceptance_criteria": [
+        "For every field in `WRITES` not declared `as_json=True`, `Write.bind` refuses a dict value and refuses a list value; the one `as_json=True` field (`writes.py:298`) still accepts both. Empty dict and empty list are covered explicitly.",
+        "A psycopg adaptation failure classifies as status 400 with `kind` `rejected`; a missing parameter and a placeholder-count mismatch each still classify as status 500 with `kind` `broke`. Both halves are required — the second is what proves the branch is narrow.",
+        "The 400 response body produced by the new branch does not contain the driver's message.",
+        "A field declared `required=True` together with `required_if` is still demanded when the `required_if` condition evaluates false.",
+        "A single named helper implements the shape rule, and it raises rather than returning a sentinel so WP-004's raising boundary can use it unchanged; a source-shape assertion confirms no second implementation of it exists in the doorway (hard constraint 3).",
+        "Two new mutation rows exist, each present exactly once, each naming a test that exists, each returning verdict `ok`.",
+        "All assertions are on status code, `kind`, exception type or row count. No assertion refers to message text.",
+        "One `memory.md` record lands with this package."
+      ],
+      "risks": [
+        "HIGH — a classification branch that is too wide reports our own SQL bugs to callers as their mistake. The discriminating criterion (missing/miscounted placeholder still 500) is not optional; it is the whole reason the branch is safe.",
+        "MEDIUM — this package edits two files that between them carry 8 mutation rows pinned by source text. Treat `mutation_check.py` as a serialised resource: no other package may edit it concurrently.",
+        "LOW — the fix changes status codes on paths that existing tests may assert as 500. Enumerate before editing; criterion 6 forbids weakening them.",
+        "LOW — several later packages' error paths run through `refusals.classify`, so a regression here has wide blast radius. That is why this package is sequenced first among the fix packages."
+      ],
+      "rollback_or_remediation": [
+        "Three separable deliverables (shape guard, classification branch, `required_if` fix). Any one can be reverted independently; the classification branch is the only one with cross-package consequences.",
+        "If the classification branch proves too wide in review, revert it alone and keep the boundary shape guard, which fixes the B1 symptom for every write in `WRITES` without touching classification at all.",
+        "Revert the paired mutation row in the same commit as any reverted guarantee, or `preflight()` goes red."
+      ]
+    },
+    {
+      "id": "WP-004",
+      "title": "B1 residual — the TWO bind sites outside `Write.bind` that launder a structured value",
+      "objective": "Close both B1 sites that bind outside `Write.bind`: `backend/doorway/executions.py:174-175`, where `str(body[\"agreement_id\"]).strip()` turns a dict into the plausible string \"{'nested': [1, 2]}\" and yields a not-found rather than a refusal; and `backend/doorway/manifests.py:99`, where an unguarded `body.get(\"value\")` travels to `cw.run.value` and reaches psycopg as a bind parameter, producing B1's 500 exactly.",
+      "scope": [
+        "Route the `agreement_id` and `run_id` reads at `executions.py:174-175` through the shape helper WP-003 exports.",
+        "Route `value` at `manifests.py:99` through the same helper, raising `Malformed` so the existing `except manifests.Malformed` at `runs.py:129-131` converts it to a 400 `rejected`.",
+        "One endpoint-level test per site proving the corrected refusal."
+      ],
+      "out_of_scope": [
+        "`backend/doorway/runs.py`'s `agreement_id` read. Verified: `runs.py:111-112` already reads `agreement_id = body.get(\"agreement_id\")` followed by an isinstance guard returning 400 `rejected`. An acceptance criterion phrased 'POST /runs starts returning 400 for a dict agreement_id' would pass vacuously against unmodified code. The `value` field on the same endpoint is NOT excluded — it is in scope above.",
+        "Writing a second copy of the shape rule. Import it.",
+        "Any change to `refusals.py` — that is WP-003's file.",
+        "The `manifest` JSON column at engine/run.py:172-176, which passes `manifest.value` through `json.dumps` and adapts fine. The defect is the sibling bare `\"value\": manifest.value` column."
+      ],
+      "target_files_or_sections": [
+        "backend/doorway/executions.py:174-175 — `agreement_id = str(body[\"agreement_id\"]).strip()` and the `run_id` line immediately following",
+        "backend/doorway/manifests.py:99 — `value=body.get(\"value\"),` inside `manifest_from`",
+        "backend/doorway/test_executions.py, backend/doorway/test_runs.py — one new test each",
+        "backend/doorway/mutation_check.py — possibly one new row"
+      ],
+      "prerequisites": [
+        "WP-003"
+      ],
+      "required_changes": [
+        "Replace `str(body[\"agreement_id\"]).strip()` at `executions.py:174` with a call through the shape helper WP-003 exports, so a dict or list value is refused as 400 `rejected` before it can be stringified. Apply the same to `run_id` at `executions.py:175`.",
+        "Guard `value` at `manifests.py:99` with the same helper. `manifest_from` signals malformation by RAISING `Malformed` (see the neighbouring `raise Malformed(f\"risk {index} names no category\")` at manifests.py:90), and `runs.py:128-131` already catches it and returns 400 `rejected`. So the helper's raising form is used directly here and no new error path is added. This is why WP-003's helper contract is specified as raising.",
+        "Add an endpoint-level test per site, since both bind outside `Write.bind` and the DB-free write-table test cannot reach them.",
+        "If a mutation row is added, it must be present exactly once and name a test that exists."
+      ],
+      "implementation_notes": [
+        "DATAFLOW FOR THE SECOND SITE — re-derived end to end from source this pass, not adopted from the review. `manifests.py:99` is `value=body.get(\"value\"),` with no isinstance guard and no `str()` coercion (contrast the two adjacent fields, which are both `str(...)`). `runs.py:128` calls `manifests.manifest_from(body)`. `engine/run.py:168-172` builds the run row dict containing the bare key `\"value\": manifest.value`. `runs.py:222-229` passes `engine_run.run_rows(...)` into `_store` as `run_tables`. `_store` at `runs.py:333` calls `_insert(request, \"run\", run_tables[\"run\"])`. `_insert` at `runs.py:273-279` builds `%(name)s` placeholders from the row's keys and passes `row` straight to `request.write`. `cw.run.value` is declared `value text` at `0005_run_store.sql:83`. A dict- or list-valued `value` in a POST /runs body therefore reaches psycopg as a bind parameter for a text column and raises \"cannot adapt type 'dict'\" — B1's 500 `broke`, verbatim. The previous revision's exclusion ('reaches only dict members and string concatenation') is FALSIFIED and has been deleted from both WP-003 and WP-004.",
+        "Observed: `executions.py:174` is `agreement_id = str(body[\"agreement_id\"]).strip()`, immediately after a block that carefully validates signatory shape (executions.py:161-172). The mismatch is the defect: signatories are checked, the identifiers are not.",
+        "The two sites fail DIFFERENTLY pre-fix and both belong here because one imported helper cures both. executions.py: a dict becomes a syntactically valid string that matches no row, so the caller receives a not-found and the malformed request is never reported as malformed — a floor in `refusals.classify` cannot catch it because the value never reaches the driver. manifests.py: the value DOES reach the driver, so WP-003's floor would turn it from a 500 into a 400, but with a generic adaptation sentence rather than the field-naming refusal this package delivers.",
+        "KEYERROR QUESTION — RESOLVED IN-PACKAGE, not passed down. `executions.py:112-113` `REQUIRED` contains both `agreement_id` and `run_id`; the loop at `executions.py:148-152` rejects any value that is None or a blank string before line 174 is reached. No `KeyError` is reachable at `body[\"agreement_id\"]`. The previous revision's 'confirm the surrounding validation already guarantees presence' risk line is deleted.",
+        "Hard constraint 3 governs the implementation: import WP-003's helper at both sites, do not restate the isinstance test. The repository already models a shared-constant import in `NEVER_FROM_THE_BODY`; follow that shape.",
+        "Observed: `doorway/executions.py` carries 4 mutation rows and `doorway/manifests.py` 1, all pinned by source text. Check whether the edited lines disturb an existing pattern, and repoint in this same package if so.",
+        "This package must precede WP-005, which also edits `executions.py` AND `manifests.py`. That ordering edge already exists (WP-005's prerequisite is WP-004) and still holds after the second site is added."
+      ],
+      "validation_checks": [
+        "`POST /agreements/execute` with a dict-valued `agreement_id` returns 400 with `kind` `rejected`; the same for a list value and for `run_id`.",
+        "`POST /runs` with a dict-valued `value` returns 400 with `kind` `rejected`; the same for a list value.",
+        "Well-formed requests still succeed on both endpoints — the guard must not have narrowed the accepted input. In particular a string `value` and an absent `value` (the column is nullable) both still work.",
+        "A source-shape assertion that the rule is imported rather than reimplemented at either site.",
+        "`preflight()` returns `[]`; the existing executions, runs and manifests tests pass unchanged."
+      ],
+      "acceptance_criteria": [
+        "`POST /agreements/execute` with a dict-valued `agreement_id` returns status 400 with `kind` `rejected`, not a not-found. DEMONSTRATED FAILING against pre-fix code, where it returns a not-found.",
+        "The same holds for a list-valued `agreement_id` and for both shapes of `run_id`.",
+        "`POST /runs` with a dict-valued `value` returns status 400 with `kind` `rejected`. DEMONSTRATED FAILING against pre-fix code, where it returns 500 with `kind` `broke`. The pre-fix failure mode differs from the executions site's and both must be shown.",
+        "A well-formed `POST /runs` with a string `value`, and one with no `value` at all, both still succeed.",
+        "A source-shape test asserts the shape rule is imported from one module rather than reimplemented in `executions.py` or `manifests.py` (hard constraint 3).",
+        "All existing `test_executions.py`, `test_runs.py` and `test_manifests.py` tests pass unmodified.",
+        "`preflight()` returns `[]` and any new or repointed mutation row returns verdict `ok`.",
+        "No assertion refers to message text."
+      ],
+      "risks": [
+        "MEDIUM — `executions.py` and `manifests.py` are both edited by this package and again by WP-005 (B5/B6). Sequencing is mandatory, not preference; WP-005's prerequisite on WP-004 covers it.",
+        "MEDIUM — the `manifests.py:99` guard sits inside a function used by BOTH `POST /runs` and the manifest-check path. Confirm the check path's callers also tolerate `Malformed`; `runs.py:128-131` does, and `manifests.py`'s own entry point must be checked before editing.",
+        "LOW — if WP-003's helper signature changes late, this package's three call sites must follow. Keep the helper's contract minimal: a value and a field name in; the validated value out, or a raise."
+      ],
+      "rollback_or_remediation": [
+        "Two files, three lines, two tests. `git checkout --` on both files reverts cleanly.",
+        "If reverted, WP-003's classification floor still converts the 500 half of the manifests.py site to a 400 with a generic sentence; the executions.py string-laundering half returns entirely uncaught. Record that asymmetry in any revert rationale so the gap is visible rather than assumed closed.",
+        "Revert any added mutation row together with the code, or `preflight()` goes red."
+      ]
+    },
+    {
+      "id": "WP-005",
+      "title": "B5 unguarded `reasons[0]` and B6 f-string-interpolated audit events",
+      "objective": "Stop an empty `reasons` sequence raising an IndexError on the refusal path (B5), and stop the audit event name being composed into SQL by f-string at the three sites that still do it (B6).",
+      "scope": [
+        "Guard `reasons[0]` at the four verified occurrences.",
+        "Bind the audit event as a parameter at the three f-string call sites.",
+        "Repoint the mutation row that pins `\"reason\": reasons[0],` verbatim."
+      ],
+      "out_of_scope": [
+        "`backend/doorway/documents.py:218` and `backend/doorway/writes.py:459` — both already pass the event as a literal inside a parameterised statement and compose no f-string. Re-verified this pass by grep. 'All six audit sites' is not a checkable criterion: there are FIVE `cw.audit(` call sites in doorway product code, of which exactly THREE interpolate.",
+        "Reproducing B5 end to end through an unknown category. Verified impossible — see the first implementation note. Any implementer who tries will burn a day.",
+        "Any change to the audit chain's append-only character (hard constraint 5).",
+        "Adding a cast to the event parameter — `cw.audit`'s first parameter is already declared `text`."
+      ],
+      "target_files_or_sections": [
+        "backend/doorway/manifests.py:172 and :176 — `reasons[0]` (re-verified by grep this pass)",
+        "backend/doorway/runs.py:176 and :179 — `reasons[0]` (re-verified by grep this pass)",
+        "backend/doorway/executions.py:323 — `f\"select cw.audit('{event}', %(agreement_id)s, %(payload)s::jsonb)\"`",
+        "backend/doorway/manifests.py:240 — `f\"select cw.audit('{event}', %(vendor)s, %(payload)s::jsonb)\"`",
+        "backend/doorway/runs.py:405 — `f\"select cw.audit('{event}', %(agreement_id)s, %(payload)s::jsonb)\"`",
+        "backend/doorway/mutation_check.py:376 — the row pinning `'                    \"reason\": reasons[0],'`"
+      ],
+      "prerequisites": [
+        "WP-004"
+      ],
+      "required_changes": [
+        "Guard the empty-`reasons` case at `manifests.py:172`, `manifests.py:176`, `runs.py:176` and `runs.py:179`, so that a refusal with no stated reason still produces a 409 with a non-empty reason rather than raising.",
+        "QUOTE THIS IN THE PACKAGE so nobody tries to reproduce it end to end — `bug_report.md` B5's own severity note: 'Latent — not reachable today.'",
+        "Convert the three f-string audit statements to pass `event` as a bound parameter. `cw.audit`'s first parameter is declared `text`, so no cast is required.",
+        "Repoint the mutation row at `mutation_check.py:376`, which pins the literal source text `\"reason\": reasons[0],` (occurring once, at `manifests.py:176`) and therefore breaks under the B5 edit. This must happen in the SAME package.",
+        "Add or adjust mutation rows so both new guarantees are pinned."
+      ],
+      "implementation_notes": [
+        "WHY THE OLD HEADLINE CRITERION WAS DELETED, verified this pass rather than adopted from the review. `engine/manifest.py:110-113` reads `for risk in manifest.risks: if not categories.knows(risk.category): dropped.append(risk); continue`. `dropped` is non-empty under exactly the condition that makes `categories.key_for` raise `UnknownCategory` at the doorway. So `checked.dropped` non-empty IMPLIES `reasons` non-empty, the unknown-category request already returns 409 correctly today, and an acceptance criterion phrased over it passes identically before and after the fix. It cannot be 'demonstrated failing'. The unit-level criterion is the only one that discriminates.",
+        "Observed by grep: `reasons[0]` occurs at `manifests.py:172`, `manifests.py:176`, `runs.py:176`, `runs.py:179` — and at `mutation_check.py:376`, which is the harness pin, not a fifth product site.",
+        "Observed by grep for `cw.audit(` in `backend/doorway/*.py` excluding tests: five product sites — `documents.py:218`, `executions.py:323`, `manifests.py:240`, `runs.py:405`, `writes.py:459`. Exactly three interpolate an f-string. Scope the criterion to those three by path and line, not to a count.",
+        "The unit-level test constructs the empty-`reasons` state directly — by stubbing `categories.key_for` to succeed while `checked.dropped` is non-empty, or by calling the guarded expression directly. It must not depend on engine behaviour that WP-002 may touch.",
+        "B6 is a defence-in-depth fix, not an injection hole today — `event` is a module-local literal at all three sites. Fix it because a future refactor that makes `event` caller-influenced would be invisible, and because it is cheap.",
+        "This package edits `executions.py` and `manifests.py`, which WP-004 also edits; it must follow WP-004.",
+        "Observed row counts: `runs.py` 2 rows, `manifests.py` 1 row, `executions.py` 4 rows — all pinned by source text. Verify none of the other rows' patterns are disturbed by these edits."
+      ],
+      "validation_checks": [
+        "A unit-level test exercising the empty-`reasons` path directly at each of the four sites' code paths.",
+        "A non-regression endpoint test: for a manifest with an unknown category, `POST /manifests/check` and `POST /runs` each still return 409 with the engine's own non-empty reason.",
+        "A source-shape test asserting the three named statements pass the event as a bound parameter and compose no f-string.",
+        "Existing audit-chain tests pass unchanged.",
+        "`preflight()` returns `[]` after the row at `mutation_check.py:376` is repointed."
+      ],
+      "acceptance_criteria": [
+        "PRIMARY (promoted this revision): a unit-level test drives the refusal branch with `checked.dropped` non-empty and `reasons` empty, and observes a 409 with a non-empty reason instead of an IndexError. DEMONSTRATED FAILING (IndexError) against pre-fix code. This is the only criterion that discriminates; the endpoint route cannot reach this state (see implementation notes).",
+        "NON-REGRESSION, explicitly labelled as such and NOT offered as proof of fix: for a manifest with an unknown category, `POST /manifests/check` and `POST /runs` each still return 409 with a non-empty reason carrying the engine's own sentence. This criterion passes before and after the fix by design.",
+        "All four guarded sites are covered by the unit-level test: `manifests.py:172`, `manifests.py:176`, `runs.py:176`, `runs.py:179`.",
+        "A source-shape test asserts that `executions.py:323`, `manifests.py:240` and `runs.py:405` each pass the audit event as a bound parameter and contain no f-string in the statement.",
+        "The mutation row at `mutation_check.py:376` is repointed in this package; `preflight()` returns `[]` and the row returns verdict `ok`.",
+        "Existing audit-chain tests pass with none edited, weakened or deleted.",
+        "The audit tables remain append-only; no UPDATE or DELETE is introduced (hard constraint 5).",
+        "No assertion refers to message text — only status code, `kind`, non-emptiness and exception type."
+      ],
+      "risks": [
+        "MEDIUM — the B5 edit breaks a mutation row by construction. If the row is not repointed in the same package, `preflight()` goes red and the next package inherits a failure it did not cause.",
+        "MEDIUM — this package shares `executions.py` and `manifests.py` with WP-004 and shares `mutation_check.py` with WP-003. All are serialised resources.",
+        "LOW — the audit event binding changes the shape of a statement that a source-shape test may already pin. Check `test_no_identity_survives.py` and the other source-shape tests before editing.",
+        "LOW — a guard that substitutes a placeholder reason must not invent product wording; use a neutral non-empty value and assert only non-emptiness, per hard constraint 2."
+      ],
+      "rollback_or_remediation": [
+        "B5 and B6 are independent; either can be reverted alone.",
+        "Reverting B5 requires reverting the `mutation_check.py:376` repoint in the same commit.",
+        "If the source-shape test for B6 proves brittle against the concurrent session's edits, keep the code fix and downgrade the test to assert the absence of f-string composition in the three named statements only, rather than a whole-module rule."
+      ]
+    },
+    {
+      "id": "WP-006",
+      "title": "B2 — do not hold a database transaction across a 20-second network call to a model provider",
+      "objective": "Split the advisory assessment endpoint so that no pooled connection is held open while `judge_semantic_difference` makes an outbound HTTP call with a 20-second timeout, and bound the number of pool connections the advisory path can occupy.",
+      "scope": [
+        "Split the single `as_person` block at `advisory.py:274-325` into read, call, write.",
+        "Bound advisory concurrency below the pool's `max_size`.",
+        "Decide and record what a decided, withdrawn or re-texted ticket means in the window."
+      ],
+      "out_of_scope": [
+        "Any change to `SEMANTIC_DIFFERENCE_PROMPT` or any other content or wording (contract non-goal; `CLAUDE.md`).",
+        "Introducing a privileged connection or a second pool that bypasses `as_person` (hard constraint 4).",
+        "Changing `TIMEOUT_SECONDS` as the fix. Reducing the timeout narrows the window; it does not remove the defect.",
+        "ANY EDIT TO `backend/doorway/db.py`. Resolved this revision: the `application_name` route is rejected and `pg_backend_pid()` is chosen instead, precisely so that db.py stays READ ONLY as this package's target list claims. This removes the hard-constraint-7 collision with WP-011, which may edit `ROLE_TO_DB_ROLE` at db.py:65-72 under its Option B."
+      ],
+      "target_files_or_sections": [
+        "backend/doorway/advisory.py:274-325 — the single `with db.as_person(...)` block spanning the read, the model call at line 304, and the insert at line 306",
+        "backend/doorway/db.py:164-173 — READ ONLY, and it genuinely is read-only under the chosen discriminator: verified `max_size: int = 10` and `kwargs={\"autocommit\": True}` at db.py:164-172",
+        "backend/doorway/test_advisory.py — new tests",
+        "memory.md — one decision record"
+      ],
+      "prerequisites": [
+        "WP-003"
+      ],
+      "required_changes": [
+        "Restructure `assess` into three phases: (1) open `as_person`, read the ticket and the two frozen texts, close; (2) call `judge_semantic_difference` holding no connection; (3) reopen `as_person` and perform the insert. The second `as_person` re-authorises, so this is a staleness window, not an authorisation hole.",
+        "DECIDE AND RECORD — do not discover in review — what a ticket that is decided, withdrawn or re-texted during the window means. The defensible answer, given the insert already stores `baseline_text` and `compared_text` verbatim, is that the row stands as a judgment about those two frozen texts. Record the decision in `memory.md`; read the head of the file at authoring time for the next number.",
+        "Ship the concurrency bound as a SEPARATELY TESTABLE second deliverable — a semaphore, or a dedicated small pool sized below `max_size=10` — so it lands even if the transaction split slips.",
+        "Ensure a role change mid-call surfaces as a refusal through `refusals.classify`, not as a 500.",
+        "USE `pg_backend_pid()` AS THE PROBE DISCRIMINATOR. The test captures the backend PID from inside an `as_person` block on the serving pool and asserts against `pg_stat_activity` filtered to that PID (or to the set of PIDs the serving pool has ever handed out during the test). Do NOT set `application_name` on the pool: that is a db.py edit, and db.py is READ ONLY for this package."
+      ],
+      "implementation_notes": [
+        "Observed: `advisory.py:274` opens `with db.as_person(caller.person, caller.role) as request:`; the model call is at line 304 inside that block; the insert is at line 306. `TIMEOUT_SECONDS = 20` at `advisory.py:74`, used by `urlopen(..., timeout=TIMEOUT_SECONDS)` at line 174. `db.py:182-206` holds `conn.transaction()` open across the yield. The pool is `max_size=10`. Eleven concurrent assessments exhaust the pool.",
+        "Observed: the insert already stores `baseline_text` and `compared_text` as columns, so the record is self-describing about what was judged. That is the evidence for the recommended staleness decision.",
+        "VALIDATION DISCRIMINATOR — keep this reasoning verbatim, it is the reason the test is worth running. `db.py:164-173` constructs the pool with `kwargs={'autocommit': True}` and sets NO `application_name`, and the test fixtures connect to the same database as the same login. A bare `pg_stat_activity` count therefore cannot distinguish a serving-pool backend from the test's own connection, and the acceptance test would pass whether or not B2 is fixed. The chosen mechanism is `pg_backend_pid()` captured inside `as_person`, which needs no product change at all.",
+        "The 404 path, the 409 'not yet' path and the 403 'silently refused' path must all be preserved exactly; they are separate guarantees that happen to live in the same function.",
+        "Observed: `doorway/advisory.py` carries 1 mutation row. Verify the edit does not disturb its pattern.",
+        "OPEN, tagged Assumed: the endpoint's own code shows no consumer relying on the read and insert being atomic, but SQL-layer callers of `cw.advisory_assessment` were not searched. Do that search before implementing."
+      ],
+      "validation_checks": [
+        "With `judge_semantic_difference` stubbed to block, an independent connection observes ZERO idle-in-transaction backends among the PIDs the serving pool has handed out, captured via `pg_backend_pid()` inside `as_person`.",
+        "A test asserting the advisory path cannot occupy more than N pool connections concurrently, where N is well below `max_size`.",
+        "All existing `test_advisory.py` tests pass unmodified, including the 404, 409 and 403 paths.",
+        "A test that a role change between phases surfaces as a refusal (403 or the classified status) rather than a 500.",
+        "`git diff --exit-code backend/doorway/db.py` is clean.",
+        "`preflight()` returns `[]`."
+      ],
+      "acceptance_criteria": [
+        "With the model call stubbed to block, an independent connection observes zero idle-in-transaction backends among the serving pool's own backends. The probe MUST discriminate by `pg_backend_pid()` captured inside `as_person`; a bare `pg_stat_activity` count is not acceptable because it passes against unfixed code.",
+        "DEMONSTRATED FAILING against pre-fix code: the same probe observes at least one idle-in-transaction serving-pool backend today.",
+        "A second, independently runnable test asserts the advisory path cannot hold more than N pool connections concurrently.",
+        "`backend/doorway/db.py` is byte-identical to its pre-package state. (This is what makes the package non-colliding with WP-011.)",
+        "All existing advisory tests pass unmodified, including the 404 not-found, 409 not-yet and 403 silently-refused paths.",
+        "A mid-window role change produces a classified refusal, not a 500 `broke`.",
+        "The staleness decision is recorded in `memory.md` as a numbered entry.",
+        "No assertion refers to message text."
+      ],
+      "risks": [
+        "MEDIUM — the split introduces a genuine time-of-check/time-of-use window of up to 20 seconds. It is a staleness window rather than an authorisation hole, because the second transaction re-authorises via `as_person`, but a mid-call role change turns a successful judgment into a refusal. That must be documented in the package, not discovered in review.",
+        "MEDIUM — the concurrency bound must not be implemented as a second connection pool that bypasses `as_person`; hard constraint 4 forbids a privileged connection in the serving path.",
+        "LOW — the endpoint is one long function; the split is a readability change as much as a correctness one, and a careless split loses one of the three refusal paths."
+      ],
+      "rollback_or_remediation": [
+        "Two separable deliverables. The concurrency bound is safe to keep even if the split is reverted; it caps the blast radius on its own.",
+        "`git checkout -- backend/doorway/advisory.py` reverts both. The defect returns to its current known state.",
+        "If the split proves to break an atomicity assumption found in the SQL layer, revert the split, keep the bound, and re-raise B2 with the discovered constraint stated — do not paper over it by shortening the timeout."
+      ]
+    },
+    {
+      "id": "WP-007",
+      "title": "B9 — stop the test harness writing cluster-wide role state on every rebuild",
+      "objective": "Remove the unconditional cluster-wide role mutations that make two concurrent doorway test runs collide, replacing them with the assert-don't-rewrite shape the repository already models. Two statements are confirmed in scope; a third is in scope only if a probe shows it actually contends.",
+      "scope": [
+        "`backend/doorway/setup.py:38-42` — the per-`prepare()` `alter role cw_app login password`.",
+        "`backend/db/migrations/0016_doorway_login.sql:41` — `alter role cw_app noinherit` in the DO block's else branch.",
+        "`backend/db/migrations/0016_doorway_login.sql:45-47` — the unconditional `grant cw_viewer, ... to cw_app` OUTSIDE the DO block. CONDITIONAL on PRE-1 below.",
+        "A reproduction test, shown to fail against pre-fix code."
+      ],
+      "out_of_scope": [
+        "Editing `0016_doorway_login.sql` in place. It is applied; re-asserting differently means a NEW migration (hard constraint 6).",
+        "Removing the serial second pass in `backend/doorway/mutation_check.py` — see risks; the correctness claim behind that idea is the reverse of what the code states.",
+        "Any change to what privileges `cw_app` ends up holding. This package changes HOW the state is established, never WHAT it is.",
+        "Coordinating migration numbers with WP-011 at implementation time. The number is allocated in this package (0034) — see prerequisites."
+      ],
+      "target_files_or_sections": [
+        "backend/doorway/setup.py:34-55 — `prepare()`, and the existing verify-don't-rewrite model at lines 43-52",
+        "backend/db/migrations/0016_doorway_login.sql:35-47 — READ ONLY (applied; forward-only)",
+        "backend/db/migrations/0034_*.sql — the NEW migration. NUMBER ALLOCATED IN THIS PLAN, not left to coordination: 0032_session_store.sql is the highest file on disk (verified by `ls`), WP-011 may consume 0033 under its Decision 2, so WP-007 takes 0034 unconditionally and is safe whichever way that decision goes.",
+        "backend/doorway/conftest.py — the per-process fixture",
+        "memory.md — one decision record"
+      ],
+      "prerequisites": [
+        "WP-001",
+        "PRE-1 (VERIFICATION, must complete before the package's scope is final): probe whether `grant cw_viewer, cw_requester, cw_legal_reviewer, cw_legal_admin, cw_auditor, cw_administrator to cw_app;` actually contends when the memberships are already held. PostgreSQL commonly treats a redundant GRANT of an already-held role membership as a no-op with a NOTICE, in which case the statement never writes `pg_auth_members` and this scope item disappears. Run the probe against the ACTUAL target cluster version: issue the grant twice concurrently from two sessions on a cluster where cw_app already holds all six, and observe whether an InternalError or a `pg_auth_members` write occurs. Record the result and the server version in `memory.md`."
+      ],
+      "required_changes": [
+        "Convert `setup.py:38-42` from an unconditional `alter role cw_app login password` to a conditional. NOTE: a password cannot be read back from `pg_authid` in cleartext, so a pure assert is impossible; a hybrid is likely — assert `rolcanlogin`, and write the password only when login is not yet enabled or an explicit bootstrap flag is set. State the chosen shape explicitly in the package.",
+        "Add migration `0034` re-expressing `0016:41` (`alter role cw_app noinherit`) as a check-then-act: read `rolinherit` from `pg_roles` and only issue the `alter` if it disagrees. Model on `setup.py:43-52`, which already reads `rolinherit` and raises a RuntimeError naming 0016 rather than silently rewriting.",
+        "IF AND ONLY IF PRE-1 shows the grant contends: in the same migration, re-express `0016:45-47` conditionally on `pg_auth_members`, so a rebuild that changes nothing writes nothing. If PRE-1 shows it is a no-op, record that finding in `memory.md` and drop the item — do not add a conditional wrapper around a statement that was never a problem.",
+        "Add a reproduction test starting N concurrent `prepare()` calls against one cluster, asserting no `psycopg.errors.InternalError`, and SHOW IT FAILING against pre-fix code.",
+        "Add a test running two full doorway suites concurrently to completion with no fixture error.",
+        "Document how a first-time clean cluster is bootstrapped under the new shape, and record the decision in `memory.md`. Read the head of the file at authoring time for the next number."
+      ],
+      "implementation_notes": [
+        "Observed: `0016:45-47` sits OUTSIDE the DO block, which closes at `end $$;` on line 43, and is therefore unconditional in the sense that it executes on every application of the file. That much is verified by reading the file this pass.",
+        "INFERRED, NOT OBSERVED — DOWNGRADED THIS REVISION: that this unconditional statement WRITES `pg_auth_members` on every per-test rebuild and therefore contends. The previous revision asserted this as Observed and hardened it into a pass/fail criterion. PostgreSQL typically no-ops a redundant role GRANT. PRE-1 exists to settle it. The distinction matters because the old criterion would have mandated a migration for a statement that may never contend.",
+        "Observed: `setup.py:43-52` already models the desired shape — it reads `rolinherit` from `pg_roles` and raises a `RuntimeError` naming migration 0016 rather than silently rewriting. Copy that posture.",
+        "Observed: `0016` is an applied migration, and `doorway/migrate.py` ledgers by filename (`create table if not exists cw.schema_migration (filename text primary key ...)` at :41, done-set read at :63, `insert ... values (%s)` with `path.name` at :75) with no checksum and no re-application path. Editing it changes nothing on any database that already ran it. A new migration is the only forward-only option (hard constraint 6).",
+        "The acceptance test is inherently probabilistic — a race that does not fire is not a fix. The seen-to-fail requirement is what makes it meaningful, and it is the repository's own stated standard.",
+        "The bootstrap question is real: assert-don't-rewrite changes what a clean cluster needs before tests run. If the package does not answer it, the harness fails loudly on a fresh machine."
+      ],
+      "validation_checks": [
+        "PRE-1 probe run against the target cluster, server version and result recorded.",
+        "Reproduction test: N concurrent `prepare()` calls against one cluster, asserting no `psycopg.errors.InternalError`. Run against pre-fix code first and observed to FAIL.",
+        "Two full doorway suites run concurrently to completion, no fixture error.",
+        "A single `prepare()` on a clean cluster still produces a working `cw_app` — login enabled, NOINHERIT set, all six roles granted.",
+        "A second `prepare()` on an already-prepared cluster issues no role-write statement (assert by statement log or by an instrumented counter, not by absence of error).",
+        "`npm run verify` from `backend/` passes end to end."
+      ],
+      "acceptance_criteria": [
+        "A reproduction test starting N concurrent `prepare()` calls asserts no `psycopg.errors.InternalError`, and is DEMONSTRATED FAILING against pre-fix code. A post-fix-only green is not acceptable — a race that did not fire proves nothing.",
+        "Two full doorway suites run concurrently to completion with no fixture error.",
+        "`setup.py:38-42` and `0016:41` are both covered. `0016:45-47` is covered if and only if PRE-1 showed it contends; if PRE-1 showed it is a no-op, the finding and the server version are recorded in `memory.md` and its absence from the change satisfies this criterion.",
+        "A repeat `prepare()` against an already-prepared cluster issues no role-write statement, asserted by instrumentation rather than by absence of error.",
+        "A clean-cluster bootstrap path exists and is documented; a first-time `prepare()` still yields a working `cw_app` with login, NOINHERIT and all six role memberships.",
+        "`0016_doorway_login.sql` is unmodified; the change ships as migration `0034` (hard constraint 6).",
+        "The serial second pass in `backend/doorway/mutation_check.py` is retained, unmodified.",
+        "One `memory.md` record lands with this package, including the PRE-1 result."
+      ],
+      "risks": [
+        "MEDIUM — the acceptance test is probabilistic. Mitigated only by the seen-to-fail requirement; without it the package can go green by luck.",
+        "MEDIUM — do NOT remove the harness's serial second pass as a claimed benefit of this fix. That pass re-runs every row scoring `imprecise`, i.e. the suite failed but not through the named test. Role collision is ONE cause among many (port conflict, OOM, slow container). The module's own comment says the pass 'is not belt-and-braces — it is what makes the parallel first pass safe to keep'. Removing it would recreate the condition it records: nine guarantees reported as guarded that were never evaluated.",
+        "LOW — the password cannot be read back, so a pure assert is impossible for `setup.py:38-42`. If the hybrid is not stated explicitly, an implementer will either leave the unconditional write in place or break the bootstrap.",
+        "LOW — PRE-1 may come back ambiguous on a cluster whose version differs from production. Record the version alongside the result."
+      ],
+      "rollback_or_remediation": [
+        "The `setup.py` change and the new migration are separable; either can revert alone.",
+        "A new migration cannot be un-applied by reverting the file. If the conditional grant proves wrong, the remediation is a FURTHER migration restoring the prior state, not an edit or a delete — forward-only (hard constraint 6). Say so in the package so the implementer does not reach for `git checkout` on an applied migration.",
+        "If the reproduction test proves too flaky to keep in CI, mark it explicitly rather than deleting it, and record why in `memory.md`."
+      ]
+    },
+    {
+      "id": "WP-008",
+      "title": "B4 — an allowlist tripwire over the five unprotected snapshot and ruleset tables",
+      "objective": "Turn the invariant that `backend/doorway/documents.py:47-56` currently states in PROSE into a review tripwire, so that a new consumer of the five unprotected snapshot and ruleset tables cannot appear without somebody looking at it. RE-SPECIFIED this revision: the earlier dataflow-property formulation was not executable.",
+      "scope": [
+        "One source-shape test asserting that the five table names appear only in the doorway modules on a named allowlist.",
+        "A demonstration that the test trips when a table name is introduced in a module not on the allowlist."
+      ],
+      "out_of_scope": [
+        "Row-level security on the five tables. That is the structurally better fix and it is DEFERRED — see WP-012 — because it is a schema change whose blast radius includes content-addressed sharing.",
+        "A behavioural database test of the form 'as an ordinary requester, a direct select using another deal's identifier returns zero rows or is refused'. VERIFIED UNACHIEVABLE against correct, unfixed code — see implementation notes.",
+        "Any test that attempts to decide whether an identifier is caller-supplied or whether resolution happened first. DROPPED THIS REVISION: those are dataflow and ordering properties that no text or regex check can decide, and the previous formulation named no mechanism.",
+        "The previous criterion 'the test passes for a hypothetical legitimate consumer'. DROPPED: a hypothetical cannot be executed, and it fought the very rule the test asserts.",
+        "`cw.audit_checkpoint` — audit-chain infrastructure fenced off by hard constraint 5.",
+        "`cw.schema_migration`."
+      ],
+      "target_files_or_sections": [
+        "backend/doorway/documents.py:47-56 — the prose statement of the invariant, READ ONLY",
+        "backend/doorway/test_executions.py:418-424 — THE MECHANISM MODEL, verified this pass: `test_the_status_moves_by_the_trigger_and_never_by_the_endpoint` reads the module's source with `Path(__file__).with_name(\"executions.py\").read_text(...)` and asserts `\"update cw.agreement\" not in source`. Copy this shape exactly.",
+        "backend/doorway/ — a new test module, or an addition to the existing source-shape suite",
+        "The five tables by name: cw.snapshot, cw.snapshot_member, cw.snapshot_ladder_rung, cw.ruleset, cw.ruleset_member"
+      ],
+      "prerequisites": [
+        "WP-001"
+      ],
+      "required_changes": [
+        "Add a source-shape test that, for each of the five table names, reads every `*.py` in `backend/doorway/` excluding tests and asserts the name appears only in modules on an explicit ALLOWLIST constant declared in the test.",
+        "Populate the allowlist from the current tree at authoring time, and give each entry a one-line reason in a comment.",
+        "Demonstrate the test failing by adding one of the five table names to a module not on the allowlist, then removing it.",
+        "The test's own docstring must state plainly that this is a REVIEW TRIPWIRE, not row-level security: it proves only that a new file naming these tables gets seen, not that the identifier reaching them was resolved through `cw.run`. WP-012 carries the real control.",
+        "Follow the conventions in `backend/doorway/test_no_identity_survives.py` and `test_executions.py:418-424` rather than inventing a new mechanism."
+      ],
+      "implementation_notes": [
+        "Observed, and this is why the behavioural test was rejected: `backend/db/migrations/0005_run_store.sql` enables RLS on `cw.run`, `cw.run_decision` and `cw.run_finding` ONLY, while granting `select, insert` on all five snapshot/ruleset tables to `cw_requester`, `cw_legal_reviewer` and `cw_legal_admin`, plus `select` to `cw_auditor`. A requester CAN reach those tables directly today. A behavioural test asserting otherwise would fail against correct code, and the package would either stall or silently pull an unscoped schema change into a package sized as a cheap test.",
+        "Observed: `documents.py:47-56` states the invariant explicitly, including that 'the caller-supplied run id is the one identifier in this system that must never reach an unprotected table before it has been resolved through a protected one'. The prose is the specification; this package makes a proxy for it executable, and the docstring must say it is a proxy.",
+        "WHY THE ALLOWLIST RATHER THAN THE RULE: the rule as stated is a dataflow property. Deciding it requires knowing whether a value originated in the request body and whether a `cw.run` resolution dominates the use — an AST-plus-dataflow analysis nobody in this repository has built, and not something a regex can approximate. The allowlist is honest about being a tripwire: it cannot be wrong about what it checks, and it fails closed on exactly the event worth reviewing, a NEW module naming these tables.",
+        "Five tables, per `bug_report.md`'s prose. The pg_class output quoted in the bug report lists seven; the two extras are `cw.audit_checkpoint` and `cw.schema_migration`, both out of scope for the reasons stated.",
+        "This is the cheapest package in the plan and is fully independent of every other one except WP-001. It can be scheduled to fill any gap."
+      ],
+      "validation_checks": [
+        "The new test passes on the untouched tree with the allowlist as authored.",
+        "With one of the five table names added to a doorway module not on the allowlist, the test fails and names the offending file.",
+        "With a new module added to the allowlist, the test passes again — confirming the allowlist is the intended review point rather than an obstacle.",
+        "The full doorway suite passes; `preflight()` returns `[]`."
+      ],
+      "acceptance_criteria": [
+        "A source-shape test enumerates the five tables (cw.snapshot, cw.snapshot_member, cw.snapshot_ladder_rung, cw.ruleset, cw.ruleset_member) and asserts each name appears only in doorway modules on an explicit allowlist declared in the test.",
+        "The test is DEMONSTRATED FAILING when one of the five names is introduced in a module not on the allowlist, and the failure names the offending file.",
+        "The allowlist is authored from the current tree and every entry carries a one-line reason.",
+        "The test's docstring states that it is a review tripwire and not row-level security.",
+        "`cw.audit_checkpoint` and `cw.schema_migration` are not in the test's table list.",
+        "No product code changes. The package is test-only and additive.",
+        "No assertion refers to message text."
+      ],
+      "risks": [
+        "MEDIUM — an allowlist is a review gate, not a proof. Its value depends entirely on somebody actually thinking when they add an entry. The docstring must say so, and WP-012 must stay visible as the real control.",
+        "LOW — the allowlist will need an entry the first time a legitimate new consumer appears. That is the design, not a defect; it must not be read as the test being 'wrong' and weakened.",
+        "LOW — the real fix (RLS scoped through `cw.run`) is deferred, so this package leaves a known gap open. That is deliberate and justified, but it must be recorded as such rather than allowed to read as closure of B4."
+      ],
+      "rollback_or_remediation": [
+        "Test-only and additive; deleting the new test file is a complete revert with no product impact.",
+        "If the tripwire proves unmaintainable, the remediation is to escalate WP-012 (RLS) rather than to leave both undone."
+      ]
+    },
+    {
+      "id": "WP-009",
+      "title": "B8 — correct the stale monotonic-clock rationale and the two import defects in `sessions.py`",
+      "objective": "Bring the sign-in reply's comment into line with what the code now does, and remove the unused import and the missing import in `backend/doorway/sessions.py`. Comment and import changes only; no behavioural change.",
+      "scope": [
+        "`backend/doorway/app.py:134-139` — the rationale comment above `\"expiresInSeconds\": length`.",
+        "`backend/doorway/sessions.py:32` — the unused `import threading`.",
+        "`backend/doorway/sessions.py` — the missing `Database` import used only in an annotation."
+      ],
+      "out_of_scope": [
+        "The returned VALUE at `app.py:140`. It is mutation-guarded ('the sign-in reply exports the raw session clock again') and must not change.",
+        "Removing `from __future__ import annotations` as a permanent change. It is removed temporarily as a validation probe only, and restored.",
+        "Introducing mypy, pyright, or any type checker and its configuration. DECIDED THIS REVISION, not left to the implementer — see the acceptance criteria and the Observed evidence below. If the owner wants a type checker in this repository, that is a separate package with its own scope.",
+        "Any behavioural change of any kind."
+      ],
+      "target_files_or_sections": [
+        "backend/doorway/app.py:132-141 — the comment block and the `\"expiresInSeconds\": length` line",
+        "backend/doorway/sessions.py:28-34 — the import block, including `import threading` at line 32 (verified this pass)",
+        "backend/doorway/sessions.py:70 — `def __init__(self, db: Database, now: Callable[[], float] | None = None):` (verified verbatim this pass)",
+        "backend/doorway/mutation_check.py — verify the app.py row's pattern is undisturbed"
+      ],
+      "prerequisites": [
+        "WP-001"
+      ],
+      "required_changes": [
+        "Rewrite the comment at `app.py:134-139` so it describes the current behaviour. Observed: the comment explains why the field is seconds-from-now rather than a timestamp, and narrates a past defect where the raw monotonic value was exported as 'expiresAt'; `sessions.py:75-77` confirms the move to `time.time()` with its own comment explaining why monotonic was wrong, so the app.py rationale is genuinely stale. Correct only the stale parts. Do not touch line 140.",
+        "Remove `import threading` at `sessions.py:32`, confirmed unused.",
+        "Add the `Database` import that `sessions.py` annotates but never imports. This import is SAFE: `backend/doorway/db.py` imports nothing from `sessions.py` (it imports contextlib, typing, psycopg and psycopg_pool only), so no cycle is created. Contrast `identity.py`, which does import from `sessions.py` — see WP-010.",
+        "Confirm the mutation row 'the sign-in reply exports the raw session clock again' still finds its pattern exactly once after the comment edit."
+      ],
+      "implementation_notes": [
+        "Observed: `app.py:133-140` reads `issued = self._sessions.issue(who[\"person\"], length)` followed by a six-line comment and `\"expiresInSeconds\": length,`. The mutation row pins the returned line, not the comment, so the comment is free to change and the value is not.",
+        "Observed: `sessions.py:28` is `from __future__ import annotations`, so the un-imported `Database` annotation at line 70 never evaluates and `import doorway.sessions` SUCCEEDS today. That is why `python -c \"import doorway.sessions\"` is a non-discriminating acceptance criterion — it passes identically before and after the fix and proves nothing.",
+        "NO TYPE CHECKER EXISTS IN THIS REPOSITORY — Observed, verified this pass so the question is not re-litigated: `find . -name pyproject.toml -o -name mypy.ini -o -name pyrightconfig.json -o -name setup.cfg` returns nothing, and `backend/package.json` declares no `devDependencies` at all (its sole dependency is @electric-sql/pglite). The previous revision's primary criterion therefore required introducing a tool and its configuration — unstated new scope in a package whose objective is 'no behavioural change'. It is replaced by the future-import probe.",
+        "Observed: `sessions.py` currently imports only stdlib — `re`, `secrets`, `threading`, `dataclass`, `Callable` — and `threading` is unused.",
+        "Observed: `sessions.py` is one of the six files currently modified and uncommitted by the concurrent session. This package must rebase cleanly and must yield the file to WP-010 and WP-011 in sequence.",
+        "`doorway/app.py` carries 1 mutation row and `doorway/sessions.py` carries 3. Re-run `preflight()` after the edit."
+      ],
+      "validation_checks": [
+        "THE PROBE: temporarily delete `from __future__ import annotations` from `sessions.py:28`, run `python -c \"import doorway.sessions\"`, then restore the line. Pre-fix this raises `NameError: name 'Database' is not defined` at def time for `Sessions.__init__`; post-fix it imports cleanly.",
+        "A linter reports no unused import in `sessions.py`.",
+        "`preflight()` returns `[]`; the app.py mutation row still finds its pattern exactly once and returns verdict `ok`.",
+        "The full doorway suite passes with no test changed."
+      ],
+      "acceptance_criteria": [
+        "THE FUTURE-IMPORT PROBE, decided in this package and not deferred to the implementer: with `from __future__ import annotations` temporarily removed from `sessions.py:28`, `import doorway.sessions` succeeds; the line is then restored and `git diff` shows it present. DEMONSTRATED FAILING against pre-fix code, where the same probe raises NameError for `Database`.",
+        "`from __future__ import annotations` is present at `sessions.py:28` in the delivered state — the probe is a probe, not a change.",
+        "No type checker, and no type-checker configuration file, is added to the repository by this package.",
+        "`import threading` no longer appears in `sessions.py` and no linter reports an unused import there.",
+        "`backend/doorway/app.py:140` (`\"expiresInSeconds\": length,`) is byte-identical to its pre-package state.",
+        "The mutation row 'the sign-in reply exports the raw session clock again' still finds its pattern exactly once and returns verdict `ok`.",
+        "The full doorway suite passes with no test edited, weakened or deleted.",
+        "No behavioural change of any kind is introduced."
+      ],
+      "risks": [
+        "LOW — the only real risk is scope creep: the comment sits next to a mutation-guarded line and an implementer tidying 'while they are in there' would break the guard.",
+        "LOW — the probe must be restored. Make the restoration an acceptance criterion in its own right, which it is, so a forgotten restoration cannot pass.",
+        "LOW — `sessions.py` is uncommitted and moving. Rebase conflicts are likely; keep the diff to three lines so they are trivial to resolve."
+      ],
+      "rollback_or_remediation": [
+        "Two files, four lines, no behaviour. `git checkout --` on both files is a complete revert.",
+        "No downstream package depends on this one, so a revert has no cascade — but WP-010 and WP-011 also touch `sessions.py`, so a revert after they land must be done as a targeted edit rather than a file checkout."
+      ]
+    },
+    {
+      "id": "WP-010",
+      "title": "Relocate LOOKUP_ACTOR and LOOKUP_ROLE so `sessions.py` can name them without closing an import cycle",
+      "objective": "Move the two lookup-identity constants to a module both `identity.py` and `sessions.py` can import, and replace the five pairs of hardcoded literals in `sessions.py`. This is the change that collapses WP-011's Python surface from five call sites to one.",
+      "scope": [
+        "Relocate `LOOKUP_ROLE` and `LOOKUP_ACTOR` out of `backend/doorway/identity.py`.",
+        "Replace both literals at all five `as_person` call sites in `backend/doorway/sessions.py`.",
+        "Preserve the rationale comments attached to both constants."
+      ],
+      "out_of_scope": [
+        "Importing `doorway.identity` into `doorway.sessions`. VERIFIED to be a circular import — see implementation notes. Any package proposing it is wrong.",
+        "Changing the VALUES of either constant. That is WP-011's question, if it is anyone's.",
+        "Any behavioural change."
+      ],
+      "target_files_or_sections": [
+        "backend/doorway/identity.py:47-48 — `from doorway.db import Database` and `from doorway.sessions import EIGHT_HOURS, Sessions, parse_duration`",
+        "backend/doorway/identity.py:57 — `LOOKUP_ROLE = \"viewer\"` and its comment",
+        "backend/doorway/identity.py:62 — `LOOKUP_ACTOR = \"__signin__\"` and its comment",
+        "backend/doorway/sessions.py:87, 112, 119, 130, 134 — `with self._db.as_person(\"__signin__\", \"viewer\") as request:` (all five re-verified by grep this pass)",
+        "A new or existing shared constants module, OR `backend/doorway/sessions.py` itself"
+      ],
+      "prerequisites": [
+        "WP-009"
+      ],
+      "required_changes": [
+        "Choose and record a home for the two constants. Two viable options: (a) a small shared module both may import; (b) `sessions.py` itself, which `identity.py` ALREADY imports at line 48, making the dependency direction correct with no new module. Option (b) is the smaller change and is consistent with the existing import direction and with the house preference for few moving parts.",
+        "Move `LOOKUP_ROLE` and `LOOKUP_ACTOR` together with their rationale comments — those comments carry the security argument for why `cw_viewer` is safe on this path, and they must not be orphaned.",
+        "Replace all five occurrences of `db.as_person(\"__signin__\", \"viewer\")` in `sessions.py` with the named constants. Note both literals appear at all five sites; earlier drafts addressed only one of the two.",
+        "Update `identity.py` to resolve both constants from their new home, so its own uses at identity.py:101, 115 and 130 are unchanged in behaviour.",
+        "Record the relocation decision in `memory.md`. Read the head of the file at authoring time for the next number."
+      ],
+      "implementation_notes": [
+        "Observed, and this is the whole reason the package exists: `backend/doorway/identity.py:48` is `from doorway.sessions import EIGHT_HOURS, Sessions, parse_duration`. `sessions.py` importing `identity.py` to reach `LOOKUP_ACTOR`/`LOOKUP_ROLE` closes a cycle. Two earlier plans proposed exactly that as a mechanical tidy-up, one of them on WP-011's critical path.",
+        "Observed by grep this pass: `sessions.py:87, 112, 119, 130, 134` are each `with self._db.as_person(\"__signin__\", \"viewer\") as request:` — both literals, five sites, ten occurrences.",
+        "Observed: `identity.py:57` and `:62` define the constants with substantial rationale comments — `LOOKUP_ROLE` carries the argument that `cw_viewer` 'can do nothing else at all. So the worst a bug on this path can do is read the staff list', and `LOOKUP_ACTOR` carries 'Nothing is audited under it, because looking somebody up is not a governed act'. Both arguments become load-bearing under WP-011 and must travel with the constants.",
+        "This is a small change with a real design decision inside it — where the lookup identity lives — which is why it is its own package rather than a line in WP-011.",
+        "Sequencing: `sessions.py` is a serialised resource across WP-009, WP-010 and WP-011, in that order.",
+        "Observed: `doorway/identity.py` carries 2 mutation rows and `doorway/sessions.py` 3. Re-run `preflight()` after the move."
+      ],
+      "validation_checks": [
+        "`import doorway.identity` and `import doorway.sessions` both succeed, in either order, in a fresh interpreter.",
+        "A grep confirming the literals `\"__signin__\"` and `\"viewer\"` no longer appear at any `as_person` call site in `sessions.py`.",
+        "`identity.py` still resolves both constants and its existing tests pass.",
+        "`preflight()` returns `[]`; the identity and sessions mutation rows return verdict `ok`.",
+        "The full doorway suite passes with no test changed."
+      ],
+      "acceptance_criteria": [
+        "`import doorway.identity` and `import doorway.sessions` both succeed in either order in a fresh interpreter — proving no cycle was introduced.",
+        "`backend/doorway/sessions.py` contains neither the literal `\"__signin__\"` nor the literal `\"viewer\"` at any of its five `as_person` call sites; both are named constants.",
+        "`backend/doorway/identity.py` still resolves `LOOKUP_ROLE` and `LOOKUP_ACTOR`, and its existing tests pass unmodified.",
+        "The rationale comments for both constants survive the move intact.",
+        "The full doorway suite passes with no test edited, weakened or deleted; `preflight()` returns `[]` and the identity and sessions rows return verdict `ok`.",
+        "One `memory.md` record states where the constants now live and why.",
+        "No behavioural change: the same actor and role reach `as_person` at all five sites."
+      ],
+      "risks": [
+        "MEDIUM — a naive implementation that imports `identity` into `sessions` produces a circular import that may not surface until a particular import order occurs at runtime. The 'either order in a fresh interpreter' criterion is the guard.",
+        "LOW — `sessions.py` is uncommitted and moving; five call sites is a wide diff surface for rebase conflicts.",
+        "LOW — if option (a) is chosen, a new module appears in a codebase that values few moving parts; option (b) adds none. Record the reasoning either way."
+      ],
+      "rollback_or_remediation": [
+        "Two files plus possibly one new module. A `git checkout --` on both files and deletion of any new module is a complete revert.",
+        "If reverted after WP-011 has landed, WP-011's single Python call site reverts to five hardcoded pairs — so the two must be reverted together or not at all. State that dependency in both packages."
+      ]
+    },
+    {
+      "id": "WP-011",
+      "title": "A-1 — remove the unscoped `cw_viewer` grant and `using (true)` policy on `cw.session`, with its boundary test (APPROVAL-GATED)",
+      "objective": "Close the finding that any person holding the viewer role can read, insert and delete every session row in the system, and ship the boundary test that would have caught it. BLOCKED pending three owner decisions; do not author as implementable until all three are answered.",
+      "scope": [
+        "The chosen A-1 fix: either an actor-scoped RLS policy, or a dedicated database lookup role.",
+        "A boundary test in `backend/doorway/test_prohibitions.py`.",
+        "A test that an account whose person collides with the lookup actor gains no session access.",
+        "A first-of-kind mutation row pinning the fix, if judged worth its cost."
+      ],
+      "out_of_scope": [
+        "Shipping the migration without the test. That recreates exactly the condition that let A-1 land.",
+        "Deciding the approach without the owner. Both options are security-sensitive database migrations and the contract designates this approval-sensitive.",
+        "Editing `0032_session_store.sql` in place on the strength of `git status`. See implementation notes — the argument is a non-sequitur.",
+        "Any change to `cw.account`'s schema.",
+        "Any edit to `backend/doorway/db.py` under Option A. Under Option B the `ROLE_TO_DB_ROLE` entry at db.py:65-72 is in scope, and this package is the ONLY package in the plan that may touch that file — WP-006 has been re-specified to leave db.py byte-identical, which removes the previous hard-constraint-7 collision without adding a sequencing edge."
+      ],
+      "target_files_or_sections": [
+        "backend/db/migrations/0032_session_store.sql:28-32 — `grant select, insert, delete on cw.session to cw_viewer;` and `create policy viewer_manages_sessions on cw.session for all to cw_viewer using (true);`",
+        "backend/db/migrations/0033_*.sql — the superseding migration, if that is the owner's Decision 2. NUMBER ALLOCATED IN THIS PLAN: this package takes 0033; WP-007 takes 0034 unconditionally, so neither waits on the other and no collision is possible whichever way Decision 2 goes.",
+        "backend/doorway/sessions.py — the single `as_person` constant, if the dedicated-role option is chosen (one site after WP-010; five before it)",
+        "backend/doorway/db.py:65-72 — `ROLE_TO_DB_ROLE`, ONLY if Option B is chosen",
+        "backend/doorway/test_prohibitions.py — the boundary test",
+        "memory.md — decision records for the approach, the numbering and the ledger query"
+      ],
+      "prerequisites": [
+        "WP-010"
+      ],
+      "required_changes": [
+        "BLOCKED PENDING OWNER DECISION 1 — approach. Do not author an implementable change until answered.",
+        "OPTION A, actor-scoped RLS policy: replace `using (true)` with a predicate scoping the policy to the lookup actor. The predicate MUST be written `cw.app_actor() = '__signin__'` or `current_setting('cw.actor', true)`. NEVER bare `current_setting('cw.actor')`, which RAISES when unset — `cw.app_actor()` at `0001_foundation.sql:93-95` is the `missing_ok` form and is the house form. A bare call would make any owner, migration or maintenance path ERROR rather than deny, and `refusals.classify` would render that as a 500 `broke`. Note the table-level grant survives under this option.",
+        "OPTION B, dedicated lookup role: create `cw_lookup`, move the grant to it, revoke from `cw_viewer`, grant `cw_lookup` to `cw_app`, add a `ROLE_TO_DB_ROLE` entry, and add usage/select grants. COSTING THAT MUST BE STATED TO THE OWNER: `cw.app_role()` (replaced at `0013:84-94`) is a CASE over `current_user` naming only the six application roles and returning NULL otherwise, and `0013_administrator.sql:252-253` has `create policy read_all on cw.account for select using (cw.app_role() is not null)`. A `cw_lookup` role therefore fails that policy and SIGN-IN BREAKS AT RUNTIME, after the migration lands. Making it work requires a further migration replacing `app_role()` — after which `cw_lookup` satisfies EVERY policy phrased `app_role() is not null`, which `0013:72-80` records as the pervasive phrasing across 0001–0012, and its containment falls back to table-level GRANTs: the very layer Option B exists to stop relying on. Option B relocates the reliance rather than removing it.",
+        "BLOCKED PENDING OWNER DECISION 2 — `0032` edited in place versus superseded by `0033`. Requires running `select filename from cw.schema_migration where filename = '0032_session_store.sql'` against EVERY database a developer has run `prepare()` on. If any row exists, in-place editing is off the table regardless of git.",
+        "BLOCKED PENDING OWNER DECISION 3 — whether the first-of-kind SQL mutation row is worth its cost.",
+        "Add the boundary test to `test_prohibitions.py`. It ships in THIS package, not a later one.",
+        "Add a test that an account whose `person` collides with the lookup actor gains no session access, or that such a name is refused at creation.",
+        "Record the approach decision, the ledger query result and the numbering decision in `memory.md`. Read the head of the file at authoring time for the next numbers."
+      ],
+      "implementation_notes": [
+        "Observed: `0032_session_store.sql:28` is `grant select, insert, delete on cw.session to cw_viewer;` and lines 30-32 create `viewer_manages_sessions ... for all to cw_viewer using (true)`. The migration's own header calls `cw_viewer` 'the lookup role' — true on the sign-in path, false everywhere else, since `cw_viewer` is also a real application role held by real people.",
+        "REJECTED ARGUMENT: 'edit `0032` in place because `git status` shows it untracked'. Untracked proves never COMMITTED, not never APPLIED. Observed and re-verified this pass: `doorway/migrate.py:41` creates `cw.schema_migration (filename text primary key, ...)`, `:63` reads `select filename from cw.schema_migration` into a done-set, `:75` inserts `path.name` — no checksum, no re-application path. Any developer database on which `prepare()` has run since 0032 was written already holds that row and would silently SKIP an edited file, leaving the unscoped grant standing, while `conftest.py`'s fresh per-process database reported the whole suite green. Contract assumption A4 ('not yet applied', tagged Observed) is DOWNGRADED to Assumed on this evidence.",
+        "Observed by `ls backend/db/migrations`: `0032_session_store.sql` is the highest-numbered file present. 0033 is free and is allocated to this package.",
+        "THE ACCEPTANCE CRITERION MUST BE BRANCH-NEUTRAL. Under Option A the grant survives and the viewer's select returns ZERO ROWS. Under Option B the grant is revoked and the same select RAISES InsufficientPrivilege — and `db.py`'s SilentlyRefused wrapping covers `write_one` only. A criterion phrased 'returns zero rows' ERRORS under Option B. A criterion phrased 'is refused' fails under Option A.",
+        "Observed, supporting the `__signin__` collision concern: `cw.account.person` is an unconstrained `text primary key` (`0013:117`); the CHECK constraint at `0013:126-128` is on the `role` column, not `person`; `writes.py:339` takes `person` from the request body; `db.py:205` feeds that person to `set_config('cw.actor', ...)`. An administrator-created account named `__signin__` with role 'viewer' would satisfy an actor-scoped policy. The precondition is that the account's role maps to a db role still holding the grant — which under Option A it does.",
+        "FIRST-OF-KIND: no existing mutation row targets a `.sql` file; all 36 doorway rows target `doorway/*.py`. A row restoring the unscoped grant IS buildable — the harness copies `db/migrations` into the temp tree and `migrate.py` resolves MIGRATIONS_DIR relative to `__file__`, so the mutated migration is the one the per-test rebuild applies — but it has no precedent and must be costed as first-of-kind rather than assumed free."
+      ],
+      "validation_checks": [
+        "A boundary test in `test_prohibitions.py`: a person holding the viewer role attempts to select from `cw.session` and to delete from it, asserting on ROW COUNT or InsufficientPrivilege as appropriate, and accepting either.",
+        "The test run against the CURRENT `0032` grant and observed to FAIL.",
+        "The full sign-in path exercised end to end after the change: issue, verify, expire, remove.",
+        "A test that an account named `__signin__` gains no session access, or that such a name is refused.",
+        "If Option B: an explicit test that `cw.app_role()` returns a usable value for `cw_lookup`, or that the `cw.account` read policy at `0013:252-253` still admits the sign-in read.",
+        "`select filename from cw.schema_migration where filename = '0032_session_store.sql'` run against every developer database, result recorded.",
+        "`npm run verify` from `backend/` passes end to end.",
+        "`preflight()` returns `[]`; any new first-of-kind row returns verdict `ok`."
+      ],
+      "acceptance_criteria": [
+        "BRANCH-NEUTRAL: a person holding the viewer role obtains NO ROW from `cw.session` and removes none — WHETHER BY REFUSAL OR BY EMPTY RESULT. The assertion must accept a zero row count OR an InsufficientPrivilege, never one alone.",
+        "The test is DEMONSTRATED FAILING against the current `0032` grant.",
+        "The sign-in path still works end to end after the change: a session can be issued, verified, expired and removed.",
+        "A second test asserts that an account whose `person` collides with the lookup actor gains no session access, or that such a name is refused at account creation.",
+        "If Option A is chosen, the policy predicate uses `cw.app_actor()` or `current_setting('cw.actor', true)`; a bare `current_setting('cw.actor')` fails this criterion because it raises when unset rather than denying.",
+        "If Option B is chosen, a test proves the `cw.account` read policy at `0013:252-253` still admits the sign-in read — i.e. sign-in has been verified at runtime, not merely reasoned about.",
+        "If a superseding migration is used, it is numbered 0033 as allocated in this plan; no number is negotiated with WP-007 at implementation time.",
+        "The migration and its test ship in the SAME package. A migration landing without its test does not satisfy this package.",
+        "Three `memory.md` records land: the approach decision, the `0032`-versus-`0033` numbering decision, and the ledger query result.",
+        "No assertion refers to message text.",
+        "`preflight()` returns `[]`; the full `npm run verify` passes."
+      ],
+      "risks": [
+        "HIGH — BLOCKED on three owner decisions (approach; `0032` versus `0033`; whether the first-of-kind SQL mutation row is worth its cost). Authoring this as implementable before they are answered hides an unresolved design decision inside a package, which this role's instructions forbid.",
+        "HIGH — editing `0032` in place on the git-status argument would ship a security fix that APPEARS to land and does not, on any developer database where it already applied, while the fresh per-process test database reported green. The ledger query is a hard precondition, not a nicety.",
+        "HIGH — a branch-dependent acceptance criterion means the package's own success test is wrong for one of the two options. The branch-neutral phrasing is mandatory.",
+        "MEDIUM — Option B has a privilege-widening tail: making sign-in work requires replacing `cw.app_role()`, after which `cw_lookup` satisfies every policy phrased `app_role() is not null` and containment falls back to table GRANTs. Presenting Option B as 'structurally correct' without this understates it. Both options must be costed honestly before the owner decides.",
+        "MEDIUM — `sessions.py` is a serialised resource shared with WP-009 and WP-010 and is currently uncommitted and moving.",
+        "LOW — first-of-kind SQL mutation row. Buildable, verified, but unprecedented; cost it as such rather than assuming it is free."
+      ],
+      "rollback_or_remediation": [
+        "A migration cannot be un-applied by reverting the file. If the fix proves wrong, the remediation is a FURTHER forward migration restoring a known-good state (hard constraint 6). Never `git checkout` an applied migration and assume the database followed.",
+        "Option A is materially easier to remediate than Option B: it changes one policy predicate and no Python. Option B changes a role, a grant, a Python role map, a call site, and potentially `cw.app_role()` itself — its rollback is a multi-statement forward migration plus a Python revert, and a partial rollback breaks sign-in.",
+        "If sign-in breaks after the change, the immediate mitigation is a forward migration restoring the prior grant, followed by re-raising the decision — NOT weakening the boundary test to make the suite green.",
+        "If the ledger query finds `0032` applied anywhere, abandon the in-place option immediately and re-plan as `0033`; record the finding in `memory.md` so the question is not re-litigated."
+      ]
+    },
+    {
+      "id": "WP-012",
+      "title": "DEFERRED — row-level security scoped through `cw.run` on the five snapshot and ruleset tables (B4b)",
+      "objective": "Registered and justified deferral, not for implementation in this run. The structurally correct fix for B4 is RLS on the five unprotected tables, scoped through `cw.run`. It is out of proportion to the 'cheap invariant test' B4 was sized as, and it needs its own risk budget and its own migration number.",
+      "scope": [
+        "No implementation. This package exists so B4b is visible in the traceability matrix as a deliberate deferral rather than an omission."
+      ],
+      "out_of_scope": [
+        "Everything. Do not implement. If this is later approved, it becomes a new package with its own number in a new run."
+      ],
+      "target_files_or_sections": [
+        "backend/db/migrations/0005_run_store.sql — where RLS is enabled on three tables and grants are made on five more",
+        "backend/doorway/runs.py:282-334 — `_store`, the content-addressed sharing path",
+        "cw.run_snapshot, cw.run_contract, cw.run_summary — the `security_invoker` setting of these views"
+      ],
+      "prerequisites": [
+        "none. CORRECTED THIS REVISION: the previous 'WP-008' prerequisite made no sense on a package that is not implemented. The correct relationship is stated as a supersession, not a dependency — if WP-012 is ever approved and lands, it SUPERSEDES WP-008's allowlist tripwire as the control for B4, and WP-008's docstring should then be updated to point at it."
+      ],
+      "required_changes": [
+        "None. Deferred.",
+        "If approved in a future run, the package must first answer the open question below, because it determines whether the work is buildable at all."
+      ],
+      "implementation_notes": [
+        "Observed: `0005_run_store.sql` enables RLS on `cw.run`, `cw.run_decision` and `cw.run_finding` only, while granting `select, insert` on the five snapshot/ruleset tables to three roles and `select` to a fourth. The gap is real.",
+        "BLAST RADIUS, which is why this is deferred: `backend/doorway/runs.py:282-334` implements content-addressed sharing via `_store` with `on conflict do nothing` on all five shared tables, and an explicit comment — verified verbatim this pass — that there is deliberately NO read-then-skip guard because it would be a second copy of one rule and a weaker one, since a read followed by a write is a race. Snapshots and rulesets are SHARED across runs by content hash. A policy scoped through `cw.run` must therefore admit a row reachable via ANY run the caller may see, not merely the run in hand — and getting that wrong either breaks sharing or reintroduces the leak.",
+        "Additional surface: the `security_invoker` setting of `cw.run_snapshot`, `cw.run_contract` and `cw.run_summary` determines whose privileges apply when those views read the underlying tables, and must be settled before any policy is written.",
+        "UNRESOLVED, and this is the gating question: can the five tables carry policies scoped through `cw.run` at all, or does the pinned-library read path require unscoped access? Not determined in this pass. If the answer is no, this deferral becomes permanent and WP-008's tripwire is the only available control.",
+        "WP-008 is the partial mitigation that ships now: it makes a proxy for the invariant executable without changing the schema."
+      ],
+      "validation_checks": [
+        "Not applicable — deferred."
+      ],
+      "acceptance_criteria": [
+        "This package is NOT implemented in this run.",
+        "The deferral, its reason and its gating open question are recorded in `memory.md` so B4 does not read as fully closed by WP-008 alone. Read the head of `memory.md` at authoring time for the number.",
+        "WP-008's test docstring states explicitly that it is a review tripwire and not row-level security, so nobody downstream mistakes it for the real control.",
+        "The relationship to WP-008 is recorded as supersession, not dependency."
+      ],
+      "risks": [
+        "MEDIUM — the risk of deferring is that B4 reads as closed. Mitigated by the explicit `memory.md` record and by WP-008's docstring.",
+        "MEDIUM — if the gating question resolves to 'the pinned-library read path requires unscoped access', the gap is permanent and must be documented as an accepted risk rather than an open task."
+      ],
+      "rollback_or_remediation": [
+        "Not applicable — nothing is changed.",
+        "If the deferral is later judged wrong, the remediation is a new package in a new run with its own migration number and its own risk budget."
+      ]
+    },
+    {
+      "id": "WP-013",
+      "title": "DEFERRED — add a checksum column to `cw.schema_migration` so forward-only is enforceable",
+      "objective": "Registered and justified deferral, newly surfaced during this run. `doorway/migrate.py` ledgers applied migrations by FILENAME ONLY, with no checksum, so hard constraint 6's forward-only convention is currently unenforceable and in-place edits to any applied migration are invisible forever to every installation that already ran them.",
+      "scope": [
+        "No implementation. Registered because it is the control that would make WP-011's `0032`-versus-`0033` question a safe check rather than a judgement call."
+      ],
+      "out_of_scope": [
+        "Everything. Do not implement. It is new scope relative to the objective contract, which covers B1–B9 and A-1."
+      ],
+      "target_files_or_sections": [
+        "backend/doorway/migrate.py:41 — `create table if not exists cw.schema_migration (filename text primary key, applied_at ...)`",
+        "backend/doorway/migrate.py:63 — `done = {row[0] for row in conn.execute(\"select filename from cw.schema_migration\")}`",
+        "backend/doorway/migrate.py:75 — `insert into cw.schema_migration (filename) values (%s)` with `path.name`"
+      ],
+      "prerequisites": [
+        "none"
+      ],
+      "required_changes": [
+        "None. Deferred.",
+        "If approved in a future run: add a checksum column, record the digest at apply time, and fail loudly when a recorded migration's file has changed on disk. Backfilling existing installations is the hard part and must be planned, not assumed."
+      ],
+      "implementation_notes": [
+        "Observed: `migrate.py:41` creates the ledger, `:63` reads `select filename from cw.schema_migration` into a done-set, `:75` inserts `path.name`. No checksum, no digest, no re-application path.",
+        "Consequence, Observed: a migration edited after it has been applied is silently skipped on every database that already ran it, and there is no mechanism by which that drift becomes visible. That is exactly the failure mode that makes WP-011's Decision 2 dangerous.",
+        "This is registered rather than implemented because it is genuinely new scope. The contract's non-goals do not name it, but its success criteria do not cover it either, and absorbing it into a defect-remediation run would be the kind of scope creep the workflow exists to prevent.",
+        "Tagged: Observed (the gap), Unresolved (whether to close it)."
+      ],
+      "validation_checks": [
+        "Not applicable — deferred."
+      ],
+      "acceptance_criteria": [
+        "This package is NOT implemented in this run.",
+        "The gap is recorded in `memory.md` so that the next person deciding whether to edit an applied migration knows the ledger cannot tell them. Read the head of `memory.md` at authoring time for the number.",
+        "WP-011's Decision 2 is answered by an explicit database query rather than by trusting the ledger's design."
+      ],
+      "risks": [
+        "MEDIUM — while this remains open, every in-place edit to an applied migration is an undetectable divergence between what the repository says and what any given database holds.",
+        "LOW — implementing it later requires a backfill decision for existing installations, which is why it is not free."
+      ],
+      "rollback_or_remediation": [
+        "Not applicable — nothing is changed.",
+        "Interim mitigation, already built into WP-011: run the ledger query against every developer database before deciding to edit an applied migration."
+      ]
+    }
+  ]
+}

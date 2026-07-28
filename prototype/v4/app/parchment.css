@@ -1,0 +1,99 @@
+/* Parchment theme — the old-school legal look. (Mike, 2026-07-28)
+ *
+ * Decision U8 froze base.css as v3's bytes, so this theme NEVER edits base.css
+ * or v4.css. It loads after both and does exactly two things:
+ *
+ *   1. Repaints the colour tokens: aged parchment for the desk, cream sheets
+ *      for the panels, iron-gall brown-black for the ink, a banker's-lamp
+ *      green where the dark theme used teal. The amber "pending, never green"
+ *      rule and the red "error, never merely no" rule keep their meanings —
+ *      only the shades changed.
+ *
+ *   2. Swaps the typefaces to a typeset register: Source Serif for running
+ *      text where Inter was, Courier Prime (the legal typewriter face) where
+ *      JetBrains Mono was. Instrument Serif stays — it was already the
+ *      old-style display face.
+ *
+ * Everything else below exists only because a handful of base.css rules
+ * assumed a dark background (white-tinted hovers, black shadows, a dark
+ * caption bar) and need the light-background equivalent.
+ *
+ * To go back to dark mode, remove this stylesheet's <link> from index.html.
+ */
+
+:root {
+  --bg: #EAE0C9;
+  --surface: #F5EEDD;
+  --surface-2: #EEE5CE;
+  --panel: #F5EEDD;
+  --panel-2: #EEE5CE;
+  --line: #D3C5A5;
+  --line-2: #BFAE87;
+  --ink: #2C2318;
+  --mute: #6C5D45;
+  --mute-2: #97876B;
+  --accent: oklch(0.45 0.09 165);   /* banker's-lamp green */
+  --accent-2: oklch(0.50 0.12 72);  /* burnished amber — pending stays amber */
+  --danger: oklch(0.47 0.16 28);    /* sealing-wax red */
+  --ok: oklch(0.46 0.10 150);
+}
+
+/* A whisper of paper grain on the desk itself. Kept below the threshold of
+ * "texture you can point at" — parchment, not a themed restaurant. */
+html, body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(rgba(44, 35, 24, 0.028) 1px, transparent 1px),
+    radial-gradient(ellipse at 50% 0%, rgba(255, 252, 240, 0.5), transparent 70%);
+  background-size: 3px 3px, 100% 100%;
+}
+
+/* ── Typeset ─────────────────────────────────────────────────────────────── */
+body { font-family: 'Source Serif 4', Georgia, serif; -webkit-font-smoothing: auto; }
+.section-label { font-family: 'Source Serif 4', Georgia, serif; }
+.font-mono, .tag, .btn, .chip,
+.waiting-age, .tile-n, .acting-role, .empty-kicker,
+input, textarea, select {
+  font-family: 'Courier Prime', 'Courier New', monospace;
+}
+
+/* ── Light-background corrections for rules that assumed dark ────────────── */
+
+/* Ink-tinted hovers and zebra stripes where base.css tinted with white. */
+.waiting-row:hover { background: rgba(44, 35, 24, 0.04); }
+.zebra > *:nth-child(even) { background: rgba(44, 35, 24, 0.025); }
+.btn:hover { background: rgba(44, 35, 24, 0.05); }
+
+/* Dark green button, cream lettering — base.css set near-black text for a
+ * bright teal button. */
+.btn-primary { color: #F7F1E1; }
+.btn-primary:hover { filter: brightness(1.12); }
+
+/* The demo caption was a near-black bar; now a paper slip. */
+.demo-caption {
+  background: rgba(245, 238, 221, 0.96);
+  border-color: var(--line-2);
+  color: var(--ink);
+  box-shadow: 0 10px 30px -12px rgba(44, 35, 24, 0.35);
+}
+
+/* The dossier sheet keeps its own paper, one step brighter than the desk so
+ * it still reads as a separate document; the heavy black drop shadow becomes
+ * a soft sepia one. */
+.paper {
+  background: #FBF6E9;
+  box-shadow:
+    0 1px 0 rgba(44, 35, 24, 0.18),
+    0 18px 44px -24px rgba(44, 35, 24, 0.45),
+    inset 0 0 0 1px rgba(26, 23, 20, 0.06);
+}
+
+/* Panels are sheets laid on the desk — a hairline shadow sells the stack
+ * without inventing any new component. */
+.panel { box-shadow: 0 1px 2px rgba(44, 35, 24, 0.07); }
+
+/* Inputs read as fields on a form: brightest surface in the room. */
+input, textarea, select { background: #FBF6E9; }
+
+/* Scrollbars in parchment tones. */
+::-webkit-scrollbar-thumb { background: var(--line-2); }

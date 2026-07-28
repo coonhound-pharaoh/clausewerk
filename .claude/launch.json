@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "clausewerk",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "doorway.server", "--port", "8787", "--static", "../prototype/v4"],
+      "cwd": "backend",
+      "port": 8787
+    }
+  ]
+}

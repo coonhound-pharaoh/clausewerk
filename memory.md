@@ -2833,3 +2833,200 @@ checks. The session-authorized person is also the person recorded in
 Application-role inserts bind negotiation `opened_by`, `baseline_chosen_by`,
 round `actor`, and movement `actor` to `cw.app_actor()`. The append-only
 commercial history cannot carry a second caller-supplied identity.
+
+## S96 — A case-variant severity is not a recorded rewrite — SETTLED 2026-07-28
+`coerced` records rewrites that change MEANING. `"HIGH"` stored as `"High"`
+changes spelling only and is deliberately absent, because recording it would
+bury the rewrites that did change meaning. Reported as defect B3; withdrawn on
+review — `engine/test_manifest.py::test_high_is_matched_on_meaning_not_spelling`
+already pins this behaviour, and "fixing" it would have deleted the regression
+guard against silent High-to-Standard downgrades that `manifest.py`'s own
+comment records as having happened once. Owner decision: change the docstring,
+not the code. No behaviour changed.
+
+## S97 — The B1 shape rule lives at the boundary AND as a floor — SETTLED 2026-07-28
+Two layers, deliberately, and they are not two copies of one rule.
+`writes.refuse_structured` is the single implementation: it refuses a dict or a
+list for any field not declared `as_json=True`, names the field, and is imported
+by `runs.py` and `executions.py` rather than restated. The branch in
+`refusals.classify` is a backstop for a bind site the guard has not reached, and
+it says less because it knows less.
+The floor is narrow on purpose. Three unrelated conditions raise
+`ProgrammingError` with no SQLSTATE (verified, psycopg 3.3.4): a failed
+adaptation (the caller's fault), a missing parameter, and a placeholder-count
+mismatch. The last two are OUR bugs. Keying on "no SQLSTATE" would have told
+callers they made a mistake about our bug — the same failure B1 objects to,
+running backwards — so the branch keys on the adaptation message alone and a
+test pins that the other two still return 500 `broke`.
+Also found: psycopg adapts a LIST to a Postgres array without error, so a list
+never raised at all — it would have been silently stored as an array in a text
+column. The boundary guard is what catches that; the floor never could.
+
+## S98 — `required_if` adds a condition, it never removes one — SETTLED 2026-07-28
+`Field.required_if` used to overwrite `required` rather than combine with it, so
+a field declared `required=True` alongside a `required_if` became optional
+whenever the condition was false. No live effect — the one field using it
+declares `required=False` — but the two read as though they compose. They now
+do: `demanded = spec.required or (condition)`.
+
+## S99 — The model call holds no database connection — SETTLED 2026-07-28
+`advisory.assess` runs in three phases: read the two frozen texts and close the
+transaction; call the model holding nothing; reopen a short transaction to write
+the row. Previously the 20-second model call ran inside the caller's open
+transaction, so ten concurrent assessments occupied every connection in the
+`max_size=10` serving pool and everything else — sign-in included — queued
+behind them, then failed with a message blaming the database.
+WHAT THE WINDOW MEANS: the ticket may be decided, withdrawn or re-texted while
+the model is thinking. The row still stands, because it stores `baseline_text`
+and `compared_text` verbatim — it is a judgment about those two frozen texts and
+says so in its own columns. If the ticket itself is gone, the foreign key
+refuses the insert and the caller gets a classified refusal.
+Second belt, independently useful: `MAX_CONCURRENT_JUDGMENTS = 4`, below the
+pool's 10, so a slow provider degrades one endpoint rather than the process.
+
+## S100 — Role contention is retried in the migration runner, not fixed in 0016 — SETTLED 2026-07-28
+A role is cluster-wide; a database is not. The harness gives every process its
+own database, but `cw_app` lives in `pg_authid` outside that isolation, and the
+schema fixture rebuilds per test — so migration 0016's `alter role cw_app
+noinherit` fired hundreds of times per run and two overlapping runs raised
+`tuple concurrently updated` in an unrelated test (defect B9).
+DEVIATION FROM THE WORK PACKAGE, recorded because it matters: the package called
+for a new migration 0034 re-expressing 0016's statement as check-then-act. That
+cannot work. `0016` re-runs from the start on every fresh database, so a later
+migration cannot prevent it; and 0016 itself may not be edited, because its
+filename is already in every ledger and the edit would be silently skipped
+exactly where it was needed. The retry therefore lives in `migrate.py`, keyed on
+PostgreSQL's own words and bounded, with anything else still failing loudly on
+the first attempt. No migration was added.
+MEASURED 2026-07-28, PostgreSQL 18.4: 12 concurrent `alter role cw_app
+noinherit` produced 7 failures; 12 concurrent `grant ... to cw_app` produced
+none. So the grant needed nothing, and the package's conditional-grant item was
+dropped rather than implemented against a problem that does not exist.
+
+## S101 — `prepare()` checks the login rather than rewriting it — SETTLED 2026-07-28
+The NOINHERIT check in `setup.prepare()` was already right — it verifies rather
+than re-applies — and was simply two lines too late. The password write is now
+conditional on `rolcanlogin`, so a repeat `prepare()` writes nothing to the
+cluster-wide role. A password cannot be read back from `pg_authid`, so this
+cannot be a pure assertion; rotation stays available through
+`CW_APP_PASSWORD_RESET`, which makes changing a credential a deliberate act.
+
+## S102 — The lookup identity lives in sessions.py — SETTLED 2026-07-28
+`LOOKUP_ACTOR` and `LOOKUP_ROLE` moved from `identity.py` to `sessions.py`, with
+their rationale comments, which carry the security argument for why `cw_viewer`
+is safe on this path. They cannot live in `identity.py`: that module already
+imports `sessions.py`, so naming them there and importing them back closes a
+cycle. `identity.py` now re-exports them, so there is one copy of each. This
+collapses the five hardcoded `as_person("__signin__", "viewer")` sites in
+`sessions.py` to named constants.
+
+## S103 — The five RLS-free tables get a review tripwire, not a behavioural test — SETTLED 2026-07-28
+`cw.snapshot`, `cw.snapshot_member`, `cw.snapshot_ladder_rung`, `cw.ruleset` and
+`cw.ruleset_member` have no row-level security, and `0005_run_store.sql:301-309`
+grants select on all five to the requester and both Legal roles. A behavioural
+test asserting a requester cannot reach them CANNOT PASS against correct code —
+today a requester can. What ships instead is a source-shape tripwire
+(`test_unprotected_tables.py`): each table name may appear only in modules on an
+explicit allowlist, so a new file naming one gets read before it merges. This is
+a review control and the test says so in its own docstring; it proves nothing
+about whether the id reaching the table was resolved through `cw.run`. Real RLS
+on these tables remains deferred (WP-012) — it is a schema change with
+content-addressed-sharing blast radius.
+
+## S104 — A retired mutation row leaves with a written reason — SETTLED 2026-07-28
+`python doorway/mutation_check.py` had been exiting 1 on the untouched tree, and
+because the preflight aborts before running anything, ALL 36 doorway guarantees
+were unevaluated and `npm run verify` was red on `main` (defect B10). Three rows
+were repointed. The fourth — "removing an expired session crashes if another
+request removed it first" — guarded a KeyError on an in-memory dict popped by
+two requests at once; sessions now live in the database and both expiry paths
+delete by predicate, which removes zero rows without complaint. There is no line
+left whose mutation reproduces the hazard and the test it named was deleted with
+the dict. Owner decision: RETIRED with this reason recorded, not repointed —
+inventing a replacement guarantee to keep the count at 36 would be a design
+change wearing a repair's clothes. 35 rows, preflight clean.
+Both session rows anchor on the comment above their delete, not the delete
+itself: the two expiry deletes are byte-identical and a bare pattern would match
+twice and mutate whichever came first.
+
+## S105 — A-1 is held, and 0032 is never edited — SETTLED 2026-07-28
+Owner decision on the session-key exposure (audit finding A-1): HELD, not fixed
+in this pass. Both options were under-costed in the audit. The "minimal"
+actor-scoped policy is forgeable — nothing reserves the name `__signin__`, so an
+administrator could create an account with it and read every session key. The
+"structurally correct" dedicated lookup role BREAKS SIGN-IN at runtime once the
+migration lands, because a new role returns NULL from `cw.app_role()` and fails
+the account-read policy; making it work needs a further migration widening every
+policy phrased `app_role() is not null`. Neither is a clean win, and neither
+should be chosen without testing against a real database.
+Separately settled: migration `0032` is never edited in place. `migrate.py`
+ledgers by filename with no checksum and no re-application path, so any database
+where `prepare()` has run since 0032 was written already holds that row and
+would SILENTLY SKIP an edited file, while a fresh test database reports green.
+Any change supersedes it with a new number. (Checked 2026-07-28 on the local
+developer database: no `003x` row present. The rule holds regardless — it is
+about what cannot be proven across every developer machine, not about this one.)
+
+## S95 — The screens wear parchment, and the theme is one removable file — SETTLED 2026-07-28
+Mike asked for the old-school legal parchment-and-typeset look in place of dark
+mode, kept short of garish. This does not reopen decision U8: base.css is still
+v3's bytes, untouched, and v4.css is still additions-only. The whole look lives
+in ONE new file, `prototype/v4/app/parchment.css`, loaded last in index.html —
+it repaints the colour tokens (parchment desk, cream sheets, iron-gall ink,
+banker's-lamp green where teal was) and swaps the typefaces (Source Serif for
+running text, Courier Prime — the legal typewriter face — for the data face;
+Instrument Serif stays). The amber-never-green rule for pending grants and the
+red-means-error rule keep their meanings; only the shades changed, and every
+status chip was measured at or above ~4:1 contrast on the new paper. Removing
+one `<link>` line from index.html restores dark mode exactly. `_style.html`
+still shows the dark tokens; it is a reference snippet, not a served page.
+
+## S106 — A-1 fixed by scoping the policy to the sign-in act — SETTLED 2026-07-28
+Supersedes the "held" half of [[S105]]; the 0032 rule in S94 still stands.
+
+Migration `0033` replaces 0032's `using (true)` policy on `cw.session` with one
+scoped to the ACTOR rather than the role:
+
+    using (cw.app_actor() = '__signin__')
+
+WHY THE POLICY AND NOT THE GRANT. There is only one role to grant to. Sign-in
+and an ordinary signed-in viewer both arrive as `cw_viewer` — that is the whole
+finding. What distinguishes them is the actor stamped on the connection, so the
+policy asks WHICH ACT is in progress rather than which role is asking. The grant
+is left alone, and no Python changed.
+
+`cw.app_actor()` and not bare `current_setting`: the bare form RAISES when
+unset, so an owner or maintenance path touching the table would 500 rather than
+simply match nothing.
+
+THE FORGERY IS CLOSED IN THE SAME MIGRATION, and it had to be — without it the
+policy is decorative. `cw.account.person` is an unconstrained text primary key
+and `POST /accounts` takes it from the request body, so an administrator could
+have created an account named `__signin__` with role `viewer`, satisfied the
+policy, and read every live session key through the front door with no error
+anywhere. A CHECK constraint now reserves the leading-double-underscore
+namespace for identities the system uses. Real people here are email addresses;
+all six seeded demo accounts verified unaffected.
+
+THE OTHER OPTION WAS REJECTED ON EVIDENCE. A dedicated `cw_lookup` role returns
+NULL from `cw.app_role()`, which fails the `read_all` policy on `cw.account`
+(0013:252) — sign-in would break at runtime AFTER the migration landed. Making
+it work needs a further migration replacing `app_role()`, after which the new
+role satisfies EVERY policy phrased `app_role() is not null` and containment
+falls back to table grants: the very weakness the smaller option was criticised
+for.
+
+WHAT THIS IS NOT. It does not reduce anyone's access. The exposure ran the other
+way — `viewer` is the role held by outside suppliers, and it could read the
+administrator's session key and sign the whole company out. A session key is the
+credential itself, not a fact about a person, so a stolen one is
+indistinguishable from its holder and leaves no audit trail.
+
+Shipped with `test_session_privacy.py`, the audit's own probe kept as a test:
+four assertions demonstrated failing with 0033 removed. Asserts row counts and
+exceptions, never wording.
+
+GAP LEFT OPEN, recorded rather than quietly carried: `db/test/` has no SQL-side
+coverage of `cw.session` at all, and the SQL mutation harness
+(`db/test/mutation-check.mjs`) carries no row for this guarantee. The Python
+boundary test is what guards it today.

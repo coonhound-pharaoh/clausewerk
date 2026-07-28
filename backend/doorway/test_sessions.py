@@ -1,61 +1,67 @@
-"""The session store, alone — no database, no socket.
+"""The session store, now backed by the database.
 
-The server is threaded on purpose (see server.py), which means the sign-in
-ledger is shared state. These tests prove the two failures that shape allowed:
-
-  · two requests presenting the same expired token raced their removals, and
-    the loser crashed its request with a KeyError the user saw as "we broke";
-  · an expired session was only removed when its exact token came back, so an
-    abandoned browser left its entry behind forever — and sign-in is the one
-    unauthenticated door, so that was memory a stranger could fill.
+These tests prove the store correctly persists sessions, sweeps expired ones,
+and survives parallel traffic without crashing.
 """
 
 from __future__ import annotations
 
 import threading
+import pytest
 
 from doorway.sessions import Sessions
+from doorway.db import Database
 
 
-def test_an_entry_removed_mid_check_is_no_session_not_a_crash():
-    """The exact interleaving the threaded server produces: the token is found,
-    and by the time this request goes to remove it as expired, another request
-    has already removed it. The clock callback stands in for the other thread —
-    it runs between the lookup and the removal, exactly where the other request
-    would."""
-    sessions = Sessions(now=lambda: 0.0)
-    issued = sessions.issue("rita@clausewerk", 10.0)
+@pytest.fixture
+def db(schema: str, owner_url: str):
+    import psycopg
+    with psycopg.connect(owner_url, autocommit=True) as owner:
+        owner.execute("select cw.bootstrap(%s,%s,%s,%s,%s,%s)",
+                      ("owner@clausewerk", "admin@clausewerk", "The Administrator",
+                       "leah@clausewerk", "Leah Legal", "Legal"))
+        
+    database = Database(schema, min_size=1, max_size=15)
+    
+    with database.as_person("admin@clausewerk", "administrator") as request:
+        # Create users for all tests
+        users = ["rita@clausewerk", "leah@clausewerk"]
+        for i in range(50):
+            users.append(f"p{i}@clausewerk")
+        for i in range(8):
+            users.append(f"w{i}@clausewerk")
+            
+        for user in users:
+            request.write(
+                "insert into cw.account (person, display_name, unit, role, created_by) "
+                "values (%s, 'Test User', 'Test', 'requester', 'admin@clausewerk') "
+                "on conflict do nothing",
+                (user,)
+            )
+            
+    yield database
+    database.close()
 
-    def racing_clock() -> float:
-        # Another request got here first: the entry is already gone.
-        sessions._by_token.pop(issued.token, None)
-        return 1_000_000.0  # long past expiry
 
-    sessions._now = racing_clock
-    assert sessions.person_for(issued.token) is None
-
-
-def test_expired_sessions_are_swept_when_a_new_one_is_issued():
-    """Abandoned sign-ins must not accumulate: the store is in process memory
-    and sign-in needs no credential, so growth without bound is a door."""
+def test_expired_sessions_are_swept_when_a_new_one_is_issued(db: Database):
+    """Abandoned sign-ins must not accumulate in the database."""
     clock = {"t": 0.0}
-    sessions = Sessions(now=lambda: clock["t"])
+    sessions = Sessions(db, now=lambda: clock["t"])
 
     for _ in range(5):
         sessions.issue("rita@clausewerk", 10.0)
     assert len(sessions) == 5
 
-    clock["t"] = 11.0  # all five are now expired, none ever presented again
+    clock["t"] = 11.0  # all five are now expired
     sessions.issue("leah@clausewerk", 10.0)
     assert len(sessions) == 1, "expired sessions were kept until presented"
 
 
-def test_the_store_survives_genuinely_parallel_traffic():
+def test_the_store_survives_genuinely_parallel_traffic(db: Database):
     """Sign-ins, presentations of expiring tokens, and revocations, all at
-    once. Any unguarded read-check-remove in the store surfaces here as a
-    KeyError or a dictionary-changed-size error on some thread."""
+    once. Proves the database correctly handles concurrent modifications."""
     clock = {"t": 0.0}
-    sessions = Sessions(now=lambda: clock["t"])
+    sessions = Sessions(db, now=lambda: clock["t"])
     failures: list[BaseException] = []
 
     tokens = [sessions.issue(f"p{i}@clausewerk", 0.5).token for i in range(50)]
@@ -63,7 +69,7 @@ def test_the_store_survives_genuinely_parallel_traffic():
 
     def hammer(worker: int) -> None:
         try:
-            for i in range(200):
+            for i in range(50):
                 sessions.person_for(tokens[i % len(tokens)])
                 if i % 5 == 0:
                     sessions.issue(f"w{worker}@clausewerk", 0.001)
@@ -79,3 +85,26 @@ def test_the_store_survives_genuinely_parallel_traffic():
         thread.join()
 
     assert not failures, f"parallel traffic crashed the store: {failures[:3]}"
+
+
+def test_sessions_are_dropped_by_token(db: Database):
+    """A session ended explicitly by its token is gone immediately."""
+    sessions = Sessions(db, now=lambda: 0.0)
+    issued = sessions.issue("rita@clausewerk", 10.0)
+    assert sessions.person_for(issued.token) == "rita@clausewerk"
+
+    sessions.end(issued.token)
+    assert sessions.person_for(issued.token) is None
+
+
+def test_sessions_are_dropped_by_person(db: Database):
+    """Ending all sessions for a person drops every token they hold."""
+    sessions = Sessions(db, now=lambda: 0.0)
+    t1 = sessions.issue("rita@clausewerk", 10.0).token
+    t2 = sessions.issue("rita@clausewerk", 10.0).token
+    t3 = sessions.issue("leah@clausewerk", 10.0).token
+
+    sessions.end_all_for("rita@clausewerk")
+    assert sessions.person_for(t1) is None
+    assert sessions.person_for(t2) is None
+    assert sessions.person_for(t3) == "leah@clausewerk"

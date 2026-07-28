@@ -105,6 +105,34 @@ class Missing(Exception):
     """
 
 
+class WrongShape(Exception):
+    """A field that arrived as an object or a list where a plain value belongs."""
+
+
+def refuse_structured(name: str, value: Any) -> Any:
+    """Refuse an object or a list for a field that takes a plain value.
+
+    THE ONE COPY OF THIS RULE. Import it; do not restate the isinstance test.
+
+    A `dict` or a `list` handed to psycopg as a bind parameter raises
+    `cannot adapt type 'dict'`, which carries no SQLSTATE and so lands in the
+    catch-all that means "we broke". The caller mistyped a form field and gets
+    told the service failed — the exact inversion this codebase argues against
+    wherever the question comes up (server.py, documents.py).
+
+    Refused HERE, at the boundary where presence is already checked, so the
+    message can name the field. Raises rather than returning a sentinel because
+    the other callers are raising boundaries too; the one that must answer
+    instead of raise catches this and converts.
+
+    Empty cases are covered deliberately: `str({})` is "{}" and `str([])` is
+    "[]", so neither is caught by the blankness check below.
+    """
+    if isinstance(value, (dict, list)):
+        raise WrongShape(f"{name} takes a plain value, not an object or a list")
+    return value
+
+
 @dataclass(frozen=True)
 class Field:
     """One value a write takes from the request body.
@@ -136,12 +164,21 @@ class Write:
         params: dict[str, Any] = {}
         for spec in self.fields:
             value = body.get(spec.name)
+            # Shape before blankness: an empty dict is not blank by the test
+            # below, and would sail through to the driver.
+            if not spec.as_json:
+                refuse_structured(spec.name, value)
             blank = value is None or str(value).strip() == ""
 
             demanded = spec.required
             if spec.required_if is not None:
                 other, expected = spec.required_if
-                demanded = body.get(other) == expected
+                # `or`, not `=`. These two read as though they compose, and a
+                # field declared required=True alongside a required_if used to
+                # become optional whenever the condition was false — required_if
+                # ADDS a condition under which a field is demanded, it never
+                # takes away one that was already unconditional.
+                demanded = spec.required or (body.get(other) == expected)
 
             if blank and demanded:
                 raise Missing(f"{spec.name} is required and cannot be blank")
@@ -681,6 +718,13 @@ def answer(db: Database, caller: Caller, key: str, body: dict | None = None) -> 
     except Missing as missing:
         return Answer(status=400, body={
             "error": "refused", "reason": str(missing), "kind": "rejected"})
+    except WrongShape as wrong:
+        # Same answer as Missing, and it must be here rather than nowhere: an
+        # uncaught WrongShape would reach the last-resort handler and become the
+        # 500 this guard exists to remove — the defect fixed, then reintroduced
+        # one layer up.
+        return Answer(status=400, body={
+            "error": "refused", "reason": str(wrong), "kind": "rejected"})
     except SilentlyRefused as silent:
         # Deliberately NOT a 200. The JavaScript answers `{"rows": []}` here and
         # the screen says the change was saved.

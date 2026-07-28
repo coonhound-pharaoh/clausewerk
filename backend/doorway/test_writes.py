@@ -39,7 +39,8 @@ from doorway.db import Database, SilentlyRefused
 from doorway.identity import Caller
 from doorway.reads import READS
 from doorway.writes import (
-    NEVER_FROM_THE_BODY, WRITES, Missing, NoSuchWrite, answer, run,
+    NEVER_FROM_THE_BODY, WRITES, Field, Missing, NoSuchWrite, Write, WrongShape,
+    answer, run,
 )
 
 ADMINISTRATOR = Caller(person="admin@clausewerk", role="administrator")
@@ -917,3 +918,122 @@ def test_each_negotiation_endpoint_is_reachable_through_the_service(
     ):
         answered = service.handle("POST", path, token, body)
         assert answered.status == 200, (path, answered.body)
+
+
+# ── 7. A structured value in a plain field is the caller's mistake ──────────
+#
+# Defect B1. A caller who sent a nested object or a list where a plain value
+# belongs was told THE SERVICE FAILED — an HTTP 500 — on every write endpoint in
+# the product. Scalar mistakes were already handled correctly, which is what
+# made it a bug rather than a design choice.
+#
+# It matters in both directions: caller typos produced 500s, so a genuine
+# service failure stopped being distinguishable from noise in the log.
+
+
+def _plain_fields(key):
+    return [f for f in WRITES[key].fields if not f.as_json]
+
+
+@pytest.mark.parametrize("key", sorted(WRITES))
+@pytest.mark.parametrize("bad", [{}, {"nested": [1, 2]}, [], [1, 2]])
+def test_a_structured_value_is_refused_and_the_field_is_named(key, bad):
+    """Every plain field, every write, both shapes, and the empty cases too.
+
+    Database-free: this is the boundary, and it refuses before anything opens.
+    The empty cases are here deliberately — `str({})` is "{}" and `str([])` is
+    "[]", so neither is caught by the blankness check that sits beside this one.
+    """
+    for spec in _plain_fields(key):
+        body = dict(BODIES[key])
+        body[spec.name] = bad
+        with pytest.raises(WrongShape):
+            WRITES[key].bind(body)
+
+
+def test_the_one_json_field_still_takes_a_structure():
+    """The guard must not break the field whose whole job is to carry one."""
+    findings = [f for f in WRITES["POST /overrides"].fields if f.as_json]
+    assert findings, "POST /overrides no longer declares a JSON field"
+    body = dict(BODIES["POST /overrides"])
+    body[findings[0].name] = [{"finding_ref": "F-1"}]
+    WRITES["POST /overrides"].bind(body)
+
+
+@pytest.mark.parametrize("bad", [{"nested": [1, 2]}, [1, 2]])
+def test_the_endpoint_answers_a_refusal_and_not_a_service_failure(
+    people, db: Database, bad
+):
+    """B1's reported reproduction, end to end.
+
+    The guard raising is not enough — an uncaught exception on the way out
+    becomes the very 500 the guard exists to remove, which is how this defect
+    would have been fixed and reintroduced one layer up in the same change.
+    """
+    shaped = answer(db, REQUESTER, "POST /deals",
+                    {"agreement_id": "AG-B1", "counterparty": bad})
+
+    assert shaped.status == 400, (
+        f"a malformed field answered {shaped.status}; a caller's mistake is "
+        f"never a service failure")
+    assert shaped.body.get("kind") == "rejected"
+
+
+def test_a_scalar_mistake_is_unaffected(people, db: Database):
+    """The behaviour that was already right stays right."""
+    shaped = answer(db, REQUESTER, "POST /deals",
+                    {"agreement_id": "AG-B1b", "counterparty": "Northwind"})
+    assert shaped.status == 200
+
+
+def test_the_shape_rule_has_exactly_one_implementation():
+    """Hard constraint: a rule with two copies is a rule that drifts.
+
+    The doorway's stated central vulnerability is two copies of one rule
+    disagreeing. `refuse_structured` is the copy; everything else imports it.
+    """
+    doorway = Path(__file__).parent
+    restated = []
+    for path in sorted(doorway.glob("*.py")):
+        if path.name.startswith("test_") or path.name == "writes.py":
+            continue
+        source = path.read_text(encoding="utf-8")
+        # The isinstance test itself, in either argument order, outside the one
+        # module entitled to spell it.
+        if re.search(r"isinstance\([^)]*,\s*\(?\s*(dict|list)\s*,\s*(list|dict)\s*\)?\s*\)",
+                     source):
+            restated.append(path.name)
+    assert restated == [], (
+        f"{restated} restates the dict/list shape test instead of importing "
+        f"writes.refuse_structured")
+
+
+# ── 8. required_if adds a condition; it never removes one ───────────────────
+
+
+def test_a_required_field_stays_required_alongside_a_condition():
+    """Defect B7. `required_if` used to OVERWRITE `required`, so a field
+    declared both became optional whenever the condition was false. No live
+    effect today — the one field using it declares required=False — but the two
+    read as though they compose, and the next conditional field would inherit
+    the trap."""
+    both = Write(sql="", rule="",
+                 fields=(Field("note", required=True, required_if=("decision", "reject")),))
+
+    with pytest.raises(Missing):
+        both.bind({"decision": "approve"})       # condition false, still required
+    with pytest.raises(Missing):
+        both.bind({"decision": "reject"})        # condition true, still required
+    both.bind({"decision": "approve", "note": "n"})
+
+
+def test_a_conditional_only_field_is_demanded_only_when_the_condition_holds():
+    """The other half: required=False plus required_if still composes correctly,
+    which is the live case in the write table."""
+    conditional = Write(sql="", rule="",
+                        fields=(Field("note", required=False,
+                                      required_if=("decision", "reject")),))
+
+    conditional.bind({"decision": "approve"})    # not demanded
+    with pytest.raises(Missing):
+        conditional.bind({"decision": "reject"})  # demanded

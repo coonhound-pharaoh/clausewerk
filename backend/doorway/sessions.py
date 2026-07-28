@@ -29,11 +29,29 @@ from __future__ import annotations
 
 import re
 import secrets
-import threading
 from dataclasses import dataclass
 from typing import Callable
 
+from doorway.db import Database
+
 EIGHT_HOURS = 8 * 3600.0
+
+# The role sign-in reads as, before any role is known. This is the one genuine
+# chicken-and-egg in the serving path, and it is NOT resolved by using the owner.
+#
+# cw_viewer is the least-privileged role in the system. It holds select on
+# cw.account and cw.effective_role — access is not a secret, both carry role
+# names and no contract content — and can do nothing else at all. So the worst a
+# bug on this path can do is read the staff list.
+#
+# These live here, not in identity.py, because identity.py already imports this
+# module: naming them there and importing them back would close a cycle.
+LOOKUP_ROLE = "viewer"
+
+# A name, not a person: it is what appears as the actor on a connection that is
+# only reading the staff list to find out who somebody is. Nothing is audited
+# under it, because looking somebody up is not a governed act.
+LOOKUP_ACTOR = "__signin__"
 
 _DURATION = re.compile(r"^\s*(\d+)\s*([smhd])\s*$")
 _UNIT_SECONDS = {"s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0}
@@ -61,42 +79,41 @@ class Issued:
 
 
 class Sessions:
-    """Live sign-ins, held in memory.
-
-    In memory is a deliberate limit and worth naming: restarting the service
-    signs everybody out. That is the honest trade for this stage — it is safe
-    (nothing is lost but a sign-in) and it avoids inventing a session store
-    before there is a second instance to share one.
+    """Live sign-ins, held in the database.
+    
+    A service restart no longer signs everybody out, because sessions are now
+    persisted.
     """
 
-    def __init__(self, now: Callable[[], float] | None = None):
+    def __init__(self, db: Database, now: Callable[[], float] | None = None):
         # Time is injected so expiry can be tested without waiting. A test that
         # proves expiry by sleeping for eight hours is a test nobody runs.
         import time
 
-        self._now = now or time.monotonic
-        self._by_token: dict[str, tuple[str, float]] = {}
-        # The server is threaded ON PURPOSE (see server.py), so two requests
-        # really do read and write this dict at the same moment. Every method
-        # holds this lock; without it, two presentations of one expired token
-        # race their removals and the loser crashes the request.
-        self._lock = threading.RLock()
+        self._db = db
+        # time.time() instead of time.monotonic(), since monotonic rests on machine
+        # uptime and would expire sessions immediately on server restart if stored.
+        self._now = now or time.time
 
     def issue(self, person: str, length_seconds: float) -> Issued:
         # secrets, not a general-purpose random source: this string is the only
         # thing standing between a stranger and somebody else's session.
         token = secrets.token_urlsafe(32)
-        with self._lock:
-            now = self._now()
+        now = self._now()
+        expires_at = now + length_seconds
+
+        with self._db.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:
             # Sweep the dead before admitting the new. An expired session is
             # otherwise only removed when its exact token is presented again —
             # which for an abandoned browser is never — and sign-in is the one
             # unauthenticated door, so unswept growth is a way for a stranger
-            # to fill the process's memory one sign-in at a time.
-            self._by_token = {
-                t: held for t, held in self._by_token.items() if held[1] > now}
-            expires_at = now + length_seconds
-            self._by_token[token] = (person, expires_at)
+            # to fill the database one sign-in at a time.
+            request.write("delete from cw.session where expires_at <= %s", (now,))
+            request.write(
+                "insert into cw.session (token, person, expires_at) values (%s, %s, %s)",
+                (token, person, expires_at)
+            )
+
         return Issued(token=token, expires_at=expires_at)
 
     def person_for(self, token: str | None) -> str | None:
@@ -107,23 +124,18 @@ class Sessions:
         """
         if not token:
             return None
-        with self._lock:
-            found = self._by_token.get(token)
-            if not found:
-                return None
-            person, expires_at = found
-            if self._now() >= expires_at:
-                # pop, not del: the entry may already be gone — removed by a
-                # parallel request holding the same expired token, or by a
-                # revocation — and "already gone" is the outcome we wanted,
-                # not an error.
-                self._by_token.pop(token, None)
-                return None
-            return person
+            
+        now = self._now()
+        
+        with self._db.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:
+            # Drop expired before lookup, so we never return a dead session.
+            request.write("delete from cw.session where expires_at <= %s", (now,))
+            row = request.one("select person from cw.session where token = %s", (token,))
+            return row[0] if row else None
 
     def end(self, token: str) -> None:
-        with self._lock:
-            self._by_token.pop(token, None)
+        with self._db.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:
+            request.write("delete from cw.session where token = %s", (token,))
 
     def end_all_for(self, person: str) -> None:
         """Drop every session a person holds, used when they are revoked.
@@ -133,10 +145,10 @@ class Sessions:
         is still being presented. It is not the control — the per-request lookup
         is the control.
         """
-        with self._lock:
-            self._by_token = {
-                t: held for t, held in self._by_token.items() if held[0] != person}
+        with self._db.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:
+            request.write("delete from cw.session where person = %s", (person,))
 
     def __len__(self) -> int:
-        with self._lock:
-            return len(self._by_token)
+        with self._db.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:
+            row = request.one("select count(*) from cw.session")
+            return row[0] if row else 0

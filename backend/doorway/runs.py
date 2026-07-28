@@ -68,9 +68,11 @@ from dataclasses import dataclass
 import psycopg
 
 from doorway import manifests
+from doorway.manifests import DROPPED_WITHOUT_REASON
 from doorway.db import Database
 from doorway.identity import Caller
 from doorway.refusals import Refused, classify
+from doorway.writes import WrongShape, refuse_structured
 from engine import docx, loader
 from engine import run as engine_run
 from engine.manifest import UnknownCategory, check_manifest
@@ -130,6 +132,21 @@ def run(db: Database, caller: Caller, body: dict | None) -> Answer:
         return Answer(400, {"error": "refused", "reason": str(wrong),
                             "kind": "rejected"})
 
+    # `value` is the one manifest field that travels unconverted from the body
+    # into cw.run.value, a text column, and a dict there reaches psycopg as a
+    # bind parameter — B1's 500 exactly.
+    #
+    # Guarded HERE and not in manifests.manifest_from, for the same reason
+    # manifest_source is checked here: POST /manifests/check is a pre-flight
+    # over anything a model might emit, it never binds `value` to the driver,
+    # and narrowing manifest_from would silently change that endpoint. See the
+    # note below, which made this call once already.
+    try:
+        refuse_structured("value", manifest.value)
+    except WrongShape as wrong:
+        return Answer(400, {"error": "refused", "reason": str(wrong),
+                            "kind": "rejected"})
+
     if manifest.source not in SOURCES:
         # cw.run.manifest_source carries a check constraint naming exactly
         # these three. Left to the database, a bad source arrives as a late
@@ -173,10 +190,16 @@ def run(db: Database, caller: Caller, body: dict | None) -> Answer:
                         categories.key_for(risk.category)
                     except UnknownCategory as unknown:
                         reasons.append(str(unknown))
-                _record(request, agreement_id, manifest, "run_refused", reasons[0])
+                # Guarded for the same reason as the identical site in
+                # manifests.check: reasons is non-empty only by a coupling to
+                # the engine's single drop condition, and an IndexError here
+                # would answer "the service failed" on the refusal-explaining
+                # path itself.
+                first = reasons[0] if reasons else DROPPED_WITHOUT_REASON
+                _record(request, agreement_id, manifest, "run_refused", first)
                 return Answer(409, {
                     "error": "refused",
-                    "reason": reasons[0],
+                    "reason": first,
                     "kind": "unknown_category",
                     "dropped": [risk.category for risk in checked.dropped],
                     "reasons": reasons,
@@ -402,8 +425,14 @@ def _record(request, agreement_id: str, manifest, event: str, reason: str) -> No
     off the connection and there is nowhere here to put a different name.
     """
     request.write(
-        f"select cw.audit('{event}', %(agreement_id)s, %(payload)s::jsonb)",
+        # Bound, not interpolated. `event` is a module-local literal at every
+        # call site, so nothing a caller sends reaches it — but db.py spends ten
+        # lines explaining why even a role name from a fixed internal map is
+        # composed safely, and these three writers were the one exception, on
+        # the one table with no UPDATE and no DELETE.
+        "select cw.audit(%(event)s, %(agreement_id)s, %(payload)s::jsonb)",
         {
+            "event": event,
             "agreement_id": agreement_id,
             "payload": json.dumps({
                 "reason": reason,

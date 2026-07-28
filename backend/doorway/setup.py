@@ -30,16 +30,40 @@ OWNER_URL = os.environ.get(
 )
 APP_PASSWORD = os.environ.get("CW_APP_PASSWORD", "clausewerk-dev")
 
+# Set this to rotate the password on a role that can already log in. Without it,
+# prepare() establishes the login once and then leaves the role alone — see the
+# reasoning in prepare(). Rotation is a deliberate act, so it says so.
+RESET_PASSWORD_VARIABLE = "CW_APP_PASSWORD_RESET"
+
 
 def prepare(owner_url: str = OWNER_URL, app_password: str = APP_PASSWORD) -> list[str]:
     """Apply the schema and make `cw_app` able to log in. Returns migrations applied."""
     with psycopg.connect(owner_url, autocommit=True) as conn:
         applied = migrate(conn)
-        conn.execute(
-            sql.SQL("alter role cw_app login password {}").format(
-                sql.Literal(app_password)
+
+        # CHECKED, NOT REWRITTEN — the same instinct as the NOINHERIT check
+        # below, which was already right and was simply applied two lines too
+        # late.
+        #
+        # `cw_app` is a CLUSTER-WIDE row. The test harness gives every process
+        # its own database and rebuilds the schema per test, so an unconditional
+        # `alter role` here fired hundreds of times per run against a row no
+        # per-process database isolates — and two overlapping runs raised
+        # `tuple concurrently updated` in an unrelated test.
+        #
+        # A password cannot be read back from pg_authid, so this cannot be a
+        # pure assertion the way NOINHERIT can. The next best thing: write only
+        # when there is something to establish. Once the role can log in, a
+        # repeat prepare() writes nothing at all.
+        can_login = conn.execute(
+            "select rolcanlogin from pg_roles where rolname = 'cw_app'"
+        ).fetchone()[0]
+        if not can_login or os.environ.get(RESET_PASSWORD_VARIABLE):
+            conn.execute(
+                sql.SQL("alter role cw_app login password {}").format(
+                    sql.Literal(app_password)
+                )
             )
-        )
         # Stated as a check rather than trusted: NOINHERIT is the single word
         # that stops the doorway's login holding all six roles' privileges at
         # once, and a hand-edited role is exactly the thing nobody would notice.
