@@ -306,11 +306,16 @@ await test('a caller cannot self-report a clean score', async () => {
     update cw.review_ticket set
       state='verified', approved_text='Supplier shall notify Customer within 24 hours.',
       edited_before_approval=false, decided_by='L. Reyes',
+      decided_on='2000-01-01T00:00:00Z',
       minted_clause_id='DP-H-092', minted_version=1
     where ticket_id=${id}`, [], 'legal@clausewerk');
-  const t = await one(`select edited_before_approval from cw.review_ticket where ticket_id=${id}`);
+  const t = await one(`select edited_before_approval,
+    decided_on > now() - interval '1 minute' and decided_on <= now() as decision_time_is_fresh
+    from cw.review_ticket where ticket_id=${id}`);
   eq(t.edited_before_approval, true,
      'the flag is computed from the bytes, so a false claim is simply overwritten');
+  eq(t.decision_time_is_fresh, true,
+     'the decision time is computed at transition, so a forged backdate is overwritten');
 });
 
 await test('the baseline cannot be edited instead of the approval', async () => {

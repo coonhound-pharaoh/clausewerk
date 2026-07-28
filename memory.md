@@ -5,6 +5,10 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S81 — Review decision time is database-derived — SETTLED 2026-07-28
+Every review-ticket decision transition records the database's current time.
+Direct table callers cannot backdate or future-date the review evidence.
+
 ## S80 — Review-ticket self-review separation lives on the transition — SETTLED 2026-07-28
 A requester-originated review ticket cannot be verified by its authenticated
 opener through either the helper or direct Legal update. Tickets opened by a

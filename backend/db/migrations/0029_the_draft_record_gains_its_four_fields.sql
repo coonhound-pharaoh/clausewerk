@@ -233,7 +233,9 @@ begin
     new.edit_similarity := null;
   end if;
 
-  if new.decided_on is null then new.decided_on := now(); end if;
+  -- The decision time is evidence, not caller input. Assign over a supplied
+  -- value so direct Legal UPDATE cannot backdate or future-date the record.
+  new.decided_on := now();
   return new;
 end $$;
 

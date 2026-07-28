@@ -4,6 +4,24 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 67 — direct ticket decisions accepted forged timestamps
+
+**Observed defect.** The review-ticket transition supplied the current time only
+when `decided_on` was null. The intentional direct Legal update path could
+therefore backdate or future-date a decision, corrupting the historical evidence
+used to explain when language passed review.
+
+**Fix.** Every review-ticket decision transition now derives `decided_on` from
+the database clock, assigning over any caller-supplied value.
+
+**Regression proof.** A direct Legal verification supplies a year-2000 decision
+time. The stored decision time is nevertheless within the current test window.
+
+**Validation.**
+
+- `node backend/db/test/review-queue.test.mjs` — 45 passed
+- `node backend/db/test/self-approval.test.mjs` — 9 passed
+
 ## Cycle 66 — direct ticket verification bypassed self-review separation
 
 **Observed defect.** The review helper prevented a requester-originated ticket
