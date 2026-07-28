@@ -105,3 +105,14 @@ that serves authenticated workspaces.
 
 **Proof.** `test_api_responses_disable_browser_content_sniffing` verifies both
 API response branches; the static branch uses the same fixed header.
+
+## 9. The authenticated workspace could be framed
+
+**Risk.** Another site could embed Clausewerk and place deceptive controls over
+its real buttons, causing a signed-in person to perform an unintended act.
+
+**Fix.** Static screens, JSON responses, and downloads now send
+`X-Frame-Options: DENY`.
+
+**Proof.** `test_authenticated_origin_cannot_be_embedded_for_clickjacking`
+verifies the policy on both API response branches.

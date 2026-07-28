@@ -770,6 +770,19 @@ def test_api_responses_disable_browser_content_sniffing():
             assert reply.headers["x-content-type-options"] == "nosniff"
 
 
+def test_authenticated_origin_cannot_be_embedded_for_clickjacking():
+    app = Records(Response(200, {"ok": True}))
+
+    with stub_serving(app) as base:
+        with urllib.request.urlopen(base + "/api/me") as reply:
+            assert reply.headers["x-frame-options"] == "DENY"
+
+    download = Records(Download(200, b"contract", DOCX_TYPE, "contract.docx"))
+    with stub_serving(download) as base:
+        with urllib.request.urlopen(base + "/api/runs/contract") as reply:
+            assert reply.headers["x-frame-options"] == "DENY"
+
+
 # A DECLARED LENGTH LARGER THAN WHAT ARRIVES is guarded in `_read_document`
 # (the short-read check) and is deliberately NOT tested here: proving it needs a
 # client that promises bytes and then stops, which leaves the socket waiting for
