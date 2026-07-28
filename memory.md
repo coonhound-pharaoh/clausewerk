@@ -2582,3 +2582,8 @@ and never emits partial Word bytes.
 XML-forbidden characters in approved clause text return the engine's actionable
 UnprintableText explanation as a 409. No document hash, audit entry, or Word
 bytes are produced.
+
+## S38 — Execution requires a negotiating agreement — SETTLED 2026-07-28
+The executed-agreement insert and the `negotiating` to `executed` status move
+are one atomic act. If the agreement is no longer negotiating, the trigger
+raises and no immutable execution record is retained.

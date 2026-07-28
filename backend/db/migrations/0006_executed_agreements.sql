@@ -210,9 +210,17 @@ create trigger audit_agreement_status
 create or replace function cw.agreement_execute() returns trigger
 language plpgsql
 security definer set search_path = cw, pg_temp as $$
+declare
+  moved integer;
 begin
   update cw.agreement set status = 'executed'
   where agreement_id = new.agreement_id and status = 'negotiating';
+  get diagnostics moved = row_count;
+  if moved <> 1 then
+    raise exception
+      'agreement % cannot be executed because it is not negotiating',
+      new.agreement_id using errcode = 'check_violation';
+  end if;
   return new;
 end $$;
 

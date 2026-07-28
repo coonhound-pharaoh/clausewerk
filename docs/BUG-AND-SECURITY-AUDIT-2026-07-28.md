@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 24 — terminated agreements could acquire executed records
+
+**Observed defect.** The execution trigger changed an agreement from
+`negotiating` to `executed`, but did not check whether its conditional update
+matched a row. Filing against a previously terminated agreement therefore
+succeeded, creating an immutable executed-agreement record while leaving the
+agreement itself terminated.
+
+**Fix.** Require the trigger's status transition to affect exactly one
+negotiating agreement. Any other state raises a check violation, rolling the
+executed-record insert back atomically.
+
+**Regression proof.** The executed-agreement schema suite terminates a deal,
+attempts to file it, requires the state-specific refusal, and confirms no
+executed row survived.
+
+**Validation.**
+
+- `node backend/db/test/executed.test.mjs`
+
 ## Cycle 1 — ambiguous duplicate Content-Type fields
 
 **Observed defect.** The HTTP doorway accepted more than one `Content-Type`

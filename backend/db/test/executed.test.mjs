@@ -231,6 +231,19 @@ await test('a terminated agreement cannot be revived', async () => {
     'cannot go from terminated to negotiating');
 });
 
+await test('a terminated agreement cannot acquire an executed record', async () => {
+  await throws(() => db.exec(
+    `insert into cw.executed_agreement
+       (agreement_id,executed_on,effective_on)
+     values ('AG-002','2026-08-01','2026-09-01')`),
+    'cannot be executed because it is not negotiating',
+    'the execution trigger silently accepted a signed record for a dead deal');
+  const filed = await one(
+    `select count(*)::int n from cw.executed_agreement
+     where agreement_id='AG-002'`);
+  eq(filed.n, 0, 'the failed state transition left an executed record behind');
+});
+
 await test('an executed agreement can be terminated', async () => {
   await db.exec(`insert into cw.agreement (agreement_id,counterparty,requester)
                  values ('AG-003','Fabrikam','buyer@cw');
