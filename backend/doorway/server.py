@@ -355,8 +355,12 @@ class Handler(BaseHTTPRequestHandler):
         # credentials flag: the session is a bearer token the client holds, not a
         # cookie the browser attaches on its own, so there is no cross-site
         # request forgery surface to open here by accident.
-        origin = os.environ.get("CW_ORIGIN", "*")
-        self.send_header("access-control-allow-origin", origin)
+        # Cross-origin access is opt-in. The development sign-in does not prove
+        # the user owns the named account, so a wildcard would let any website
+        # acquire its own token from localhost and read the resulting records.
+        origin = os.environ.get("CW_ORIGIN")
+        if origin:
+            self.send_header("access-control-allow-origin", origin)
         self.send_header("access-control-allow-headers", "authorization, content-type")
         self.send_header("access-control-allow-methods", "GET, POST, OPTIONS")
 

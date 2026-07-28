@@ -51,3 +51,25 @@ def test_duplicate_authorization_fields_never_select_an_identity():
     )
 
     assert handler._token() is None
+
+
+def test_cross_origin_read_access_is_not_granted_by_default(monkeypatch):
+    monkeypatch.delenv("CW_ORIGIN", raising=False)
+    handler = handler_with_headers()
+    sent = []
+    handler.send_header = lambda name, value: sent.append((name.lower(), value))
+
+    handler._cors()
+
+    assert not any(name == "access-control-allow-origin" for name, _ in sent)
+
+
+def test_an_explicit_development_origin_is_granted(monkeypatch):
+    monkeypatch.setenv("CW_ORIGIN", "http://127.0.0.1:5173")
+    handler = handler_with_headers()
+    sent = []
+    handler.send_header = lambda name, value: sent.append((name.lower(), value))
+
+    handler._cors()
+
+    assert ("access-control-allow-origin", "http://127.0.0.1:5173") in sent
