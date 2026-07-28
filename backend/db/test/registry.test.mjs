@@ -233,6 +233,18 @@ await test('editing approval dates is refused', async () => {
     () => db.exec(`update cw.clause_version set approved_on='2020-01-01' where clause_id='DP-H-014' and version=1`),
     'immutable');
 });
+await test('editing clause publication time is refused', async () => {
+  const before = await one(`select created_at from cw.clause_version
+                            where clause_id='DP-H-014' and version=1`);
+  await throws(() => queryAs('legal_admin', `
+    update cw.clause_version set created_at='2099-01-01 00:00:00+00'
+     where clause_id='DP-H-014' and version=1`,
+    [], 'test@clausewerk'), 'immutable');
+  const after = await one(`select created_at from cw.clause_version
+                           where clause_id='DP-H-014' and version=1`);
+  eq(after.created_at, before.created_at,
+     'immutable publication chronology changed after approval');
+});
 await test('deleting a version is refused, not silently ignored', async () => {
   // WP-25c (settled decision S0-3). This was `do instead nothing`, and the test
   // asserted only that the row survived. The row surviving is necessary but not

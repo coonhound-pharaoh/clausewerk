@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 99 — clause-version recording time remained rewritable
+
+**Observed defect.** Governed publication now derived `created_at`, but both
+authoritative clause-version immutability functions omitted it. A legal admin
+could therefore change permanent publication chronology after approval without
+altering the protected wording or reviewer fields.
+
+**Fix.** Both the base and later replacement immutability functions now treat
+`created_at` as immutable publication evidence.
+
+**Regression proof.** A legal admin attempts to move an existing clause
+version's creation time to 2099. The update is refused and the exact original
+timestamp remains stored.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 84 passed
+- `node backend/db/test/review-queue.test.mjs` — 45 passed
+
 ## Cycle 98 — conflict-rule provenance and retirement evidence remained rewritable
 
 **Observed defect.** Conflict-rule immutability protected the predicate and

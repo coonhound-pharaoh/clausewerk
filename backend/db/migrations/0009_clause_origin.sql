@@ -136,6 +136,7 @@ begin
      or new.approved_on is distinct from old.approved_on
      or new.expires_on is distinct from old.expires_on
      or new.provenance is distinct from old.provenance
+     or new.created_at is distinct from old.created_at
      -- WP-17. A rewritable origin would let AI-drafted wording be relabelled
      -- legal_authored after approval, which is the one edit that makes the
      -- whole provenance chain a story rather than a record.

@@ -172,7 +172,8 @@ begin
      or new.reviewer is distinct from old.reviewer
      or new.approved_on is distinct from old.approved_on
      or new.expires_on is distinct from old.expires_on
-     or new.provenance is distinct from old.provenance then
+     or new.provenance is distinct from old.provenance
+     or new.created_at is distinct from old.created_at then
     raise exception
       'clause_version %@v% is immutable; create a new version and supersede it',
       old.clause_id, old.version
