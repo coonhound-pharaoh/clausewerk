@@ -537,11 +537,22 @@ await test('the actor and role are captured on every event', async () => {
   await mustWrite('legal_admin', `insert into cw.clause
       (clause_id,category_key,severity) values ('DP-H-077','data','High')`,
     [], 'test@clausewerk');
-  await mustWrite('legal_admin', `insert into cw.clause_version
-      (clause_id,version,title,body,rationale,citations,reviewer,approved_on,expires_on)
+  const published = await mustWrite('legal_admin', `insert into cw.clause_version
+      (clause_id,version,title,body,rationale,citations,reviewer,approved_on,
+       expires_on,created_at)
     values ('DP-H-077',1,'Transfer impact','Recipient shall complete a transfer assessment.',
-            'Baseline',array['Policy-DP-077'],'A. Reyes','2026-01-05','2028-01-05')`,
+            'Baseline',array['Policy-DP-077'],'A. Reyes','2000-01-01','2028-01-05',
+            '2099-01-01 00:00:00+00')
+    returning reviewer, approved_on=current_date as approved_today,
+              created_at between statement_timestamp() - interval '5 seconds'
+                             and statement_timestamp() as created_now`,
     [], 'test@clausewerk');
+  eq(published[0].reviewer, 'test@clausewerk',
+     'clause publication must name the authenticated reviewer');
+  eq(published[0].approved_today, true,
+     'clause publication approval date must come from the database');
+  eq(published[0].created_now, true,
+     'clause publication recording time must come from the database');
   await asRole('legal_admin');
   const a = await one(`select actor, actor_role from cw.audit_event order by seq desc limit 1`);
   eq(a.actor, 'test@clausewerk'); eq(a.actor_role, 'legal_admin');

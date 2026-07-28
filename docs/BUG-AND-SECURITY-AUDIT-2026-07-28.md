@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 94 — clause-version publication provenance was caller-controlled
+
+**Observed defect.** A governed legal-admin insert could supply the immutable
+clause-version `reviewer`, `approved_on`, and `created_at` fields. The permanent
+library could therefore attribute publication to another person and forge when
+approval and recording occurred.
+
+**Fix.** A clause-version publication trigger now derives reviewer, approval
+date, and recording time from the governed session and database clock. Owner
+historical imports retain explicit provenance.
+
+**Regression proof.** A legal admin publishes a version with a forged reviewer,
+year-2000 approval date, and year-2099 creation time. The stored reviewer is the
+authenticated actor and both chronology fields are current.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 81 passed
+- `node backend/db/test/review-queue.test.mjs` — 45 passed
+
 ## Cycle 93 — clause-tag publication date was caller-controlled
 
 **Observed defect.** Governed clause-tag inserts bound the authenticated Legal

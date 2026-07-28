@@ -107,6 +107,21 @@ comment on table cw.clause_version is
    so body/title/citations are immutable once written. Retirement is the one
    permitted mutation and is itself audited.';
 
+create or replace function cw.bind_clause_version_publication() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    new.reviewer := cw.app_actor();
+    new.approved_on := current_date;
+    new.created_at := now();
+  end if;
+  return new;
+end $$;
+
+create trigger clause_version_bind_publication
+  before insert on cw.clause_version
+  for each row execute function cw.bind_clause_version_publication();
+
 -- Immutability, enforced. Retiring is allowed; rewriting history is not.
 --
 -- WP-05 closed two holes here.
