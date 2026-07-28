@@ -239,12 +239,18 @@ await test('changing the rationale is recorded too, not just the value', async (
 console.log('\nwatcher lists: who is told, never who decides');
 
 await test('an administrator adds a watcher, and it is audited', async () => {
-  await mustWrite('administrator',
+  const w = await mustWrite('administrator',
     `insert into cw.override_watcher (category_key,person,added_by)
-     values ('data','${PAT}','${ADMIN}') returning watcher_id`, [], ADMIN);
-  const e = await one(`select subject, payload->>'person' as p, actor_role
+     values ('data','${PAT}','impostor@clausewerk')
+     returning watcher_id, added_by`, [], ADMIN);
+  eq(w[0].added_by, ADMIN,
+    'the caller-supplied adder entered the permanent watcher record');
+  const e = await one(`select subject, payload->>'person' as p,
+                              payload->>'by' as added_by, actor_role
                        from cw.audit_event where event_type='watcher_added'`);
   eq([e.subject, e.p, e.actor_role], ['data', PAT, 'administrator']);
+  eq(e.added_by, ADMIN,
+    'the caller-supplied adder entered the watcher audit event');
 });
 
 await test('an always-watcher watches every category', async () => {
@@ -263,7 +269,8 @@ await test('a category with nobody watching it is a visible gap, not a silence',
   // visible; closing it belongs to whoever owns the category.
   await db.exec(`insert into cw.category (key,label,short) values ('tax','Tax','TX')`);
   await execAs('administrator',
-    `update cw.override_watcher set removed_by='${ADMIN}', removed_at=now()
+    `update cw.override_watcher
+        set removed_by='impostor@clausewerk', removed_at=now()
      where person='${LEGAL}' and category_key is null`, ADMIN);
   const gaps = await rows(
     `select category_key from cw.watcher_coverage where watcher_count=0 order by category_key`);

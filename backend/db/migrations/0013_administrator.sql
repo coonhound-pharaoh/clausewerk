@@ -1149,6 +1149,16 @@ comment on view cw.watcher_coverage is
 create or replace function cw.audit_override_watcher() returns trigger
 language plpgsql as $$
 begin
+  -- Watcher-list provenance names the authenticated Administrator. Preserve
+  -- owner-authored historical imports, for which cw.app_role() is null.
+  if cw.app_role() is not null then
+    if tg_op = 'INSERT' then
+      new.added_by := cw.app_actor();
+    elsif old.removed_at is null and new.removed_at is not null then
+      new.removed_by := cw.app_actor();
+    end if;
+  end if;
+
   if tg_op = 'INSERT' then
     perform cw.audit('watcher_added', coalesce(new.category_key, '*'),
       jsonb_build_object('person', new.person, 'by', new.added_by));

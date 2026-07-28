@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 38 — override-watcher evidence accepted false actors
+
+**Observed defect.** An Administrator could add or remove an override watcher
+while supplying arbitrary `added_by` or `removed_by` identities. The false
+identity was stored and copied into the audit payload that explains who changed
+the notification audience.
+
+**Fix.** The existing before-write watcher trigger binds addition and removal
+attribution to `cw.app_actor()` for application-role sessions before auditing.
+Owner writes remain available for migrations and historical imports.
+
+**Regression proof.** The settings/watcher suite supplies
+`impostor@clausewerk` for both operations and verifies watcher state and audit
+payloads use the authenticated Administrator.
+
+**Validation.**
+
+- `node backend/db/test/settings-split.test.mjs`
+- Result: 24 passed, 0 failed.
+
 ## Cycle 37 — account history accepted false actors
 
 **Observed defect.** An Administrator could create or revoke an account while
