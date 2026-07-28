@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 79 — requesters could propose departures on another SOW
+
+**Observed defect.** The SOW-override insert policy allowed every requester
+without checking deal ownership. A requester who knew another SOW's identifier
+could insert a governance proposal on it, then lose visibility of the row under
+the stricter read policy.
+
+**Fix.** Requester proposals now require `cw.owns_agreement(sow_id)`. Legal
+reviewer and Legal admin proposal authority remains cross-deal as designed.
+
+**Regression proof.** An unrelated requester attempts to propose a Data Privacy
+departure on another requester's SOW and is refused by row-level security. The
+actual owner can still create the proposal and complete the approved execution.
+
+**Validation.**
+
+- `node backend/db/test/executed.test.mjs` — 53 passed
+- `node backend/db/test/roles.test.mjs` — 20 passed
+
 ## Cycle 78 — one session could manufacture every SOW approval
 
 **Observed defect.** `sow_override_approval` had no validation trigger. Any role

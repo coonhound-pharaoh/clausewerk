@@ -420,7 +420,8 @@ create policy read_all on cw.sow_override_settlement for select
 -- A Requester may propose a departure and record their own approval. Only Legal
 -- may authorise one — the same split as concessions.
 create policy propose on cw.sow_override for insert with check (
-  cw.app_role() in ('requester','legal_reviewer','legal_admin'));
+  cw.app_role() in ('legal_reviewer','legal_admin')
+  or (cw.app_role() = 'requester' and cw.owns_agreement(sow_id)));
 create policy approve on cw.sow_override_approval for insert with check (
   cw.app_role() in ('requester','legal_reviewer','legal_admin'));
 create policy authorise on cw.sow_override_settlement for insert with check (

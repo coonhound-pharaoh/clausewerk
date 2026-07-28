@@ -648,6 +648,12 @@ await test('the unconditional reading remains reachable, and nobody has chosen i
 // and opens for one everybody has.
 
 await test('a proposed departure nobody has approved authorises nothing', async () => {
+  await throws(() => queryAs('requester',
+    `insert into cw.sow_override (sow_id,category_key,reason,proposed_by)
+     values ('AG-102','data','Trying to alter somebody else''s SOW',
+             'somebody.else@cw')`, [], 'somebody.else@cw'),
+    'row-level security',
+    'a requester proposed a master departure on somebody else\'s SOW');
   const proposed = await queryAs('requester',
     `insert into cw.sow_override (sow_id, category_key, reason, proposed_by)
      values ('AG-102','data','Customer requires their own DPA wording',
