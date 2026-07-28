@@ -79,7 +79,7 @@ import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import ParseResult, parse_qs, unquote, urlparse
 
 from doorway.app import App, Download, Response, Upload
 from doorway.db import Database
@@ -143,7 +143,11 @@ class Handler(BaseHTTPRequestHandler):
     # ── The request ─────────────────────────────────────────────────────────
 
     def do_GET(self) -> None:  # noqa: N802 — the base class names it
-        parsed = urlparse(self.path)
+        parsed, refused = self._parse_target(self.path)
+        if refused is not None:
+            self._respond(refused)
+            return
+        assert parsed is not None
 
         # Static first, and only for GET. An API path always wins if it exists,
         # because App.handle is the thing that knows what an endpoint is.
@@ -160,7 +164,11 @@ class Handler(BaseHTTPRequestHandler):
                                       token=self._token(), query=selector))
 
     def do_POST(self) -> None:  # noqa: N802
-        parsed = urlparse(self.path)
+        parsed, refused = self._parse_target(self.path)
+        if refused is not None:
+            self._respond(refused)
+            return
+        assert parsed is not None
 
         if self._is_document():
             upload, refused = self._read_document()
@@ -190,6 +198,12 @@ class Handler(BaseHTTPRequestHandler):
         collide. The prefix is stripped here and nowhere else: App knows nothing
         about it, and the test suites address endpoints by their real names."""
         return path[4:] if path.startswith("/api/") else path
+
+    def _parse_target(self, target: str) -> tuple[ParseResult | None, Response | None]:
+        try:
+            return urlparse(target), None
+        except ValueError:
+            return None, Response(400, {"error": "the request target is malformed"})
 
     def _query(self, raw: str) -> tuple[dict[str, str], Response | None]:
         try:
