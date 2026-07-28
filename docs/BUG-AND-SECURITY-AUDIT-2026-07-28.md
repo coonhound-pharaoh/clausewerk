@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 107 — override-watcher evidence was rewritable
+
+**Observed defect.** Administrator UPDATE permission existed to record a
+watcher's removal, but no transition guard limited it to that act. An
+Administrator could redirect a live row to a different category or person,
+replace its addition provenance, or rewrite a removed watcher.
+
+**Fix.** Watcher identity and addition evidence are now immutable. A live row
+permits exactly one transition to removed, after which every update is refused;
+audience changes require an audited removal and a new audited addition.
+
+**Regression proof.** Administrator attempts to redirect a live watcher and
+replace its addition provenance, then attempts to rewrite a removed watcher.
+Both updates are refused and the original evidence remains intact.
+
+**Validation.**
+
+- `node backend/db/test/settings-split.test.mjs` — 26 passed
+- `node backend/db/test/override.test.mjs` — 37 passed
+
 ## Cycle 106 — agreement-share evidence was rewritable
 
 **Observed defect.** Legal reviewers had UPDATE permission on agreement shares

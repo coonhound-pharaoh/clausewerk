@@ -1181,6 +1181,37 @@ create trigger audit_override_watcher
   before insert or update on cw.override_watcher
   for each row execute function cw.audit_override_watcher();
 
+create or replace function cw.override_watcher_evidence_immutable()
+returns trigger
+language plpgsql as $$
+begin
+  if new.watcher_id is distinct from old.watcher_id
+     or new.category_key is distinct from old.category_key
+     or new.person is distinct from old.person
+     or new.added_by is distinct from old.added_by
+     or new.added_at is distinct from old.added_at then
+    raise exception
+      'watcher % evidence is immutable; remove it and add a new watcher',
+      old.watcher_id using errcode = 'restrict_violation';
+  end if;
+
+  if old.removed_at is not null then
+    raise exception 'watcher % was removed and cannot be rewritten',
+      old.watcher_id using errcode = 'restrict_violation';
+  end if;
+
+  if new.removed_at is null or new.removed_by is null then
+    raise exception 'watcher % may only be updated by recording its removal',
+      old.watcher_id using errcode = 'restrict_violation';
+  end if;
+
+  return new;
+end $$;
+
+create trigger override_watcher_evidence_immutable
+  before update on cw.override_watcher
+  for each row execute function cw.override_watcher_evidence_immutable();
+
 create or replace function cw.override_watcher_no_delete() returns trigger
 language plpgsql as $$
 begin

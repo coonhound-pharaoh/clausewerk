@@ -268,6 +268,25 @@ await test('an always-watcher watches every category', async () => {
   eq(by.ip,   1, 'a category with no watcher of its own should still see the always-watcher');
 });
 
+await test('watcher evidence cannot be redirected instead of removed', async () => {
+  await throws(() => queryAs('administrator',
+    `update cw.override_watcher
+        set category_key = 'ip',
+            person = '${LEGAL}',
+            added_by = 'impostor@clausewerk',
+            added_at = '2000-01-01T00:00:00Z'
+      where person = '${PAT}' and category_key = 'data'`, [], ADMIN),
+    'evidence is immutable',
+    'the Administrator silently redirected an existing watcher record');
+  const w = await one(
+    `select category_key, person, added_by,
+            added_at > now() - interval '1 minute' as added_at_is_original
+       from cw.override_watcher
+      where person = '${PAT}' and category_key = 'data'`);
+  eq([w.category_key, w.person, w.added_by, w.added_at_is_original],
+    ['data', PAT, ADMIN, true]);
+});
+
 await test('a category with nobody watching it is a visible gap, not a silence', async () => {
   // The product boundary in a view. The system's job ends at making the gap
   // visible; closing it belongs to whoever owns the category.
@@ -295,6 +314,15 @@ await test('removing a watcher lands on the chain — who was silenced, and by w
   eq([e.subject, e.p, e.by], ['*', LEGAL, ADMIN]);
 });
 
+await test('a removed watcher cannot be rewritten', async () => {
+  await throws(() => queryAs('administrator',
+    `update cw.override_watcher
+        set removed_by = '${PAT}', removed_at = now()
+      where person = '${LEGAL}' and category_key is null`, [], ADMIN),
+    'was removed and cannot be rewritten',
+    'a removed watcher still accepted changes to its permanent evidence');
+});
+
 await test('a watcher is removed, never deleted', async () => {
   await mustNotWrite('administrator',
     `delete from cw.override_watcher where person='${PAT}'`);
@@ -305,7 +333,7 @@ await test('a watcher is removed, never deleted', async () => {
 await test('a removal must name who did it and when', async () => {
   await throws(() => db.exec(
     `update cw.override_watcher set removed_at=now() where person='${PAT}'`),
-    'removed_names_a_person_and_a_time');
+    'may only be updated by recording its removal');
 });
 
 await test('the same person is not listed twice for one category', async () => {
