@@ -1,0 +1,647 @@
+<title>Clausewerk — New Capabilities Plan</title>
+<style>
+:root {
+  --bg:#F7F9FB;--surface:#FFFFFF;--surface-alt:#EEF3F7;
+  --border:#C8D7E3;--border-strong:#8AAEC4;
+  --accent:#1A5C7B;--accent-mid:#2678A0;--accent-tint:#E4EFF6;
+  --text:#0C1A24;--text-2:#3A5668;--text-3:#6E8FA2;
+  --pass:#1A6140;--pass-bg:#E5F4EB;
+  --warn:#7B5810;--warn-bg:#FDF4E0;--warn-border:#C4920F;
+  --fail:#8B2020;--fail-bg:#FBEBEB;
+  --neu:#3A5668;--neu-bg:#EEF3F7;
+  --font-serif:Georgia,"Times New Roman",serif;
+  --font-sans:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  --font-mono:"SF Mono","Cascadia Code",Consolas,monospace;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#0A1820;--surface:#0E2030;--surface-alt:#122840;
+  --border:#1C3A52;--border-strong:#2B5472;
+  --accent:#4FA3C7;--accent-mid:#6CB8D9;--accent-tint:#0F2D3E;
+  --text:#E0EBF3;--text-2:#85ABBD;--text-3:#4F7589;
+  --pass:#4FC88A;--pass-bg:#0A2018;
+  --warn:#D4A033;--warn-bg:#261808;--warn-border:#8A6010;
+  --fail:#D45A5A;--fail-bg:#220C0C;
+  --neu:#85ABBD;--neu-bg:#122840;
+}}
+:root[data-theme="dark"]{
+  --bg:#0A1820;--surface:#0E2030;--surface-alt:#122840;
+  --border:#1C3A52;--border-strong:#2B5472;
+  --accent:#4FA3C7;--accent-mid:#6CB8D9;--accent-tint:#0F2D3E;
+  --text:#E0EBF3;--text-2:#85ABBD;--text-3:#4F7589;
+  --pass:#4FC88A;--pass-bg:#0A2018;
+  --warn:#D4A033;--warn-bg:#261808;--warn-border:#8A6010;
+  --fail:#D45A5A;--fail-bg:#220C0C;
+  --neu:#85ABBD;--neu-bg:#122840;
+}
+:root[data-theme="light"]{
+  --bg:#F7F9FB;--surface:#FFFFFF;--surface-alt:#EEF3F7;
+  --border:#C8D7E3;--border-strong:#8AAEC4;
+  --accent:#1A5C7B;--accent-mid:#2678A0;--accent-tint:#E4EFF6;
+  --text:#0C1A24;--text-2:#3A5668;--text-3:#6E8FA2;
+  --pass:#1A6140;--pass-bg:#E5F4EB;
+  --warn:#7B5810;--warn-bg:#FDF4E0;--warn-border:#C4920F;
+  --fail:#8B2020;--fail-bg:#FBEBEB;
+  --neu:#3A5668;--neu-bg:#EEF3F7;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:var(--font-sans);font-size:15px;line-height:1.65;
+  max-width:980px;margin:0 auto;padding:3rem 2rem 6rem;
+}
+.hdr{border-bottom:2px solid var(--accent);padding-bottom:1.75rem;margin-bottom:2.75rem;}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);margin-bottom:.5rem;}
+.hdr h1{font-family:var(--font-serif);font-size:2.2rem;font-weight:normal;line-height:1.2;text-wrap:balance;color:var(--text);margin-bottom:.9rem;}
+.hdr-meta{font-size:13px;color:var(--text-3);}
+.section{margin-bottom:3.25rem;}
+.sec-head{display:flex;align-items:baseline;gap:.7rem;margin-bottom:1.2rem;padding-bottom:.45rem;border-bottom:1px solid var(--border);}
+.sec-num{font-family:var(--font-serif);font-style:italic;font-size:1rem;color:var(--accent);min-width:1.5rem;}
+.sec-head h2{font-family:var(--font-serif);font-size:1.25rem;font-weight:normal;color:var(--text);}
+p,li{color:var(--text-2);margin-bottom:.65rem;max-width:74ch;}
+ul{padding-left:1.4rem;margin-bottom:.8rem;}
+ul li::marker{color:var(--text-3);}
+.callout{background:var(--accent-tint);border-left:3px solid var(--accent);padding:.85rem 1.1rem;margin-bottom:1.5rem;}
+.callout p{max-width:none;margin:0;color:var(--text-2);font-size:14px;}
+.callout p+p{margin-top:.5rem;}
+.subhead{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin:1.2rem 0 .6rem;}
+.foundations{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.6rem;margin-bottom:1rem;}
+.found-item{background:var(--pass-bg);border:1px solid var(--pass);border-left:3px solid var(--pass);padding:.55rem .8rem;}
+.found-item .fi-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--pass);margin-bottom:.15rem;}
+.found-item .fi-text{font-size:12px;color:var(--text-2);line-height:1.4;}
+.found-item.inflight{background:var(--warn-bg);border-color:var(--warn-border);border-left-color:var(--warn-border);}
+.found-item.inflight .fi-label{color:var(--warn);}
+.wp-list{display:grid;gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:1rem;}
+.wp{background:var(--surface);padding:1.1rem 1.2rem;}
+.wp-head{display:flex;align-items:flex-start;gap:.85rem;margin-bottom:.75rem;}
+.wp-num{background:var(--accent);color:#fff;font-size:11px;font-weight:700;letter-spacing:.05em;padding:.2rem .5rem;flex-shrink:0;margin-top:.1rem;font-family:var(--font-mono);}
+.wp-title{font-family:var(--font-serif);font-size:1.05rem;font-weight:normal;color:var(--text);line-height:1.3;}
+.wp-tagline{font-size:13px;color:var(--text-3);margin-top:.1rem;}
+.wp-body{display:grid;grid-template-columns:1fr 1fr;gap:.75rem 1.5rem;margin-top:.5rem;}
+.wp-field label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text-3);display:block;margin-bottom:.25rem;}
+.wp-field p{font-size:13px;color:var(--text-2);max-width:none;margin:0 0 .4rem;line-height:1.5;}
+.wp-footer{display:flex;align-items:center;flex-wrap:wrap;gap:.75rem;margin-top:.85rem;padding-top:.75rem;border-top:1px solid var(--border);}
+.badge{display:inline-block;padding:.18rem .5rem;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:2px;white-space:nowrap;}
+.badge.ready{background:var(--pass-bg);color:var(--pass);}
+.badge.decision{background:var(--warn-bg);color:var(--warn);}
+.badge.blocked{background:var(--neu-bg);color:var(--neu);}
+.size{font-size:12px;color:var(--text-3);margin-left:auto;}
+.size strong{color:var(--text-2);}
+.dep-tag{display:inline-block;font-size:11px;background:var(--surface-alt);border:1px solid var(--border);padding:.1rem .4rem;font-family:var(--font-mono);color:var(--accent-mid);margin-right:.3rem;}
+.phase-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:.75rem;}
+.phase-col{background:var(--surface);}
+.phase-head{background:var(--surface-alt);padding:.55rem .8rem;border-bottom:1px solid var(--border);}
+.phase-head .ph-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--accent);display:block;}
+.phase-head .ph-note{font-size:11px;color:var(--text-3);margin-top:.1rem;}
+.phase-body{padding:.65rem .8rem;display:flex;flex-direction:column;gap:.5rem;}
+.phase-chip{padding:.35rem .65rem;font-size:12px;font-weight:600;color:var(--text);background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);}
+.phase-chip .pc-num{font-size:10px;font-family:var(--font-mono);color:var(--accent);display:block;margin-bottom:.1rem;}
+.phase-chip .pc-name{line-height:1.3;}
+.phase-chip.decision-chip{border-left-color:var(--warn-border);background:var(--warn-bg);}
+.phase-chip.decision-chip .pc-num{color:var(--warn);}
+.decision-list{display:grid;gap:.85rem;margin-bottom:1rem;}
+.decision-item{background:var(--warn-bg);border:1px solid var(--warn-border);border-left:3px solid var(--warn-border);padding:.85rem 1rem;}
+.decision-item.settled{background:var(--pass-bg);border-color:var(--pass);border-left-color:var(--pass);}
+.decision-item.settled .di-label{color:var(--pass);}
+.di-head{display:flex;align-items:baseline;gap:.65rem;margin-bottom:.5rem;}
+.di-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--warn);flex-shrink:0;}
+.di-title{font-weight:700;font-size:14px;color:var(--text);}
+.di-body{font-size:13px;color:var(--text-2);line-height:1.5;margin-bottom:.4rem;max-width:none;}
+.di-rec{font-size:13px;color:var(--text-2);max-width:none;}
+.di-rec strong{color:var(--text);}
+.di-blocks{font-size:11px;color:var(--text-3);margin-top:.35rem;}
+.gap-table{width:100%;border-collapse:collapse;font-size:13px;}
+.gap-table th{text-align:left;padding:.45rem .8rem;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);background:var(--surface-alt);border-bottom:1px solid var(--border-strong);}
+.gap-table td{padding:.5rem .8rem;border-bottom:1px solid var(--border);vertical-align:top;color:var(--text-2);}
+.gap-table tr:last-child td{border-bottom:none;}
+.gap-table td:first-child{font-weight:600;color:var(--text);white-space:nowrap;width:32%;}
+.gap-table tr:nth-child(even) td{background:var(--surface);}
+.gap-table tr:nth-child(odd) td{background:var(--surface-alt);}
+.rev-list{list-style:none;padding:0;}
+.rev-list li{padding:.4rem 0 .4rem 1rem;border-left:3px solid var(--border-strong);margin-bottom:.5rem;font-size:13px;max-width:none;}
+.rev-list li strong{color:var(--text);}
+.rpt-footer{margin-top:4rem;padding-top:1rem;border-top:1px solid var(--border);font-size:12px;color:var(--text-3);}
+.rpt-footer p{font-size:12px;color:var(--text-3);max-width:none;}
+@media(max-width:680px){
+  body{padding:1.5rem 1rem 4rem;}
+  .hdr h1{font-size:1.7rem;}
+  .wp-body{grid-template-columns:1fr;}
+  .phase-grid{grid-template-columns:1fr 1fr;}
+  .foundations{grid-template-columns:1fr;}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+</style>
+
+<header class="hdr">
+  <div class="eyebrow">Clausewerk · Project Plan · 27 July 2026 · Revision 2</div>
+  <h1>New Capabilities Plan</h1>
+  <div class="hdr-meta">Covers: Input Module · Negotiation Module · Edit Quality Metrics · Customer Thresholds · EU AI Act Compliance · Contract Intelligence<br>Revision 2: every factual claim checked against the codebase by an adversarial review; corrections listed in section 7.</div>
+</header>
+
+<!-- SCOPE -->
+<section class="section">
+  <div class="sec-head"><span class="sec-num">1.</span><h2>Scope</h2></div>
+  <div class="callout">
+    <p>This plan covers the five new capability areas discussed in the session of 27 July 2026. It does not propose rebuilding anything that already exists. The negotiation database is already built; the audit chain and draft provenance infrastructure are already built; the trust boundary is already built. What follows is what sits on top of them.</p>
+  </div>
+  <p>The product direction this plan supports: Clausewerk is not an anti-AI tool — it is a <strong>responsible-AI</strong> tool. The selling point is that every place AI is used is known, documented, reviewed by a named person, and measurably scrutinised. The metrics and compliance scaffolding in this plan are what make that claim provable rather than asserted.</p>
+</section>
+
+<!-- FOUNDATIONS -->
+<section class="section">
+  <div class="sec-head"><span class="sec-num">2.</span><h2>What Is Already Built — and What Is Being Built Right Now</h2></div>
+
+  <div class="subhead">Built and committed</div>
+  <div class="foundations">
+    <div class="found-item">
+      <div class="fi-label">Negotiation Database</div>
+      <div class="fi-text">Rounds, positions, position movement, renewal logic — all tables, policies, and triggers built. Renewal behaviour is already your settled decision (26 July): a renewal opens from the positions actually in force in the executed agreement, with the drift report as the control. Nothing in this plan reopens it.</div>
+    </div>
+    <div class="found-item">
+      <div class="fi-label">Audit Chain</div>
+      <div class="fi-text">Tamper-evident log covering every governed act, including opening a deal and adding a category; checkpointing built</div>
+    </div>
+    <div class="found-item">
+      <div class="fi-label">Review Queue with a Frozen AI Baseline</div>
+      <div class="fi-text">Every AI draft's exact original text is kept, uneditable, alongside the prompt, model, and model version — the before-and-after the metrics need already exists</div>
+    </div>
+    <div class="found-item">
+      <div class="fi-label">Unedited-Approval Rate</div>
+      <div class="fi-text">Already instrumented; Legal owns it; threshold deliberately unset — your settled decision that the system must never choose that number</div>
+    </div>
+    <div class="found-item">
+      <div class="fi-label">Clause Origin Tracking</div>
+      <div class="fi-text">legal_authored / ai_drafted / vendor_derived / external — permanent, survives supersession</div>
+    </div>
+    <div class="found-item">
+      <div class="fi-label">Concession Record &amp; Proposal Surface</div>
+      <div class="fi-text">What was given away, to whom, how far down the ladder — plus an existing library-proposal view the Builder starts from rather than invents</div>
+    </div>
+    <div class="found-item">
+      <div class="fi-label">Ladder Architecture</div>
+      <div class="fi-text">Rungs from standard to floor; below-floor always refused; the negotiation module's analytical backbone</div>
+    </div>
+    <div class="found-item">
+      <div class="fi-label">Roles and Permissions — with two known holes</div>
+      <div class="fi-text">The negotiation records themselves are fenced per person. But five summary screens over them are not (the gap in section 6), and today the database lets any requester <em>add</em> negotiation records to somebody else's deal — reading is fenced, writing is not. Both fixed inside WP-2.</div>
+    </div>
+  </div>
+
+  <div class="subhead">Being built right now — approved connection work, not yet landed</div>
+  <div class="foundations">
+    <div class="found-item inflight">
+      <div class="fi-label">Assembly Endpoints</div>
+      <div class="fi-text">Running an assembly, reading runs back, producing the document, filing an execution — the approved connection work is writing this code today. WP-1 plugs into it once it lands.</div>
+    </div>
+    <div class="found-item inflight">
+      <div class="fi-label">Manifest Check</div>
+      <div class="fi-text">The pre-flight manifest check is live; the run endpoint that enforces it is part of the in-flight connection work above.</div>
+    </div>
+  </div>
+</section>
+
+<!-- WORK PACKAGES -->
+<section class="section">
+  <div class="sec-head"><span class="sec-num">3.</span><h2>Work Packages</h2></div>
+
+  <div class="wp-list">
+
+    <!-- WP-1 -->
+    <div class="wp">
+      <div class="wp-head">
+        <span class="wp-num">WP-1</span>
+        <div>
+          <div class="wp-title">Input Module — AI Pipeline Connection</div>
+          <div class="wp-tagline">The interface is being finished now; this work connects the pipeline to it</div>
+        </div>
+      </div>
+      <div class="wp-body">
+        <div class="wp-field">
+          <label>What it is</label>
+          <p>The AI interview pipeline — which conducts the buyer interview and produces a risk manifest — needs a defined way to connect and submit to the system. The manifest-check and assembly-run endpoints it plugs into are part of the approved connection work that is being written right now, so this package starts once that work lands. It adds no endpoints of its own.</p>
+          <p>One word of vocabulary, settled once: in the system, the buying company is the <em>counterparty</em> and the person running the interview is the <em>requester</em>. The name on the record is the requester's.</p>
+        </div>
+        <div class="wp-field">
+          <label>What it delivers</label>
+          <p>An interview conducted by AI produces a risk manifest and a complete contract assembly, with the requester who ran it named throughout the audit record, and the record itself showing that a model produced the manifest. The deliverable includes the case where the model is unavailable — the same run recorded, marked as assembled by the fallback. The integration is tested and documented so any pipeline implementation can connect to it.</p>
+        </div>
+      </div>
+      <div class="wp-footer">
+        <span class="badge blocked">After the connection work lands</span>
+        <span style="font-size:12px;color:var(--text-3);">The identity question (D-1) turned out to be mostly already answered — see section 5</span>
+        <span class="size"><strong>Small</strong> — days to a few weeks</span>
+      </div>
+    </div>
+
+    <!-- WP-2 -->
+    <div class="wp">
+      <div class="wp-head">
+        <span class="wp-num">WP-2</span>
+        <div>
+          <div class="wp-title">Negotiation Core — API Layer</div>
+          <div class="wp-tagline">The database is built; this work opens it up — and closes two permission holes first</div>
+        </div>
+      </div>
+      <div class="wp-body">
+        <div class="wp-field">
+          <label>What it is</label>
+          <p>Build the API endpoints for the negotiation tables: opening a negotiation, recording each round a document is exchanged, uploading a received redline, and moving positions between states — open, held, conceded, escalated, settled. Escalating a position is the routing mechanism to Legal; it is already a first-class state in the database and needs only an endpoint to trigger it.</p>
+          <p>The review found this package is bigger than first written. Today the database lets any requester <em>add</em> a negotiation record to somebody else's deal — reading is properly fenced, writing is not. Building screens on top of that would carry the hole into the product, so this package's one database change closes both halves: the five unfenced summary screens (open question 12 — three live in the negotiation work, two in the governance work, one fix covers all five) and the write side. It claims whatever migration number is next free on disk the day it starts — numbers are never promised in a plan, because the newest migration file is not yet committed and a number written down is a number someone reuses.</p>
+        </div>
+        <div class="wp-field">
+          <label>What it delivers</label>
+          <p>A buyer can open a negotiation, record every exchange with the counterparty in order, and route any specific point to Legal when needed. Every step is in the audit chain. Legal and the Auditor can see the full history. The position-revival view — which flags a point being re-raised after it was thought settled — is live from the first round.</p>
+          <p>One dependency to know about: today the system can only <em>send</em> a document, not <em>receive</em> one. The redline-upload part of this package includes teaching it to receive — a small piece, but it touches files the in-flight connection work is editing, so it waits until that work finishes. Everything else in WP-2 can start now.</p>
+        </div>
+      </div>
+      <div class="wp-footer">
+        <span class="badge ready">Ready to start</span>
+        <span class="size"><strong>Medium, larger than first estimated</strong> — weeks to a couple of months</span>
+      </div>
+    </div>
+
+    <!-- WP-3 -->
+    <div class="wp">
+      <div class="wp-head">
+        <span class="wp-num">WP-3</span>
+        <div>
+          <div class="wp-title">Negotiation Round Analysis</div>
+          <div class="wp-tagline">What the system tells the buyer when the supplier's redline arrives</div>
+        </div>
+      </div>
+      <div class="wp-body">
+        <div class="wp-field">
+          <label>What it is</label>
+          <p>When a buyer uploads a supplier redline, the system processes it through a seven-step pipeline. Parsing the changes and comparing them to the ladder are deterministic. Identifying which negotiating position a change touches, categorising it, assessing its risk, and producing an advisory recommendation are AI-assisted. The fallback rules were already decided and partly built: where matching is uncertain, the system escalates to Legal on a review ticket rather than guessing — a worse automatic match is more dangerous than no match. The deterministic steps live in the core engine, with the service layer adapting to it and never the other way round — the same rule the first AI connection established. Every step is separately visible so a reviewer who disagrees with the categorisation can see it before the alternatives are chosen.</p>
+        </div>
+        <div class="wp-field">
+          <label>What it delivers</label>
+          <p>A buyer facing a vendor counter sees: what changed, which ongoing negotiating point it touches, where that position sits on the ladder, what the company has accepted on comparable deals, and the available alternatives ranked from best to floor. An advisory recommendation is attached — clearly labelled as advice, never as a decision. The buyer is never staring at a redline alone.</p>
+          <p>Added by the owner (27 July): a <strong>risk-exposure score</strong> — an AI estimate, baselined on the original clause, of the percentage of risk transferred from supplier to customer. It runs in both directions: every <em>proposed</em> move shown in round analysis carries its estimated risk transfer before the buyer chooses, and an accepted concession carries what the choice actually cost. An estimate with its sources cited, never a decision.</p>
+        </div>
+      </div>
+      <div class="wp-footer">
+        <span class="badge blocked">After WP-2</span>
+        <span class="dep-tag">WP-2</span>
+        <span class="size"><strong>Large</strong> — months; significant AI/pipeline work</span>
+      </div>
+    </div>
+
+    <!-- WP-4 -->
+    <div class="wp">
+      <div class="wp-head">
+        <span class="wp-num">WP-4</span>
+        <div>
+          <div class="wp-title">Supplier Paper</div>
+          <div class="wp-tagline">When the vendor's document is the starting point, not ours</div>
+        </div>
+      </div>
+      <div class="wp-body">
+        <div class="wp-field">
+          <label>What it is</label>
+          <p>When the counterparty provides their own base document, there are no clause IDs to match against. AI decomposes their document into clause-like units — each assigned a category, each quarantined so it can never enter the library or appear in a contract the system assembles. Every unit keeps a reference back to its exact location in the source document. Unknown categories are dropped at the boundary, exactly as in the manifest. Once decomposed, their paper flows through the same round analysis pipeline as a standard redline.</p>
+        </div>
+        <div class="wp-field">
+          <label>What it delivers</label>
+          <p>The system handles both directions. A buyer receiving a vendor's standard form gets the same ladder comparison, concession history, and alternative analysis they would get on the company's own paper. Supplier language that has been seen repeatedly across counterparties becomes input to the Library Builder — a pattern the company can choose to address with new approved language.</p>
+          <p>The decomposition-and-quarantine half does not need the analysis pipeline and can likely begin alongside WP-3; only the "flows through the pipeline" tail waits for it. It shares WP-2's receive-a-document dependency.</p>
+        </div>
+      </div>
+      <div class="wp-footer">
+        <span class="badge blocked">Tail after WP-3; first half can start alongside it</span>
+        <span class="dep-tag">WP-3</span>
+        <span class="size"><strong>Large</strong> — months; AI decomposition work</span>
+      </div>
+    </div>
+
+    <!-- WP-5 -->
+    <div class="wp">
+      <div class="wp-head">
+        <span class="wp-num">WP-5</span>
+        <div>
+          <div class="wp-title">Clause Library Builder</div>
+          <div class="wp-tagline">AI drafts; a named lawyer decides; the record proves it</div>
+        </div>
+      </div>
+      <div class="wp-body">
+        <div class="wp-field">
+          <label>What it is</label>
+          <p>AI drafts candidate clauses and ladder-position proposals from the concession record, identified coverage gaps, and company rules. Each draft lands in the Review queue as a proposal — not a clause. A named lawyer approves, edits, or rejects it. Approving a draft without editing is recorded separately from approving one that was changed. The full provenance of every draft — which model, which version, what it was shown — is stored permanently and is part of the audit chain. A draft may not be approved by whoever requested it when the requester is not Legal.</p>
+          <p>Less new than it looks: the library-proposal surface, the AI-drafted origin marker, and the draft record with its provenance all exist today. This package builds on them rather than inventing them.</p>
+        </div>
+        <div class="wp-field">
+          <label>What it delivers</label>
+          <p>The clause library can grow at business speed. Coverage gaps that currently produce a hard failure at assembly time can be filled without waiting for lawyers to compose language from scratch. But an approved draft is only useful if it can be put into service — activating a clause and promoting a concession are two of the six missing governance controls, which is why decision D-5 sits in front of this package.</p>
+        </div>
+      </div>
+      <div class="wp-footer">
+        <span class="badge decision">Needs D-4 and D-5 first</span>
+        <span class="dep-tag">D-4</span>
+        <span class="dep-tag">D-5</span>
+        <span style="font-size:12px;color:var(--text-3);">Can run parallel to WP-3 once the draft-record fields are agreed</span>
+        <span class="size"><strong>Large</strong> — months</span>
+      </div>
+    </div>
+
+    <!-- WP-6 -->
+    <div class="wp">
+      <div class="wp-head">
+        <span class="wp-num">WP-6</span>
+        <div>
+          <div class="wp-title">Edit Quality Metrics and Customer Thresholds</div>
+          <div class="wp-tagline">How much did Legal actually change the AI draft?</div>
+        </div>
+      </div>
+      <div class="wp-body">
+        <div class="wp-field">
+          <label>What it is</label>
+          <p>At the moment a draft is approved, the system computes the similarity between the original AI text and the approved text and stores it permanently with the draft's record — where the before-and-after already lives — rather than on the approved clause itself, whose provenance fields are locked against change. One rule matters more than any other here: the figure is computed by the database at the moment of approval, never supplied by the software calling in — the same discipline that already protects the unedited-approval rate from being gamed. This produces the new metric: average percentage of original AI language retained across the library, by clause category, and per contract. Customer-configurable thresholds are added as governance settings, consistent with the existing settings model.</p>
+        </div>
+        <div class="wp-field">
+          <label>What it delivers</label>
+          <p>Legal leadership can see not just whether AI drafts are being reviewed, but by how much. A company that sets its own thresholds can demonstrate to a regulator that they have been monitored and met, with the evidence in the system record rather than assembled from email. Thresholds are chosen by customers, not preset by the product — measured from day one, no threshold until Legal sets one, the posture you already decided.</p>
+          <p>Good news from the review: this package moved a whole phase earlier. The database already keeps the before-and-after text for every AI draft, so this does not have to wait for the Library Builder — only for the draft-record design session (D-4).</p>
+          <p>Added by the owner (27 July): alongside the arithmetic score, an <strong>AI semantic-difference measurement</strong> — how much the <em>meaning</em> changed between the AI draft and the approved text. It is an AI judgment, so it follows the judgment rules: stored with its provenance, labelled an estimate, never supplied by the calling software, and shown beside the measurement, never in place of it.</p>
+        </div>
+      </div>
+      <div class="wp-footer">
+        <span class="badge decision">Needs D-4 only — earlier than first planned</span>
+        <span class="dep-tag">D-4</span>
+        <span class="size"><strong>Small</strong> — weeks</span>
+      </div>
+    </div>
+
+    <!-- WP-7 -->
+    <div class="wp">
+      <div class="wp-head">
+        <span class="wp-num">WP-7</span>
+        <div>
+          <div class="wp-title">EU AI Act Compliance Scaffolding</div>
+          <div class="wp-tagline">Compliance evidence lives in the tool — provable, exportable, not reconstructed</div>
+        </div>
+      </div>
+      <div class="wp-body">
+        <div class="wp-field">
+          <label>What it is</label>
+          <p>Extend the draft record with the additional fields EU documentation requirements ask for — intended purpose, known limitations at time of use, and model performance metrics. Most of what a regulator asks about is already stored: the prompt, the model, its version, and what it was shown are on every draft today, so the schema work is three new fields, not a new record. Build a compliance export — a machine-readable package covering every AI use instance, who reviewed it, what they changed, and the evidence of meaningful oversight. Wire customer-configurable disclosure into the review interface. Build to the high-risk standard regardless of initial classification; the cost of building higher is small and the cost of retrofitting is not.</p>
+        </div>
+        <div class="wp-field">
+          <label>What it delivers</label>
+          <p>A customer demonstrating responsible AI use to a regulator, an auditor, or a prospective client hands them an export — not a reconstruction from email threads. All documentation requirements, approval and review processes, and evidence of human oversight occur inside the tool and are provable from the audit chain. This is a product differentiator, not a compliance burden.</p>
+          <p>One decision this surfaces (D-6): we promise customers a full record of every AI use, and we also promise we can delete data on request. Those two promises meet in this export, and which one wins for a deleted record is your call, not engineering's.</p>
+        </div>
+      </div>
+      <div class="wp-footer">
+        <span class="badge blocked">After D-2, D-4, and D-6</span>
+        <span class="dep-tag">D-2</span>
+        <span class="dep-tag">D-4</span>
+        <span class="dep-tag">D-6</span>
+        <span class="size"><strong>Medium</strong>, then ongoing as regulations develop</span>
+      </div>
+    </div>
+
+    <!-- WP-8 -->
+    <div class="wp">
+      <div class="wp-head">
+        <span class="wp-num">WP-8</span>
+        <div>
+          <div class="wp-title">Contract Intelligence — Portfolio Questions Across All Paper</div>
+          <div class="wp-tagline">"How many contracts have an uncapped confidentiality damages limit?" — answerable whatever paper it's on</div>
+        </div>
+      </div>
+      <div class="wp-body">
+        <div class="wp-field">
+          <label>What it is</label>
+          <p>A searchable index over every contract in the system, so portfolio-wide questions can be answered no matter whose paper the contract is on and no matter how the supplier edited our language. It has two halves, because the system already knows two different amounts about its contracts. For contracts assembled on our own paper, the run record already says exactly which clause and which ladder rung is in each one — those questions are answered precisely from the database, no AI involved. For supplier paper and supplier-edited language, the decomposed clause units WP-4 produces (each categorised, each pointing back to its exact place in the source document) are embedded into a vector index; a question finds the matching clauses by meaning rather than wording, and an AI step assesses each match, with every assessment citing its source so a person can check it.</p>
+        </div>
+        <div class="wp-field">
+          <label>What it delivers</label>
+          <p>Legal can ask a question across the whole book of contracts and get an answer in two clearly-labelled parts: a certain count from contracts on our paper, and an AI-assessed count from supplier paper — each one traceable to the exact clauses behind it, never a bare number. This is the same responsible-AI posture as the rest of the plan: the system shows its work.</p>
+          <p>Two things are yours to decide before it ships (D-7): who may ask portfolio-wide questions — a requester fenced to their own deals must not get counts computed across everyone else's — and the index must honour the deletion promises: when a contract's content is removed, its traces leave the index too, which is part of the D-6 question.</p>
+        </div>
+      </div>
+      <div class="wp-footer">
+        <span class="badge blocked">After WP-4 and D-7; disposal answer shared with D-6</span>
+        <span class="dep-tag">WP-4</span>
+        <span class="dep-tag">D-6</span>
+        <span class="dep-tag">D-7</span>
+        <span class="size"><strong>Medium–Large</strong> — months; AI and search work</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- SEQUENCE -->
+<section class="section">
+  <div class="sec-head"><span class="sec-num">4.</span><h2>Sequence</h2></div>
+  <div class="callout">
+    <p>The connection work already approved on 27 July is editing the same handful of service files this plan's first packages need, this week. Nothing in this plan touches those files until it finishes — otherwise two efforts edit one file and the safety checks quietly stop working. That is why WP-1 moved out of Phase 1.</p>
+  </div>
+  <p style="margin-bottom:1rem;">Work packages in the same phase run in parallel. A package cannot start until its dependencies are complete.</p>
+
+  <div class="phase-grid">
+    <div class="phase-col">
+      <div class="phase-head">
+        <span class="ph-label">Phase 1</span>
+        <span class="ph-note">Start now · run in parallel</span>
+      </div>
+      <div class="phase-body">
+        <div class="phase-chip">
+          <span class="pc-num">WP-2</span>
+          <span class="pc-name">Negotiation Core — API Layer (upload piece waits for the connection work)</span>
+        </div>
+        <div class="phase-chip decision-chip">
+          <span class="pc-num">D-4 design</span>
+          <span class="pc-name">Agree the draft-record fields before WP-5, 6, or 7 codes</span>
+        </div>
+        <div class="phase-chip decision-chip">
+          <span class="pc-num">D-5</span>
+          <span class="pc-name">Decide: are the six governance controls in this effort?</span>
+        </div>
+      </div>
+    </div>
+    <div class="phase-col">
+      <div class="phase-head">
+        <span class="ph-label">Phase 2</span>
+        <span class="ph-note">After the connection work lands and D-4</span>
+      </div>
+      <div class="phase-body">
+        <div class="phase-chip">
+          <span class="pc-num">WP-1</span>
+          <span class="pc-name">Input Module Connection</span>
+        </div>
+        <div class="phase-chip">
+          <span class="pc-num">WP-3</span>
+          <span class="pc-name">Round Analysis Pipeline</span>
+        </div>
+        <div class="phase-chip">
+          <span class="pc-num">WP-6</span>
+          <span class="pc-name">Edit Quality Metrics + Thresholds (moved up a phase)</span>
+        </div>
+      </div>
+    </div>
+    <div class="phase-col">
+      <div class="phase-head">
+        <span class="ph-label">Phase 3</span>
+        <span class="ph-note">After Phase 2 · run in parallel</span>
+      </div>
+      <div class="phase-body">
+        <div class="phase-chip">
+          <span class="pc-num">WP-4</span>
+          <span class="pc-name">Supplier Paper (first half may start alongside WP-3)</span>
+        </div>
+        <div class="phase-chip">
+          <span class="pc-num">WP-5</span>
+          <span class="pc-name">Clause Library Builder</span>
+        </div>
+      </div>
+    </div>
+    <div class="phase-col">
+      <div class="phase-head">
+        <span class="ph-label">Phase 4</span>
+        <span class="ph-note">After Phase 3 + counsel decision</span>
+      </div>
+      <div class="phase-body">
+        <div class="phase-chip">
+          <span class="pc-num">WP-7</span>
+          <span class="pc-name">EU AI Act Compliance Scaffolding</span>
+        </div>
+        <div class="phase-chip">
+          <span class="pc-num">WP-8</span>
+          <span class="pc-name">Contract Intelligence (after WP-4; the precise on-our-paper half can start earlier)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:13px;color:var(--text-3);margin-top:.5rem;">WP-7 then continues incrementally as EU Act implementation guidance develops through 2026–2027.</p>
+</section>
+
+<!-- DECISIONS -->
+<section class="section">
+  <div class="sec-head"><span class="sec-num">5.</span><h2>Decisions Required</h2></div>
+  <p style="margin-bottom:1rem;">The review resolved two of the original four decisions from the record. Five remain open: D-2, D-4, D-5, D-6, and D-7.</p>
+
+  <div class="decision-list">
+
+    <div class="decision-item settled">
+      <div class="di-head">
+        <span class="di-label">D-1 · mostly answered</span>
+        <span class="di-title">AI pipeline identity — the system already decided most of this</span>
+      </div>
+      <p class="di-body">The record always carries the name of the person the system is connected as — there is nowhere to put a second name, and we decided long ago not to let software act under a shared account. So the AI interview runs under the requester, and the record separately shows whether a model, the fallback, or a person produced the manifest. No decision is needed for WP-1 to proceed.</p>
+      <p class="di-rec"><strong>The one genuinely open piece:</strong> today, signing in doesn't prove who you are — that arrives when a real identity provider is connected. How the pipeline holds a person's credential at that point is an open question to settle during the identity-provider work, not now.</p>
+      <div class="di-blocks">Blocks: nothing</div>
+    </div>
+
+    <div class="decision-item">
+      <div class="di-head">
+        <span class="di-label">D-2</span>
+        <span class="di-title">EU AI Act risk classification — needs counsel's read</span>
+      </div>
+      <p class="di-body">Is the system classified as high-risk or limited-risk under the EU AI Act? The classification determines documentation requirements. Contract management tools that touch legal processes may fall under Annex III (high-risk); the answer depends on how the tool is used and in which jurisdictions.</p>
+      <p class="di-rec"><strong>Recommendation:</strong> Commission counsel's read before the compliance scaffolding is designed. Build WP-7 to the high-risk standard regardless — the incremental cost is small and there is nothing to retrofit if the classification changes later.</p>
+      <div class="di-blocks">Blocks: WP-7</div>
+    </div>
+
+    <div class="decision-item settled">
+      <div class="di-head">
+        <span class="di-label">D-3 · already settled by you</span>
+        <span class="di-title">Metric threshold defaults — you already ruled on this</span>
+      </div>
+      <p class="di-body">The earlier draft recommended shipping with preset default numbers. The review found that contradicts a decision you already made: the unedited-approval threshold is deliberately unset, because picking a legal review standard is content, and the system must never choose that number. The new metric follows the same posture.</p>
+      <p class="di-rec"><strong>Standing answer:</strong> measured from day one, no threshold and no alarm until Legal sets one with counsel. Nothing is blocked on it.</p>
+      <div class="di-blocks">Blocks: nothing</div>
+    </div>
+
+    <div class="decision-item">
+      <div class="di-head">
+        <span class="di-label">D-4</span>
+        <span class="di-title">Draft record fields — one session, smaller than first thought</span>
+      </div>
+      <p class="di-body">The Library Builder (WP-5), the edit quality metrics (WP-6), and the EU compliance scaffolding (WP-7) all depend on what the draft record carries. Most of it already exists — every draft already stores its prompt, model, version, and what it was shown. The session only has to agree the few new fields (the similarity score, and the three EU documentation fields). Getting it right up front still matters, because draft records can never be changed once written.</p>
+      <p class="di-rec"><strong>Recommendation:</strong> One design session covering WP-5/6/7's needs together, before the first database change that touches the draft record. It blocks those database changes — not all work on the three packages.</p>
+      <div class="di-blocks">Blocks: the WP-5 / WP-6 / WP-7 database changes</div>
+    </div>
+
+    <div class="decision-item">
+      <div class="di-head">
+        <span class="di-label">D-5 · new</span>
+        <span class="di-title">The six missing governance controls — in this effort, or a follow-on?</span>
+      </div>
+      <p class="di-body">Six governed acts exist in the database but have no way to be performed: activating/retiring a clause, superseding a clause, editing a conflict rule, promoting a concession, reordering a ladder rung, releasing a legal hold, and retention destruction. Two of them — retention destruction and clause supersession — you have already decided, and they only need their endpoints built. The other four still need your ruling. The clause library (WP-5) is not much use without clause activation and concession promotion.</p>
+      <p class="di-rec"><strong>Recommendation:</strong> Decide whether the six belong to this effort or a named follow-on. If in: the two already-decided ones can start today; the four open ones need a short owner session first.</p>
+      <div class="di-blocks">Blocks: WP-5's usefulness</div>
+    </div>
+
+    <div class="decision-item">
+      <div class="di-head">
+        <span class="di-label">D-6 · new</span>
+        <span class="di-title">When "record everything" meets "delete on request" — which promise wins?</span>
+      </div>
+      <p class="di-body">The compliance export promises a full record of every AI use. The system also promises it can remove data on request — and by design, the tamper-evident audit trail survives every removal and can never be deleted. The first compliance export a customer runs will either report AI uses whose content they believe was removed, or leave them out and under-report. Nobody has decided which.</p>
+      <p class="di-rec"><strong>Recommendation:</strong> Decide before WP-7's export is designed. This is a product-promise question, not an engineering one — likely worth putting to counsel alongside D-2.</p>
+      <div class="di-blocks">Blocks: WP-7's export design</div>
+    </div>
+
+    <div class="decision-item">
+      <div class="di-head">
+        <span class="di-label">D-7 · new</span>
+        <span class="di-title">Portfolio questions — who may ask across all contracts?</span>
+      </div>
+      <p class="di-body">WP-8 lets a person ask a question whose answer is computed across the whole book of contracts. Today every role is fenced: a requester sees only their own deals. A portfolio answer — even just a count — reveals something about everyone else's deals. Who gets to ask: Legal only? Legal and the Auditor? Requesters for their own slice?</p>
+      <p class="di-rec"><strong>Recommendation:</strong> Legal and the Auditor across the book; a requester may ask the same questions scoped to their own deals only. Same fencing principle the rest of the system already follows — decided by you, enforced by the database, before the first index is built.</p>
+      <div class="di-blocks">Blocks: WP-8</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ADJACENT KNOWN GAPS -->
+<section class="section">
+  <div class="sec-head"><span class="sec-num">6.</span><h2>Adjacent Known Gaps</h2></div>
+  <p style="margin-bottom:1rem;">Pre-existing open items not part of this plan, but overlapping with the packages above.</p>
+  <div style="overflow-x:auto;">
+  <table class="gap-table">
+    <thead><tr><th>Gap</th><th>What it is and when to address it</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Five requester over-grant screens — and the write side</td>
+        <td>Five summary screens let requesters see other requesters' rows (open question 12), and the review found the matching write-side hole: any requester can add negotiation records to somebody else's deal. One fix covers both, inside WP-2's database change. The in-flight connection work saw these and deliberately left them for this plan.</td>
+      </tr>
+      <tr>
+        <td>Six missing governance controls</td>
+        <td>Promoted from a footnote to decision D-5, because two of the six are already decided and buildable today, and WP-5 depends on two of them. See section 5.</td>
+      </tr>
+      <tr>
+        <td>Administrator run screen access</td>
+        <td>The Administrator can read run records in the database but neither run-facing screen shows them. The fix is a single line, and it was left out on purpose — what the Administrator may see is your decision (open question 11), not a side effect of an engineering change. Flag for the next governance review.</td>
+      </tr>
+      <tr>
+        <td>Two unaudited writes — removed</td>
+        <td>The earlier draft listed opening a deal and adding a category as missing from the audit log. That was already fixed before this plan was written: both have been on the audit record since the 20 July work. Removed so nobody re-fixes a closed gap.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- WHAT CHANGED -->
+<section class="section">
+  <div class="sec-head"><span class="sec-num">7.</span><h2>What This Revision Changed, and Why</h2></div>
+  <p style="margin-bottom:1rem;">An adversarial review — three independent verification passes and three challenge passes, every claim checked against the codebase — changed the following. Everything below survived at least one deliberate attempt to disprove it.</p>
+  <ul class="rev-list">
+    <li><strong>WP-1 moved out of Phase 1.</strong> The endpoints it plugs into are not finished — they are being written this week by the already-approved connection work. Starting WP-1 beside it would put two efforts in the same files.</li>
+    <li><strong>WP-2 grew.</strong> The database currently lets any requester add negotiation records to another person's deal. The same class of hole was just closed for assembly runs; WP-2's database change closes it here, on top of the five-screen read fix already planned.</li>
+    <li><strong>WP-6 moved a phase earlier.</strong> The before-and-after text it measures is already stored for every AI draft. It never needed the Library Builder — only the D-4 design session.</li>
+    <li><strong>D-1 mostly dissolved.</strong> The architecture already forces the answer the plan recommended; the only genuinely open piece is deferred to the identity-provider work.</li>
+    <li><strong>D-3's recommended numbers were deleted.</strong> They contradicted your settled decision that the system must never choose a legal review standard.</li>
+    <li><strong>Two new decisions surfaced:</strong> whether the six governance controls are in scope (D-5), and which wins when the compliance record meets a deletion request (D-6).</li>
+    <li><strong>A stale gap was removed:</strong> the "two unaudited writes" were fixed on 20 July.</li>
+    <li><strong>A missing dependency was named:</strong> the system can send a document but cannot yet receive one; WP-2's redline upload and WP-4's supplier paper both need that taught, after the connection work finishes.</li>
+  </ul>
+</section>
+
+<div class="rpt-footer">
+  <p>27 July 2026 · Revision 2, after adversarial verification against the codebase. All content is placeholder pending review.</p>
+  <p style="margin-top:.5rem;">Evidence consulted (for the engineers): migrations 0003 (ladders, concessions, library proposal), 0005 (run store, manifest source), 0008 (review queue, frozen draft baseline, derived edit flag), 0009 (clause origin), 0010–0011 (governance settings, negotiation record and its read/write policies), 0012 (U1 renewal, U4 threshold decisions), 0020 (deal/category audit triggers), 0022–0025 (owner decisions; 0025 untracked at time of writing); backend/doorway/ identity.py, manifests.py, writes.py, runs.py, server.py (JSON-only request bodies, 1&nbsp;MB cap); docs/open-questions.md §9b, §11, §12; ADR-0005 (deterministic fallbacks), ADR-0011 (no shared accounts); ASSEMBLY-CONNECTION-WORK-PACKAGES-2026-07-27.md (the in-flight connection work: its packages own backend/doorway/app.py, server.py, reads.py, mutation_check.py, test_server.py until complete). Full workflow artifacts: .adversarial-workflow-agentic/2026-07-27-new-capabilities/.</p>
+</div>

@@ -151,6 +151,18 @@ MUTATIONS = [
         "test_server.py::test_a_body_that_is_not_a_json_object_is_the_callers_mistake",
     ),
     (
+        # A contract is a zip. Serialised as JSON it does not merely arrive
+        # wrong — json.dumps raises on bytes — so the person asking for their
+        # own paperwork gets "the service failed" instead of a document.
+        "a download is serialised as JSON",
+        "doorway/server.py",
+        "        if isinstance(response, Download):\n"
+        "            self._send_download(response)\n"
+        "            return",
+        "        pass",
+        "test_server.py::test_a_download_leaves_as_bytes_with_its_own_content_type",
+    ),
+    (
         "the sign-in reply exports the raw session clock again",
         "doorway/app.py",
         '            "expiresInSeconds": length,',
@@ -247,11 +259,117 @@ MUTATIONS = [
         "test_reads.py::test_a_refusal_never_arrives_as_an_empty_list",
     ),
     (
+        # RE-POINTED THE MOMENT PERSISTENCE LANDED, and the reason is worth
+        # keeping. This row first named the ORDERING — the attempt written
+        # before the engine is consulted — and pointed at the viewer's refusal
+        # test. That was right while POST /runs stored nothing: the audit grant
+        # was the only thing standing between a viewer and an engine answer.
+        #
+        # Once runs are recorded, a viewer is ALSO refused at the cw.run
+        # insert, so the viewer test stays green with the attempt write gone
+        # and the row read as a MISS — correctly. The ordering is still the
+        # right way round and is argued in runs.py, but it is no longer
+        # independently observable from outside, and a row that cannot be seen
+        # to fail is a row that reads as protection.
+        #
+        # What IS still observable, and still matters: a call the engine
+        # refuses must leave a trace. Without the attempt write, a refused
+        # manifest vanishes from the record entirely.
+        "a call the engine refuses leaves no trace on the record",
+        "doorway/runs.py",
+        '            _record(request, agreement_id, manifest, "run_attempted",\n'
+        '                    "the manifest reached the engine")',
+        "            pass",
+        "test_runs.py::test_every_call_is_recorded_whether_it_succeeded_or_not",
+    ),
+    (
+        # Content-addressed ids repeat by design. Break the guard and a second
+        # run against an unchanged library takes a unique violation, which
+        # refusals.classify labels 'refused on its merits' — somebody is told
+        # their contract was rejected because nothing had changed.
+        "a repeated content-addressed row is treated as a collision",
+        "doorway/runs.py",
+        '            + (" on conflict do nothing" if shared else ""), row)',
+        '            , row)',
+        "test_runs.py::test_two_runs_against_an_unchanged_library_share_one_snapshot",
+    ),
+    (
+        # No paper from a run that has not just proved it reproduces. Break
+        # this and the endpoint hands over a contract built from a library that
+        # is not the one the run names — which is exactly the document nobody
+        # could ever explain in a dispute.
+        "a document is built from a run that does not rebuild",
+        "doorway/documents.py",
+        '            if rebuilt.snapshot_id != run["snapshot_id"]:',
+        "            if False:",
+        "test_documents.py::test_a_snapshot_that_does_not_rebuild_produces_no_document",
+    ),
+    (
+        # Deferred from the package that added the seam, because nothing
+        # consumed it then and a row guarding an unused capability cannot
+        # report ok. Something consumes it now: this is how a caller says WHICH
+        # contract they want.
+        "the query selector is discarded before it reaches the app",
+        "doorway/server.py",
+        "        selector = {k: v[0] for k, v in parse_qs(parsed.query).items()\n"
+        "                    if k in QUERY_KEYS and v}",
+        "        selector = {}",
+        "test_documents.py::test_a_run_recorded_through_the_service_rebuilds_through_the_service",
+    ),
+    # ── The three gates on the one act that cannot be undone ─────────────────
+    (
+        "the run is not bound to the agreement being filed",
+        "doorway/executions.py",
+        '            if run["agreement_id"] != agreement_id:',
+        "            if False:",
+        "test_executions.py::test_a_run_recorded_against_another_deal_cannot_be_filed_here",
+    ),
+    (
+        "the currency re-check at signature is not performed",
+        "doorway/executions.py",
+        "where d.run_id = %s and d.clause_id is not null and s.selectable = false",
+        "where d.run_id = %s and false",
+        "test_executions.py::test_a_run_carrying_a_retired_clause_is_refused_naming_the_clause",
+    ),
+    (
+        "the validation gate is not checked at execution",
+        "doorway/executions.py",
+        '            if not run["gate_open"]:',
+        "            if False:",
+        "test_executions.py::test_a_closed_gate_with_no_override_is_refused",
+    ),
+    (
+        # WITHOUT THIS ROW the gate above proves only the half that already
+        # works: a gate that refuses EVERY blocked run reports ok for it. This
+        # one breaks the lookup that lets an approved override through, so the
+        # positive direction has a guard of its own.
+        "an approved override is never consulted",
+        "doorway/executions.py",
+        'PASSES_SQL = "select finding_ref from cw.override_passes where run_id = %s"',
+        'PASSES_SQL = "select finding_ref from cw.override_passes where run_id = %s and false"',
+        "test_executions.py::test_a_closed_gate_with_every_blocking_finding_approved_is_admitted_and_filed",
+    ),
+
+    (
         "the engine's refusal is reworded on the way out",
         "doorway/manifests.py",
         '                    "reason": reasons[0],',
         '                    "reason": "That category is not permitted.",',
         "test_manifests.py::test_the_refusal_is_the_engine_s_own_words",
+    ),
+
+    # ── The model seam invents a number when it cannot get one ───────────────
+    # The one guarantee NC-25 rests on. Every path that fails to obtain a
+    # judgment goes through `_absent`, and a substitute figure written there is
+    # indistinguishable from a real judgment the moment it reaches a screen —
+    # the precise failure ADR-0005 exists to prevent, in the one place the ADR's
+    # usual remedy (a deterministic substitute) would itself be the lie.
+    (
+        "a judgment nobody obtained is recorded as a number anyway",
+        "doorway/advisory.py",
+        "    return Judgment(score=None, basis=None, absent_reason=reason,",
+        "    return Judgment(score=0.5, basis=None, absent_reason=reason,",
+        "test_advisory.py::test_the_adapter_records_an_absence_rather_than_a_number",
     ),
 
     # ── The one nobody may ever add ──────────────────────────────────────────

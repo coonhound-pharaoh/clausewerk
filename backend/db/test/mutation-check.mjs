@@ -461,15 +461,25 @@ grant usage, select on sequence cw.supersession_id_seq to cw_legal_reviewer;`,
 
   // The other half of refutation 3: the flag becomes self-reported rather than
   // derived, so a caller can simply declare a clean score.
+  // 0029 replaced the deciding function wholesale (the figure joined the flag),
+  // so this row keys on 0029's block — the definition that is LIVE after all
+  // migrations run, per the rule at the top of this list. NC-25's implementer
+  // found the old find string silently unguarded; repointed 2026-07-27.
   { suite: 'review-queue.test.mjs',
     name: 'the caller may supply their own edited_before_approval',
     find: `  if new.state = 'verified' then
     new.edited_before_approval := (new.approved_text is distinct from new.proposed_text);
+    sim := cw.text_overlap(new.proposed_text, new.approved_text);
+    -- Held below identity when the texts differ: see the note at the top.
+    if new.edited_before_approval and sim >= 1 then sim := 0.9999; end if;
+    new.edit_similarity := sim;
   else
     new.edited_before_approval := null;
+    new.edit_similarity := null;
   end if;`,
     repl: `  if new.state <> 'verified' then
     new.edited_before_approval := null;
+    new.edit_similarity := null;
   end if;`,
     expect: 'a caller cannot self-report a clean score' },
 
@@ -1197,6 +1207,31 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
     find: `  const at = stageOf(deal);`,
     repl: `  const at = 3;`,
     expect: 'the rail takes its stage from the deal it is drawn for' },
+
+  // THE STUB COMING BACK. The requester's screen said the forge was not built
+  // for as long as it was true; now the contract, its decisions, its findings
+  // and its gate are all real and rendered from the run's own record. A stub
+  // put back over that would read as honesty — "we do not do this yet" — while
+  // hiding a capability the system genuinely has.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the assembled contract is replaced by a stub again',
+    find: `function RunResult({ run, decisions, findings, onError }) {`,
+    repl: `function RunResult() {
+  return <NotBuiltYet what="The contract is not built." lands="a later package" />;
+}
+function RunResultRetired({ run, decisions, findings, onError }) {`,
+    expect: 'the run view renders what the endpoint returned and invents nothing' },
+
+  // THE IRREVERSIBLE ACT LOSING ITS SECOND LOOK. Everything a filing writes is
+  // frozen the moment it lands, so a one-click button is how a typo becomes a
+  // permanent wrong fact about a signed contract. The confirmation is not
+  // politeness; it is the only place the filer sees what they are about to
+  // make permanent.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the filing happens on the first click, with nothing shown first',
+    find: `                  if (!confirming) { setConfirming(true); return; }`,
+    repl: ``,
+    expect: 'nothing is filed without a confirmation showing what will be filed' },
 
   // THE VISUAL LANGUAGE DRIFTING. Decision U8 says reorganisation, not
   // restyling — a new colour here is out of scope by definition.

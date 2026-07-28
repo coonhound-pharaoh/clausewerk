@@ -22,6 +22,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { roleHelpers } from './roles.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS = process.env.CW_MIGRATIONS || join(HERE, '..', 'migrations');
@@ -126,7 +127,16 @@ function lit(v) {
 // library share one row, which is the point of hashing them. A real writer
 // inserts them if absent, so this does too. Nothing about the emitted column
 // names or values is touched either way.
-const SHARED = new Set(['snapshot', 'ruleset', 'ruleset_member']);
+// WIDENED to all five, to match what the real writer does and why.
+//
+// The parents alone are not enough, and putting the clause only on them moves
+// the collision one table along rather than removing it: a second writer's
+// parent insert becomes a no-op, and its very next statement writes a
+// snapshot_member row the first writer already wrote. Every one of these five
+// is keyed on the content-addressed parent plus the content, so a conflict is
+// by definition a row identical to the one being written.
+const SHARED = new Set(['snapshot', 'snapshot_member', 'snapshot_ladder_rung',
+                        'ruleset', 'ruleset_member']);
 
 async function insertEmitted(db, table, rows) {
   for (const row of rows) {
@@ -187,6 +197,13 @@ await db.exec(`
             'Law and forum disagree.','{"conflicting_values":"jurisdiction"}','R. Vance');`);
 
 const rows = async (sql) => (await db.query(sql)).rows;
+
+// cw.run_contract scopes itself since 0025, and the database owner is nobody
+// as far as cw.app_role() is concerned — so a run view has to be read as
+// somebody who may see the run.
+const { queryAs } = roleHelpers(db);
+const rowsAsAuditor = (sql) => queryAs('auditor', sql, [], 'auditor@cw');
+
 const TAKEN_ON = '2026-07-25';
 
 // The manifest carries one category nobody defined. It must not survive the
@@ -255,6 +272,29 @@ await test('run_rows output inserts with nothing edited by hand', async () => {
   eq(r[0].snapshot_id, intact.snapshot_id);
 });
 
+await test('a second run against an unchanged library shares one snapshot and one ruleset', async () => {
+  // Content-addressed ids repeat BY DESIGN — that is the whole point of
+  // hashing them. A writer that did not expect the repeat would take a unique
+  // violation, which reads as "your contract was refused on its merits": a
+  // refusal that is not a refusal, for the crime of nothing having changed
+  // since the last time somebody asked.
+  //
+  // Placed HERE, before the tests below start retiring clauses and degrading
+  // ladders, because "unchanged library" has to actually be true.
+  const again = await emit('RUN-100');
+  eq(again.snapshot_id, intact.snapshot_id,
+     'the same library must produce the same snapshot id, or nothing reproduces');
+  for (const t of ORDER) await insertEmitted(db, t, again.rows[t]);
+
+  const s = await rows(`select count(*)::int as n from cw.snapshot`);
+  const rs = await rows(`select count(*)::int as n from cw.ruleset`);
+  const r = await rows(`select count(*)::int as n from cw.run
+                        where run_id in ('RUN-001','RUN-100')`);
+  eq(s[0].n, 1, 'two runs against one library must share one snapshot row');
+  eq(rs[0].n, 1, 'and one ruleset row');
+  eq(r[0].n, 2, 'but they are two distinct runs');
+});
+
 await test('a decision names a category the registry defines', async () => {
   const r = await rows(`select distinct category_key from cw.run_decision
                         where run_id='RUN-001' order by category_key`);
@@ -262,7 +302,7 @@ await test('a decision names a category the registry defines', async () => {
 });
 
 await test('cw.run_contract still reports the human label', async () => {
-  const r = await rows(`select distinct category from cw.run_contract
+  const r = await rowsAsAuditor(`select distinct category from cw.run_contract
                         where run_id='RUN-001' order by category`);
   eq(r.map(x => x.category),
      ['Data Privacy', 'Definitions', 'Dispute Resolution', 'Insurance'],

@@ -92,14 +92,17 @@ REQUESTER = Caller(person="rita@clausewerk", role="requester")
 def test_the_read_count_moves_only_on_purpose():
     """Twenty-five came across from the JavaScript service. Four were added
     afterwards for read models built while this workstream was paused — the
-    reading room (0017) and the library and ladder boards (0018).
+    reading room (0017) and the library and ladder boards (0018). Three more
+    for assembly runs: GET /runs, GET /runs/decisions and GET /runs/findings.
 
     Asserted so the number moves deliberately. An endpoint appearing without
     anybody noticing is how a surface grows past what was reviewed.
     """
-    assert len(READS) == 29, (
-        f"{len(READS)} reads are registered; 25 ported plus 4 added on purpose. "
-        "If that changed deliberately, move this number with it."
+    assert len(READS) == 33, (
+        f"{len(READS)} reads are registered; 25 ported, 4 added for the reading "
+        "room and the library boards, 3 for assembly runs, and 1 for the metrics "
+        "board that shows the measurement beside the AI estimate (NC-25). If "
+        "that changed deliberately, move this number with it."
     )
 
 
@@ -221,6 +224,154 @@ def test_a_refusal_never_arrives_as_an_empty_list(people, db: Database):
             f"{key} refused a requester with no words. A refusal nobody can read "
             "is indistinguishable from a broken screen."
         )
+
+
+# ── The run reads, for every one of the six roles ───────────────────────────
+#
+# SIX, and the count is the schema's own: 0013_administrator.sql:57-59 comments
+# cw as 'Six application roles'. The sweeps above use two — an administrator and
+# a requester — which is enough to catch a broken statement and not enough to
+# describe who may see a run. These three endpoints get all six by name.
+#
+# WHAT IS NOT TESTED HERE, and where it is. Whether a requester sees only THEIR
+# runs is a property of the view's own WHERE clause, and it is proved against
+# real rows in db/test/run-store.test.mjs ('four roles are scoped by the view,
+# and see exactly their own runs'). Rebuilding a full run — library, snapshot,
+# ruleset, decisions, findings — inside this suite would be a second fixture
+# for one assertion that already has a home.
+
+RUN_READS = ("GET /runs", "GET /runs/decisions", "GET /runs/findings")
+
+# Written out by hand, one row per pair, with the reason. NOT generated: the
+# administrator's three outcomes are not uniform, and a generator would have to
+# be told that anyway — in code, where it would read as a rule rather than as a
+# fact about the schema.
+RUN_READ_OUTCOMES = {
+    # A viewer holds no grant on either run view, and none on cw.run_finding
+    # (0005_run_store.sql:288-297 names the requester, both Legal roles and the
+    # auditor, and nobody else). Refused, in the database's own words.
+    ("viewer", "GET /runs"): "refused",
+    ("viewer", "GET /runs/decisions"): "refused",
+    ("viewer", "GET /runs/findings"): "refused",
+
+    ("requester", "GET /runs"): "rows",
+    ("requester", "GET /runs/decisions"): "rows",
+    ("requester", "GET /runs/findings"): "rows",
+
+    ("legal_reviewer", "GET /runs"): "rows",
+    ("legal_reviewer", "GET /runs/decisions"): "rows",
+    ("legal_reviewer", "GET /runs/findings"): "rows",
+
+    ("legal_admin", "GET /runs"): "rows",
+    ("legal_admin", "GET /runs/decisions"): "rows",
+    ("legal_admin", "GET /runs/findings"): "rows",
+
+    ("auditor", "GET /runs"): "rows",
+    ("auditor", "GET /runs/decisions"): "rows",
+    ("auditor", "GET /runs/findings"): "rows",
+
+    # CHANGED ON PURPOSE, 2026-07-27, by owner decision (migration 0026).
+    #
+    # These two read "refused" until today, and the contradiction was written up
+    # as docs/open-questions.md §11: the administrator could read every FINDING
+    # on every assembly (0013:296 grants the base tables, 0013:321 gives the read
+    # policy) and neither SUMMARY, because the two views predate the role and
+    # 0005:293-297 named the roles that existed at the time.
+    #
+    # The owner's answer: "seeing an alarm you can't investigate is worse than
+    # either alternative." 0026 grants both views AND admits the role to their
+    # scoping clauses — the grant alone would have answered zero rows, which is
+    # the misleading-empty-list failure §9 already records for legal holds.
+    ("administrator", "GET /runs"): "rows",
+    ("administrator", "GET /runs/decisions"): "rows",
+    ("administrator", "GET /runs/findings"): "rows",
+}
+
+
+@pytest.fixture
+def six(db: Database, schema: str, owner_url: str):
+    """All six signed-in people, seeded as the demo does it — including the
+    countersign the Legal grants genuinely need."""
+    from doorway.seed_demo import PEOPLE, seed
+
+    seed(owner_url=owner_url, app_url=schema)
+    return {role: Caller(person=person, role=role)
+            for person, _display, _unit, role in PEOPLE}
+
+
+@pytest.mark.parametrize("role,key", sorted(RUN_READ_OUTCOMES))
+def test_the_run_reads_answer_for_every_signed_in_role(six, db: Database,
+                                                       role: str, key: str):
+    kind, detail = outcome(db, six[role], key)
+    want = RUN_READ_OUTCOMES[(role, key)]
+
+    assert kind != "broken", f"{key} cannot run as {role}: {detail}"
+    assert kind == want, (
+        f"{role} was expected to be {want} on {key} and was {kind} instead: "
+        f"{detail}. If that is a deliberate schema change, move this table with "
+        f"it — every entry in it names the grant it rests on.")
+
+
+def test_a_viewer_is_refused_the_run_reads_and_never_gets_an_empty_list(
+    six, db: Database
+):
+    """The failure this whole module exists to prevent, on the newest three.
+    "No runs are waiting on you" and "you may not see runs" are opposite
+    sentences to the person reading them."""
+    for key in RUN_READS:
+        shaped = answer(db, six["viewer"], key)
+        assert shaped.refused, (
+            f"{key} refused a viewer at the database and then answered "
+            f"{shaped.body!r}")
+        assert shaped.body.get("reason", "").strip()
+
+
+def test_an_administrator_reads_all_three_and_never_an_empty_list(six, db: Database):
+    """Owner decision, migration 0026 — and the half that is easy to get wrong.
+
+    Granting the two views WITHOUT admitting the role to their scoping clauses
+    would leave every call succeeding and answering nothing. That is not a
+    smaller refusal, it is a different sentence: the screen would tell the one
+    person who can see every finding in the company that no contract has ever
+    been assembled.
+
+    docs/open-questions.md §9 records the identical shape on legal holds, where
+    an inert grant made row-level security filter instead of refuse and an
+    administrator was shown "No holds are open" while a hold was open. So this
+    asserts the ROWS, not merely the absence of a refusal.
+    """
+    for key in RUN_READS:
+        shaped = answer(db, six["administrator"], key)
+        assert not shaped.refused, (
+            f"{key} refused an administrator; 0026 grants it. {shaped.body}")
+        assert "rows" in shaped.body
+
+    # Non-vacuity: with no runs recorded, every one of these is honestly empty
+    # and the test above cannot tell "scoped in" from "filtered out". Record one
+    # and prove the administrator can see it.
+    legal = six["legal_admin"]
+    with db.as_person(legal.person, legal.role) as request:
+        request.write(
+            "insert into cw.agreement (agreement_id, counterparty, requester) "
+            "values ('AG-ADMIN', 'Contoso', %s)", (legal.person,))
+        request.write(
+            "insert into cw.snapshot (snapshot_id) values (%s)", ("a" * 64,))
+        request.write(
+            "insert into cw.ruleset (ruleset_id) values (%s)", ("c" * 64,))
+        request.write(
+            """insert into cw.run (run_id, agreement_id, vendor, manifest,
+                                   manifest_source, snapshot_id, ruleset_id,
+                                   result_hash, engine_version, gate_open,
+                                   created_by)
+               values ('RUN-ADMIN', 'AG-ADMIN', 'Contoso', '{}', 'llm', %s, %s,
+                       %s, 'clausewerk-engine/3', true, %s)""",
+            ("a" * 64, "c" * 64, "d" * 64, legal.person))
+
+    seen = run(db, six["administrator"], "GET /runs")
+    assert [r["run_id"] for r in seen] == ["RUN-ADMIN"], (
+        "the administrator holds the grant and was answered an empty list — "
+        "the scoping clause does not admit the role, which is the misleading "
+        "empty state docs/open-questions.md §9 describes")
 
 
 def test_a_permitted_read_and_a_refused_read_do_not_look_alike(people, db: Database):

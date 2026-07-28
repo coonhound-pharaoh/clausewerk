@@ -50,6 +50,10 @@ for (const f of readdirSync(MIGRATIONS).filter(f => f.endsWith('.sql')).sort())
 const rows = async (s, p) => (await db.query(s, p)).rows;
 const one  = async (s, p) => (await rows(s, p))[0];
 const { queryAs, execAs, mustWrite, mustNotWrite } = roleHelpers(db);
+// The concession summary views scope themselves by who is asking (0027), so
+// reading them on the owner's connection — which holds no role — correctly
+// answers with nothing. Read them as a real role, like every governed act here.
+const oneAs = async (role, s, p) => (await queryAs(role, s, p))[0];
 
 const BUYER = 'buyer@clausewerk';
 const ATTY  = 'r.vance@clausewerk';
@@ -85,9 +89,9 @@ console.log('\na concession is a proposal until named people settle it (WP-18a)'
 let C1;
 await test('a requester can record a concession — as the real role', async () => {
   C1 = await concede('AG-001', 1);
-  const s = await one(`select state from cw.concession_state where concession_id=$1`, [C1]);
+  const s = await oneAs('legal_reviewer', `select state from cw.concession_state where concession_id=$1`, [C1]);
   eq(s.state, 'proposed', 'nothing is in force merely because it was written down');
-  const f = await one(`select count(*)::int n from cw.concession_in_force
+  const f = await oneAs('legal_reviewer', `select count(*)::int n from cw.concession_in_force
                        where concession_id=$1`, [C1]);
   eq(f.n, 0, 'and nothing reads it as agreed');
 });
@@ -156,10 +160,10 @@ await test('with everyone in, the concession comes into force', async () => {
   await mustWrite('legal_reviewer',
     `insert into cw.concession_settlement (concession_id,settled_by)
      values (${C1},'legal@clausewerk') returning concession_id`);
-  const s = await one(`select state, settled_by from cw.concession_state
+  const s = await oneAs('legal_reviewer', `select state, settled_by from cw.concession_state
                        where concession_id=$1`, [C1]);
   eq(s.state, 'approved');
-  const f = await one(`select count(*)::int n from cw.concession_in_force
+  const f = await oneAs('legal_reviewer', `select count(*)::int n from cw.concession_in_force
                        where concession_id=$1`, [C1]);
   eq(f.n, 1, 'and only now does anything read it as agreed');
 });
@@ -187,7 +191,7 @@ await test('with no Required Approver configured, two approvals are enough', asy
   await mustWrite('legal_reviewer',
     `insert into cw.concession_settlement (concession_id,settled_by)
      values (${C2},'legal@clausewerk') returning concession_id`);
-  const s = await one(`select state from cw.concession_state where concession_id=$1`, [C2]);
+  const s = await oneAs('legal_reviewer', `select state from cw.concession_state where concession_id=$1`, [C2]);
   eq(s.state, 'approved', 'the baseline for the comparison below');
 });
 
@@ -234,7 +238,7 @@ await test('once the Required Approver signs, it settles', async () => {
   await mustWrite('legal_reviewer',
     `insert into cw.concession_settlement (concession_id,settled_by)
      values (${C3},'legal@clausewerk') returning concession_id`);
-  const s = await one(`select state from cw.concession_state where concession_id=$1`, [C3]);
+  const s = await oneAs('legal_reviewer', `select state from cw.concession_state where concession_id=$1`, [C3]);
   eq(s.state, 'approved');
 });
 
@@ -286,7 +290,7 @@ await test('the same machine proposal settles once humans have signed it', async
   await mustWrite('legal_reviewer',
     `insert into cw.concession_settlement (concession_id,settled_by)
      values (${CM},'legal@clausewerk') returning concession_id`);
-  const s = await one(`select state, proposer_kind from cw.concession_state
+  const s = await oneAs('legal_reviewer', `select state, proposer_kind from cw.concession_state
                        where concession_id=$1`, [CM]);
   eq(s.state, 'approved');
   eq(s.proposer_kind, 'machine',
@@ -326,7 +330,7 @@ await test('a proposal that never settled can be withdrawn, and then cannot sett
     `insert into cw.concession_withdrawal (concession_id,withdrawn_by,reason)
      values (${C},'${BUYER}','vendor accepted our position after all')
      returning concession_id`, [], BUYER);
-  const s = await one(`select state from cw.concession_state where concession_id=$1`, [C]);
+  const s = await oneAs('legal_reviewer', `select state from cw.concession_state where concession_id=$1`, [C]);
   eq(s.state, 'withdrawn');
   await throws(() => queryAs('legal_reviewer',
     `insert into cw.concession_settlement (concession_id,settled_by)

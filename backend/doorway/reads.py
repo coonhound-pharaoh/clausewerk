@@ -214,6 +214,17 @@ READS: dict[str, Read] = {
         rule="cw.review_quality — the unedited-approval rate, measured and shown",
     ),
 
+    # The measurement and the estimate, side by side and labelled as what each
+    # one is (NC-25). The two label columns come from the view rather than from
+    # an interface that has to remember them: the one way this feature does harm
+    # is a screen showing two numbers and letting a reader take them for the
+    # same kind of thing.
+    "GET /metrics": Read(
+        sql="""select * from cw.ticket_metrics order by ticket_id""",
+        rule="cw.ticket_metrics — carries cw.review_ticket's own read_scoped "
+             "rule in its WHERE clause, because a view runs as its owner",
+    ),
+
     "GET /origin-mix": Read(
         sql="""select * from cw.library_origin_mix""",
         rule="cw.library_origin_mix — where the library actually came from",
@@ -334,6 +345,74 @@ READS: dict[str, Read] = {
         sql="""select * from cw.ladder_board""",
         rule="cw.ladder / cw.ladder_rung read_all policies; cw.ladder_board's "
              "empty-ladder row is load-bearing and must not be filtered out",
+    ),
+
+    # ── Assembly runs (migration 0025) ──────────────────────────────────────
+    #
+    # NO PARAMETERS, ON ANY OF THE THREE, FOR THE REASON THE READING ROOM GAVE.
+    #
+    # The scoping is "these runs, this person", and it comes from the identity
+    # already bound to the connection. A run_id parameter is the same shape as
+    # the agreement_id parameter WP-U14 refused above: a caller who wants one
+    # run filters what the policy already returned, and a screen that filters
+    # can never be the thing that decides what it may see.
+    #
+    # THE CONSEQUENCE, STATED RATHER THAN DISCOVERED. These answers are
+    # unbounded. For an auditor, GET /runs/decisions is every decision of every
+    # run ever recorded, in one reply. When that becomes a problem the answer is
+    # a bound WRITTEN INTO THE SQL HERE — a default limit, most recent first —
+    # and never a filter the caller supplies, because the caller-supplied filter
+    # is the thing being avoided.
+    #
+    # THE DEPENDENCY, VISIBLE FROM THE FILE THAT DEPENDS ON IT. The first two
+    # are only safe because 0025 scoped cw.run_summary and cw.run_contract in
+    # their own WHERE clauses. If that migration is ever reverted, these must be
+    # re-pointed at cw.run and cw.run_decision — which carry their own policies
+    # — BEFORE the revert lands, or every run in the system is handed to every
+    # reader who holds the grant.
+    #
+    # A CONTRADICTION THAT WAS HERE UNTIL 2026-07-27, and how it was settled,
+    # because the reasoning is worth more than the outcome.
+    #
+    # The administrator could read every FINDING on every assembly in the
+    # company (0013:296 grants the three base tables, 0013:321 gives the read
+    # policy) and neither SUMMARY — the two views predate the role by two
+    # migrations. An alarm nobody can investigate, which is how the owner
+    # settled it: migration 0026 admits the role to both.
+    #
+    # THE PART TO REMEMBER IF THIS IS EVER REVISITED: 0026 is a grant AND a
+    # scoping-clause change, and it has to be both. The grant on its own leaves
+    # every query succeeding and answering nothing, which reads on screen as
+    # "no contract has ever been assembled". docs/open-questions.md §9 records
+    # the same shape on legal holds, where it shipped.
+    "GET /runs": Read(
+        sql="""select run_id, vendor, agreement_id, manifest_source,
+                 snapshot_id, ruleset_id, result_hash, engine_version,
+                 gate_open, overridden, created_by, created_at,
+                 decisions, unresolved, findings, blocking
+          from cw.run_summary order by created_at desc""",
+        rule="cw.run_summary scopes itself in its own WHERE clause, in the same "
+             "words as cw.run's read_scoped policy (0025) — a view does not "
+             "inherit the policy on the table underneath it",
+    ),
+
+    "GET /runs/decisions": Read(
+        sql="""select run_id, seq, category, severity, reason, baseline,
+                 clause_id, version, title, body, warning, suppressed
+          from cw.run_contract order by run_id, seq""",
+        rule="cw.run_contract scopes itself in its own WHERE clause via its join "
+             "to cw.run (0025)",
+    ),
+
+    # This one reads the RLS-bearing base table rather than a view, because
+    # there is no view — and cw.run_finding's own policy already answers the
+    # question, transitively through the run it belongs to.
+    "GET /runs/findings": Read(
+        sql="""select run_id, seq, rule_id, rule_version, severity, title,
+                 detail, refs
+          from cw.run_finding order by run_id, seq""",
+        rule="cw.run_finding read_scoped policy — a finding is visible exactly "
+             "when its run is",
     ),
 }
 

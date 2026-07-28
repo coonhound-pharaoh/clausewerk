@@ -276,7 +276,9 @@ await test('superseding the clause it used changes nothing about the contract', 
 await test('retiring the clause it used changes nothing either', async () => {
   await db.exec(`update cw.clause_version set retired=true, retired_reason='withdrawn'
                  where clause_id='DP-H-052' and version=1`);
-  const c = await one(`select body from cw.run_contract where run_id='RUN-001' and seq=0`);
+  // As Legal, not as the owner: 0025 scoped cw.run_contract in its own WHERE
+  // clause, and the owner is nobody as far as cw.app_role() is concerned.
+  const c = await oneAsLegal(`select body from cw.run_contract where run_id='RUN-001' and seq=0`);
   assert(c.body.includes('24 hours'), 'the executed wording is still readable, verbatim');
 });
 
@@ -746,6 +748,56 @@ await test('and the views over it are shared-scoped too, not just the tables', a
     'the viewer reads as much as Legal does, so the scoping is not doing anything');
 
   await db.exec(`reset role; select set_config('cw.actor','legal@cw',false);`);
+});
+
+// ── The insert set the endpoint uses, performed as a real Legal connection ──
+//
+// Everything above filed its rows as the database owner, who bypasses every
+// policy there is. POST /agreements/execute files them through the caller's own
+// connection, so the set is repeated here as cw_legal_reviewer — the shape
+// finding D1 was about: a write that passes for the owner and silently affects
+// nothing for the role that actually performs it.
+
+console.log('\nthe endpoint\'s insert set, as a real Legal connection');
+
+await test('a legal reviewer can file the whole set, and kind is agreement at seq 0', async () => {
+  await db.exec(`reset role;
+    insert into cw.agreement (agreement_id,counterparty,requester)
+      values ('AG-END','Endpoint Co','buyer@cw');`);
+
+  await execAs('legal_reviewer', `
+    insert into cw.executed_agreement
+      (agreement_id, run_id, executed_on, effective_on, term_end,
+       agreement_kind, parent_agreement_id, signature_evidence)
+    values ('AG-END', null, '2026-07-27', '2026-08-01', null,
+            'standalone', null, 'envelope-1');
+    insert into cw.executed_document
+      (agreement_id, doc_seq, kind, filename, byte_size, sha256, storage_uri,
+       signed_on)
+    values ('AG-END', 0, 'agreement', 'end.docx', 2400,
+            '${'e'.repeat(64)}', 'placeholder://not-a-store/end.docx',
+            '2026-07-27');
+    insert into cw.executed_signatory
+      (agreement_id, ordinal, name, party, method, signed_on, title)
+    values ('AG-END', 0, 'Rae Vance', 'ours', 'electronic', '2026-07-27', 'GC'),
+           ('AG-END', 1, 'E. Ndpoint', 'theirs', 'electronic', '2026-07-27', null);
+  `, 'legal@cw');
+
+  await db.exec('reset role;');
+  const d = await one(`select doc_seq, kind from cw.executed_document
+                       where agreement_id='AG-END'`);
+  eq(d.doc_seq, 0);
+  eq(d.kind, 'agreement',
+     'the schema requires exactly one document to BE the agreement, at seq 0 — ' +
+     'and both planners left kind out of the insert set entirely');
+  const s = await one(`select count(*)::int n from cw.executed_signatory
+                       where agreement_id='AG-END'`);
+  eq(s.n, 2);
+});
+
+await test('the deal moved to executed by the trigger, not by whoever filed it', async () => {
+  const a = await one(`select status from cw.agreement where agreement_id='AG-END'`);
+  eq(a.status, 'executed');
 });
 
 await db.exec(`reset role;`);

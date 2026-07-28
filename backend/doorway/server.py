@@ -33,6 +33,28 @@ make that go away is to relax it until it does — which is how a permissive rul
 reaches production because it was easier during development. One origin means no
 such rule is ever needed.
 
+NOT EVERYTHING THAT LEAVES HERE IS JSON
+
+A contract leaves as a .docx — bytes, with a content type and a filename. That
+is one branch in `_respond` and one writer beneath it, and it is deliberately
+the whole of the change: `app.Download` carries what the file IS, so this file
+never learns what Word is.
+
+WHY THE DOCUMENT SELECTOR TRAVELS IN THE URL, and what the alternative was
+
+Asking for a document is a READ, and `GET /runs/contract?run=…` says so. The
+write path cannot carry it without lying about what it is: `writes.Write` holds
+exactly one SQL statement and one set of body fields, so filing a document read
+under it would erase the single distinction reads.py and writes.py exist to
+draw.
+
+The live alternative, recorded so nobody has to rediscover it: a body-carried
+selector already works elsewhere — `POST /health-checks/rebuild` and `POST
+/health-checks/document` take a run or an agreement through a write's fields.
+If a later owner prefers that, `QUERY_KEYS`, the `parse_qs` capture below and
+`App.handle`'s `query` parameter all come out, and the bytes half stays exactly
+as it is.
+
 Ported from `backend/service/server.mjs` on 2026-07-26.
 """
 
@@ -45,15 +67,21 @@ import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
-from doorway.app import App, Response
+from doorway.app import App, Download, Response
 from doorway.db import Database
 
 # A body bigger than this is refused unread. The JavaScript destroyed the socket
 # at the same size; the point is that an unbounded read is a way to exhaust the
 # service with one request.
 MAX_BODY = 1_000_000
+
+# The COMPLETE list of what a browser may name in a query string, in the same
+# spirit as reads.READS: one greppable line, so adding a second key is a visible
+# act rather than a condition buried in a handler. Anything else the browser
+# sends is dropped before App.handle is called.
+QUERY_KEYS = ("run",)
 
 MIME = {
     ".html": "text/html; charset=utf-8",
@@ -84,8 +112,11 @@ class Handler(BaseHTTPRequestHandler):
             if self._serve_static(parsed.path):
                 return
 
+        selector = {k: v[0] for k, v in parse_qs(parsed.query).items()
+                    if k in QUERY_KEYS and v}
+
         self._respond(self.app.handle("GET", self._endpoint(parsed.path),
-                                      token=self._token()))
+                                      token=self._token(), query=selector))
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
@@ -175,7 +206,33 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("access-control-allow-headers", "authorization, content-type")
         self.send_header("access-control-allow-methods", "GET, POST, OPTIONS")
 
-    def _respond(self, response: Response) -> None:
+    def _send_download(self, download: Download) -> None:
+        """Bytes out, named, measured, and not touched on the way.
+
+        THE FILENAME IS NOT SANITISED HERE, ON PURPOSE. It is quoted into a
+        content-disposition header, so a name carrying a quote or a newline
+        would break that header — and the answer to that is for the CALLER to
+        refuse such a name, not for this file to quietly rewrite what somebody
+        asked for. A transport that edits its payload's name is a transport
+        that can be argued with about what the name was.
+        """
+        self.send_response(download.status)
+        self.send_header("content-type", download.content_type)
+        self.send_header("content-disposition",
+                         f'attachment; filename="{download.filename}"')
+        self.send_header("content-length", str(len(download.body)))
+        # Kept, and it matters: the JSON path calls it, and a download that
+        # skipped it would fail cross-origin during development in a way no
+        # test covers and every browser reports differently.
+        self._cors()
+        self.end_headers()
+        self.wfile.write(download.body)
+
+    def _respond(self, response: Response | Download) -> None:
+        if isinstance(response, Download):
+            self._send_download(response)
+            return
+
         payload = json.dumps(response.body, default=str).encode("utf-8")
         self.send_response(response.status)
         self.send_header("content-type", "application/json")

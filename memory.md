@@ -2048,3 +2048,422 @@ sentence. Fifty-four of their siblings already check the *name of the rule* that
 refused instead, which never needs revisiting when wording changes. Giving each
 rule a stable code finishes almost all of it. Written up in
 `CONTENT-CHECKS-CLEANUP-2026-07-27.md` with the counts and the list.
+
+---
+
+## 2026-07-27 · The doorway learns to hand over a file
+
+**What changed.** The service could only ever answer with a record — names,
+numbers, lists. It can now hand back a document as a document: the bytes
+untouched, named so a browser saves it with a sensible filename, and measured so
+the browser knows when it has all of it. It can also read one named parameter out
+of a web address, so a screen can say *which* contract it wants.
+
+**Nothing uses either yet, on purpose.** Both live in the two files every single
+request passes through, and the safest time to change those is when nothing
+depends on the change. Every existing answer is now *proved* to arrive exactly as
+it did before, rather than assumed to have survived.
+
+**One decision worth recording: the contract is named in the address, not in the
+request body.** Asking for a document is reading, and the address says so. The
+alternative — putting it in the body — would have filed a read under the
+machinery that exists for writes, erasing the one distinction those two files
+exist to draw. The alternative is written down beside the choice, because it does
+work and a later owner may prefer it; switching costs three deletions and no
+migration.
+
+---
+
+## 2026-07-27 · Assembling a contract, wired up but recording nothing
+
+**What changed.** A person can now submit a manifest and get back a real
+assembled contract — which clause was chosen for which risk, why, what the
+conflict rules found, whether the gate is open, and how many rules were even
+consulted. It is the first time the two halves of the product have spoken to each
+other about actual work.
+
+**It stores nothing, and the answer says so.** Every reply carries `recorded:
+false`. Recording is the next step, deliberately separated: the question of *who
+may do this* is settled here, where there are no stored rows to hide a mistake
+behind.
+
+**Zero reads as zero.** A contract assembled against an empty rulebook comes back
+saying nought rules were consulted. That is not a clean run, it is an unchecked
+one, and the screen must be able to tell them apart.
+
+**An empty library reports a gap, it does not fail.** Ask for a contract when no
+clauses exist and you get a full report saying, for each risk, that there is
+nothing to offer — in the engine's own words. Nothing is invented and nothing
+reads as a system fault. The plan called for a loud refusal here; that would have
+dressed a *library* gap up as a *product* failure, which is the boundary you set
+on 2026-07-25.
+
+**A fact in the plan was out of date, and the check found it.** The plan said an
+Administrator would be stopped at the clause library. Your own U11 decision had
+already given that role sight of the library. They are stopped one step later,
+at the **conflict rules**, which U11 deliberately did not open. The outcome is
+the same — an Administrator cannot assemble a contract — but the reason is
+different, and a comment saying the wrong reason is how the next person gets it
+wrong too. Both the check and the code now say the real one, and name your
+decision.
+
+**Not one line of this decides who may do anything.** No role is named, tested or
+branched on anywhere in the new code. The database refuses, in its own words, and
+those words are passed straight back.
+
+---
+
+## 2026-07-27 · A run belongs to a deal, and the run screens stop showing everybody everything
+
+**Assembled contracts are now recorded** — the library as it stood, the rules as
+they stood, the run, its decisions and its findings, all in one act. If any part
+of it fails, none of it lands: these records can never be deleted, so a
+half-written one could never be tidied away.
+
+**Three things the database was not doing, and now does.** Migration 0025.
+
+**One — a requester could record a run against anybody's deal.** Your settled
+decision says every run belongs to a deal; there was no rule behind it. The rule
+that decided *who may record a run* checked only what job you hold, never whose
+deal it was. Now a requester may only run against their own deals. Legal may
+still run against any deal, which is their job.
+
+**Two — and closing that alone would have achieved nothing.** The same hole
+existed one table over: a requester turned away from someone else's run could
+still bolt decisions and findings onto it, permanently. Both are closed
+together, because closing one without the other is a locked door beside an open
+window.
+
+**Three — the two run screens showed every run to everyone who could open them.**
+Not a permissions bug in the usual sense: a screen built on top of a protected
+table does not inherit that protection, and this is the fourth time this system
+has been bitten by exactly that. Both now ask who is looking.
+
+**Deliberately left alone: the Administrator.** That role can read every run's
+underlying rows but neither of the two run screens. Closing it is one line, and
+it is not ours to write — it is a decision about what the Administrator is for,
+and burying it inside a technical migration would put a new control in the last
+place anyone would look. Written down, with the one line, for you.
+
+**A fix in the plan was half a fix, and would have failed in production.** The
+plan handled repeat records on the two parent tables. That moves the problem one
+table along rather than removing it: the second attempt writes the parent
+harmlessly and then trips on the very next row. Under two people submitting at
+once, one of them would have been told their contract was *rejected on its
+merits* — because nothing had changed since the last run. Now handled on all five
+tables, with one rule instead of two, and a check that fails if anyone puts it
+back to two.
+
+**A check was retired honestly rather than kept for the count.** One check
+guarded "record the attempt before consulting the engine." Once runs are stored,
+a viewer is stopped twice over, so breaking that ordering no longer shows up
+anywhere a test can see. It now guards what it can still see — that a refused
+call still leaves a trace — and the old claim is written down as retired, with
+why. A check that cannot be seen to fail reads as protection and is not.
+
+---
+
+## 2026-07-27 · The contract comes out as a file, and has to earn it first
+
+**You can now download the assembled contract as a Word document.** It is the
+first thing this service has ever handed back that is not a list of records.
+
+**No document comes out of a run that cannot prove itself.** Before a single
+byte is built, the endpoint rebuilds the library that run was taken against and
+re-runs the decisions. If either comes back different, it refuses and names both
+figures — the one stored and the one just computed. A contract that cannot be
+shown to follow from an unchangeable record is not a weaker contract; it is a
+different one wearing the same name.
+
+**The date on the document is the run's own date, not today's.** Without that,
+the same unchangeable run would produce a different file tomorrow, and two
+entries in a record that can never be corrected would legitimately disagree
+about which file it was. Now a run's paper is identical forever, and the record
+can name its fingerprint honestly.
+
+**One instruction in the plan carried the wrong reason, and the wrong reason was
+dangerous.** It said not to re-run the trust-boundary check on the stored
+manifest, because doing so would empty a field. That is false — and anyone who
+checked would find it false and "fix" it. The real reason is the opposite way
+round: re-checking against TODAY's category list would silently drop a risk that
+was perfectly legitimate when the run was recorded, change the result, and make
+the download refuse. It would report "this contract does not reproduce" when
+what actually happened is that Legal retired a category. That is the one thing
+this refusal must never mean. The true reason is now written beside the code.
+
+**An auditor cannot download a pre-execution contract.** Producing one writes a
+line to the record, and auditors deliberately cannot write to the record. Rather
+than open a side door around the caller's own connection — the exact privileged
+path this whole layer exists to make impossible — it stays refused, written down,
+with a test. Reversing it is a one-line permission change, not code.
+
+**Two conditions the schema makes untestable, recorded rather than faked.** A
+stored contract clause with no wording behind it, and a pinned ladder with no
+rungs, can both be refused correctly — but neither can be created by any act the
+system permits, because clause wording is immutable and never deleted. The checks
+prove the wiring using the engine's real sentence and say plainly that the
+condition cannot be reached through the front door.
+
+---
+
+## 2026-07-27 · Signing a contract is now a governed act with three gates
+
+**Filing an executed agreement used to be something only the database owner
+could do, by hand.** It is now an endpoint anyone in Legal can use, with the
+database deciding who may — a requester, a viewer and an auditor are all turned
+away, and not one line of the new code mentions a role.
+
+**Three checks stand between a run and a signature, and all three run before the
+record freezes.** That ordering is the whole thing: filing the agreement moves
+the deal to "executed" by itself, and a check placed after that would pass
+forever without ever being wrong out loud.
+
+**One — the run must belong to the deal being signed.** Nothing in the database
+tied them together, and Legal may assemble against any deal. Without this check
+Legal could sign deal B while citing deal A's assembly — permanently, with the
+record calling it legitimate.
+
+**Two — every clause must still be one the library would choose today.** This is
+the deviation flagged earlier and it is now built: the plan asked only about
+expiry dates, which turn out to be untestable because an expired clause can never
+get into a contract in the first place. The check asks the broader question, and
+it deliberately still allows a clause that has a replacement but is permitted to
+keep being used — the library would still choose it, so refusing would be a false
+refusal on the one act that cannot be undone. Both directions are tested, and the
+allowing one is the test that stops a later author "tightening" it into a bug.
+
+**Three — a blocked contract may only be signed if every blocking finding was
+individually approved.** The obvious place to look for that answer is a column on
+the run marked "overridden". That column is wrong: it is written once and can
+never change, so a check reading it would leave every blocked contract unsignable
+no matter what Legal approved, and the entire override workflow would end in a
+filing cabinet. The check reads the approvals themselves. A test proves the
+column is still false after a successfully approved signing, which is how we know.
+
+**Both directions of that gate have their own check.** A gate that refuses
+everything would pass a test that only proves refusal. One check breaks the
+approval lookup specifically, so the "yes" half is guarded too.
+
+**The signature certificate's actual file is refused, with a reason.** The
+document store does not exist yet, so there is nowhere to put it. A caller who
+sends one is told; silently dropping it would leave them believing it was filed.
+
+**And the reading room finally has something in it.** A counterparty shown a
+signed agreement can now see its wording — the first time that screen has ever
+returned a row, and it does so off a real assembly, not a fixture.
+
+---
+
+## 2026-07-27 · The screens finally do what the rail has been promising
+
+**A requester can now, on one screen: say which risks are in scope, check that
+list, assemble the contract, read what was selected and why, download it as a
+Word document, and ask for an override on whatever blocked it.** Until today
+every one of those was a stub or a typed-in box.
+
+**Checking and assembling are two separate buttons, deliberately.** Checking
+records nothing. Assembling records something that can never be edited or
+removed. Learning that a category was invented AFTER making a permanent record
+is a worse way to learn it, so assembling stays unavailable until the check has
+passed.
+
+**The categories come from the library, not from a list on the screen.** A
+category this page invented would be refused by the trust boundary, and the
+person would be told a model hallucinated when in fact the screen did.
+
+**The override form no longer asks people to type a reference.** It ticks the
+findings that actually blocked the run. This matters more than it looks: that
+reference is what the signing gate matches an approval against, and a typed one
+can be typed wrong. A wrong one is not caught when it is written — it is
+accepted, decided by Legal, and then covers nothing at the signature, which is
+the worst possible moment. One function on each side builds the reference, and
+matching at the gate refuses rather than guesses.
+
+**Downloading is split on purpose, and the split is checked.** The transport
+fetches the file and shapes a refusal into a sentence; the requester's screen —
+and only that screen — actually saves it. A check asserts the transport contains
+no file-saving code at all, because if it did, every screen would download by
+accident and the rule that the counterparty has no export path would quietly
+stop meaning anything.
+
+**Legal's side: read any assembly, and file the signed agreement.** The filing
+form asks for the document's fingerprint and the named signatories — your
+settled decision — and there is no certificate field, because there is nowhere
+to keep the file yet. The gap is shown on screen rather than hidden.
+
+**Filing takes two clicks, and the second one shows exactly what will be
+written.** Everything filed is frozen on landing, so a one-click button is how a
+typo becomes a permanent wrong fact about a signed contract. A check breaks the
+second look and expects the test to notice.
+
+**No permission decision is made on any of these screens.** The buttons are
+offered to whoever is looking. The database refuses, and what the person sees is
+the database's own sentence. Hiding a button would look like a rule while
+enforcing nothing.
+
+**A check tripped on its own warning, again.** The new screen SAYS the signature
+certificate cannot be attached yet — that is the gap shown honestly — and a check
+searching for the word "certificate" failed on the sentence explaining the very
+thing it was policing. Same trap as the "force" ban. The check now looks for a
+field and a sent value, which is what actually matters.
+
+**And one check was moved rather than deleted.** A check required the phrase
+"not built yet" on the requester's screen. The thing it referred to is built; the
+honest fact it guarded — the screen still declares its own gaps — is still true.
+It now checks that the gap-declaring component is there and that what it names is
+the intake interview, which genuinely is not built. Structure, not wording.
+
+---
+
+## 2026-07-27 · The browser walk — the whole thing, clicked through by hand
+
+**Done in a real browser against a real database, and recorded as manual rather
+than claimed as automated.** The screen checks read source code; they prove
+shape, not that anything renders. This is the part that proves it renders.
+
+**Set up on its own throwaway database** so nothing in the working development
+database was created, seeded or dropped.
+
+**What was actually done, in order, entirely by clicking:**
+
+1. Signed in as the requester. Opened the deal.
+2. Chose a risk from the library's own category list, checked it, and watched
+   the check unlock the assemble button — which stays locked until it passes.
+3. Assembled the contract. The engine ran: the boilerplate Definitions clause
+   was pulled in automatically, the data-protection clause was matched, the
+   cross-border rule fired, and the gate closed. All of it on screen, in the
+   engine's own words.
+4. Downloaded the contract. A real file, named by the server, built from the run.
+5. Asked for an override. The blocking finding was offered as a tickbox
+   carrying its own reference — the exact reference the signing gate matches
+   against. Recorded, one person told, window opened, and the screen said the
+   finding still blocks.
+6. Assembled a second, clean contract. An assembly picker appeared.
+7. Signed in as the Legal reviewer. Both assemblies were listed with their gate
+   states. Opened one and filed the signed agreement.
+8. The filing took two clicks. The second showed exactly what was about to
+   become permanent — file, size, deal, assembly, dates, who signed — before
+   anything was written.
+9. Signed in as the counterparty. The reading room showed the signed agreement
+   and its wording, with who shared it and why.
+
+**Checked afterwards in the record, not taken on trust:** one signing event, one
+document freeze, one document produced, two assemblies, and the deal moved to
+"executed" by the system rather than by the screen. Exactly one of each — no
+duplicate written by the endpoint alongside the one the database writes itself.
+
+**No errors in the browser console at any point.**
+
+---
+
+## 2026-07-27 · Three decisions, and one of them turned a defect into a feature
+
+**Your U13 file is landed.** The old check that demanded the Administrator be
+able to read *why* a contract is frozen now says the opposite, and a second
+check sits beside it proving they can still see *that* it is frozen. The two are
+next to each other on purpose, so nobody later reads the absence as an oversight
+and puts it back. The whole bar is green for the first time: 21 of 21.
+
+**The Administrator now sees the assembly summaries.** Your words: seeing an
+alarm you can't investigate is worse than either alternative.
+
+**And that fix had a trap in it that this system has already paid for once.**
+The obvious change is a one-line permission. That alone would have been *worse
+than the gap*: the summaries were narrowed last week to answer only people they
+recognise, and the Administrator was not on that list. Grant the permission
+without adding them, and every request succeeds and returns nothing — the screen
+telling the one person who can see every alarm in the company that no contract
+has ever been assembled. That is exactly the legal-holds failure you settled
+with U13: an inert permission, so the system *filtered* instead of *refusing*,
+and an Administrator was shown "No holds are open" while a hold was open. The
+change does both halves, and the checks now count rows rather than checking for
+an error — because "no error" is precisely what the broken version reports.
+
+**COLLEAGUES SEEING EACH OTHER'S WORK IS NOT A DEFECT — IT IS THE POINT.** Your
+decision, and it inverts what was reported to you. Cover matters: a buyer on
+holiday should not take their deals offline with them, and a colleague picking
+one up should not need an access request. The five screens flagged as leaking
+were doing the right thing by accident. Nothing was narrowed.
+
+**Why:** this reverses the instinct that any unscoped screen is a bug. The
+question is not "can somebody see this" but "should a colleague be able to cover
+for them". Confidentiality becomes the exception a person chooses, not the
+default the system imposes.
+
+**How to apply:** openness is the default; hiding a deal is an explicit act.
+Before that can be built, four things need Mike: who may mark and unmark a deal,
+and whether unmarking is recorded the way every other reversal here is; whether
+Legal, the Auditor and the Administrator still see a hidden deal (almost
+certainly yes — the Auditor's whole job is that nothing is invisible); whether a
+colleague sees nothing at all or sees "confidential", because a silent
+disappearance means somebody covering cannot tell a hidden deal from one that
+does not exist; and whether marking a deal covers the concessions and positions
+underneath it. It is a new capability across the deal record, every deal list,
+and the negotiation family — its own plan, not a scoping fix.
+
+**One consequence flagged and deliberately not acted on.** The same principle
+argues against a narrowing that predates all of this: a requester sees only
+their own assembled contracts, because the run table has said so since 0005. The
+recent change made the two new screens *obey* that rule rather than bypass it —
+it did not invent it. If openness-with-an-opt-out is the house rule, that rule is
+a candidate to go too, and widening who sees every assembled contract in the
+company is a decision rather than a tidy-up.
+
+## U14 — D-4 draft-record fields — SETTLED (except one) 2026-07-27
+Mike answered the D-4 session sheet (docs/D4-DRAFT-RECORD-SESSION-PREP-2026-07-27.md §7):
+F1 edit-quality figure on the TICKET, never empty; F2 intended purpose, F3 known limitations,
+F4 model performance all on the DRAFT, never empty, fixed/frozen at creation or use. "Never empty"
+overrides the empty-for-old-records recommendation because development data is synthetic and
+rebuilt — old records do not survive into production. 1.3 (database-computed vs caller-supplied
+for F1) DEFERRED pending plain explanation, provided same day. Scope confirmed: four fields only.
+
+## U14a — Risk-exposure score — NEW, recorded 2026-07-27
+Mike wants an AI-calculated "risk exposure" score: baselined on the original clause, estimating
+the % of risk transferred from supplier to customer by accepting a concession. Recorded as a
+separate question per the D-4 scope rule — belongs to round analysis (plan WP-3 / package NC-17)
+as an advisory estimate, never a decision, never caller-supplied. Not a draft-record field.
+
+## U14 addendum — D-4 CLOSED 2026-07-27
+1.3 settled by Mike: DATABASE-COMPUTED. The edit-quality figure is calculated by the database at
+the moment of approval; whatever the calling software supplies is ignored and overwritten — the
+same rule as edited_before_approval. All twelve D-4 questions now answered; NC-11 unblocked.
+
+## U14b — F1 kept, with its meaning stated 2026-07-27
+Mike challenged the edit-quality score twice (meaning-blind arithmetic; added words) and then
+ruled: KEEP it. For the record: the figure measures how far apart the AI text and the approved
+text are — additions count as much as deletions — and it claims only "a person worked on this,"
+never "the meaning changed this much." Meaning-level comparison is the AI's job (WP-4/WP-8), and
+review-depth-as-judgment may be added later as a separately-labelled AI advisory, not in place of
+the measurement.
+
+## U14c — Two AI advisory measurements wanted 2026-07-27
+Mike wants BOTH, as features (not maybes): (1) an AI semantic content-difference measurement —
+how much the MEANING changed between the AI draft and the approved text (and between our clause
+and a supplier's version) — living alongside the arithmetic F1 score as a separately-labelled AI
+advisory, never replacing the measurement (U14b); (2) the risk-exposure score (U14a) — AI-estimated
+% of risk transferred supplier→customer by accepting a concession. Both are AI judgments: stored
+with provenance (model, version, inputs), labelled estimates, never caller-alterable, never
+decisions. Semantic-difference attaches to WP-6's metrics surface; risk exposure to WP-3 round
+analysis (NC-17). Neither is a field on the frozen draft/ticket record — an AI judgment arrives
+after the fact and lives in its own advisory record; the D-4 four-field ruling stands unchanged.
+
+## U14d — Risk exposure covers PROPOSED moves too 2026-07-27
+Mike extended U14a: the AI risk-exposure estimate applies not only to an accepted concession
+(retrospective) but to every PROPOSED negotiation move — each alternative shown in round analysis
+carries an AI-estimated % of risk it would transfer from supplier to customer, before the buyer
+chooses. Same judgment rules: advisory, provenance-stamped, labelled estimate, never a decision,
+never caller-supplied. Home: WP-3 round analysis (NC-17 area), shown beside the ladder ranking.
+
+## U14e — In-product AI judgment is intended scope, not an open question 2026-07-27
+Mike, correcting an over-cautious gate: Clausewerk calling AI judgment inside the negotiation
+module was always the intent — it analyzes risk AND drafts recommended language for attorney
+approval (the review queue's proposal→named-lawyer flow is the built home for that). D-8 is NOT
+"may the product call a model" — that is settled by the plan (WP-3, WP-5). D-8 reduces to
+provider selection: which model provider, whose key, one bill. Still owner-named before the
+first call is wired, but it is procurement, not scope.
+
+## D-8 — Model provider — SETTLED 2026-07-27
+Mike: OpenAI is the model provider for this project's in-product AI judgments, chosen for token
+efficiency. D-8 was procurement only (in-product AI judgment itself was settled intent, U14e).
+The adapter seam (NC-25) is built provider-thin so this remains one integration point; the key is
+Mike's to supply and never lands in the repository.
