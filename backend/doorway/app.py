@@ -66,6 +66,32 @@ class Download:
     filename: str
 
 
+@dataclass(frozen=True)
+class Upload:
+    """A request that is bytes rather than a record. The mirror of Download.
+
+    A THIRD type rather than a wider body, for the same reason Download is a
+    second one: `handle`'s `body` stays annotated `dict`, every existing
+    handler goes on reading named fields off it, and nothing downstream has to
+    ask "is this body a document or a record?".
+
+    NOTHING IS PERSISTED BY THE TRANSPORT. This type is what arrived, held in
+    memory, handed to whichever act was asked for. Where document bytes live is
+    an open question in this package's own words — `cw.negotiation_round`
+    carries a `storage_uri` and nothing in the repository is a document store —
+    and receiving is deliberately separated from storing so that the answer,
+    when it comes, changes one act and not the doorway.
+
+    `filename` is what the caller SAID it was called, unedited. This layer does
+    not sanitise it, on the same principle as the outbound path: a transport
+    that quietly rewrites a name is a transport that can be argued with about
+    what the name was. Whatever records it refuses the ones it cannot accept.
+    """
+    body: bytes
+    content_type: str
+    filename: str | None
+
+
 # THE ONLY SPELLING OF THIS STRING IN THE REPOSITORY. It lives here because
 # this file owns the Download type; server.py never learns what Word is, it
 # reads `download.content_type`. Two copies of one constant in two files is
@@ -126,7 +152,15 @@ class App:
         token: str | None = None,
         body: dict | None = None,
         query: dict[str, str] | None = None,
+        upload: Upload | None = None,
     ) -> Response | Download:
+        # A document that arrived over the wire, or None — which is every
+        # request today. NO ENDPOINT CONSUMES IT YET: recording a received
+        # redline is its own act (NC-09), and this package deliberately stops
+        # at the doorway. An upload addressed to an endpoint that does not take
+        # one falls through to the ordinary 404 below, which is the truth.
+        _ = upload
+
         # What the browser named in the query string, already narrowed to the
         # keys server.py will carry (server.QUERY_KEYS). Its one consumer is
         # GET /runs/contract, which has to say WHICH run to build.

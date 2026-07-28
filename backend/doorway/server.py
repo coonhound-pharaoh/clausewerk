@@ -40,6 +40,17 @@ is one branch in `_respond` and one writer beneath it, and it is deliberately
 the whole of the change: `app.Download` carries what the file IS, so this file
 never learns what Word is.
 
+AND NOT EVERYTHING THAT ARRIVES HERE IS JSON EITHER
+
+The mirror of the paragraph above, and the whole of this file's inbound change.
+A POST whose content type is not JSON is a DOCUMENT: the bytes are read once,
+measured against their own limit, wrapped in `app.Upload` and handed on
+untouched. This file never learns what a .docx is on the way in either. The
+JSON path is chosen by the same header and is otherwise exactly as it was.
+
+Nothing is stored here. Receiving and storing are separate acts on purpose —
+see `app.Upload`.
+
 WHY THE DOCUMENT SELECTOR TRAVELS IN THE URL, and what the alternative was
 
 Asking for a document is a READ, and `GET /runs/contract?run=…` says so. The
@@ -69,13 +80,27 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from doorway.app import App, Download, Response
+from doorway.app import App, Download, Response, Upload
 from doorway.db import Database
 
 # A body bigger than this is refused unread. The JavaScript destroyed the socket
 # at the same size; the point is that an unbounded read is a way to exhaust the
 # service with one request.
 MAX_BODY = 1_000_000
+
+# THE LARGEST DOCUMENT THE SYSTEM WILL ACCEPT, and it is a PRODUCT FACT, not a
+# technical detail: it decides which real contracts can be filed and which are
+# turned away at the door. It sits here, one greppable line beside MAX_BODY, so
+# the owner can see it and change it in one place.
+#
+# THE OWNER QUESTION, STILL OPEN: how big may a received redline be? Ten
+# megabytes is a working placeholder chosen to be comfortably larger than any
+# negotiated contract in Word and far smaller than anything that would hurt the
+# service — it is NOT an answer. When the owner names a number, this line is the
+# only thing that changes. If the limit later has to be changed without a
+# deploy, it becomes a governance setting; it is a constant today because there
+# is no such setting and inventing one would settle the question quietly.
+MAX_DOCUMENT_BYTES = 10_000_000
 
 # The COMPLETE list of what a browser may name in a query string, in the same
 # spirit as reads.READS: one greppable line, so adding a second key is a visible
@@ -120,6 +145,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+
+        if self._is_document():
+            upload, refused = self._read_document()
+            if refused is not None:
+                self._respond(refused)
+                return
+            self._respond(self.app.handle("POST", self._endpoint(parsed.path),
+                                          token=self._token(), upload=upload))
+            return
+
         body, refused = self._read_body()
         if refused is not None:
             self._respond(refused)
@@ -167,6 +202,77 @@ class Handler(BaseHTTPRequestHandler):
             # the wrong shape, which is a 400 by this file's own rules.
             return None, Response(400, {"error": "the request body must be a JSON object"})
         return parsed, None
+
+    # ── Bytes in ────────────────────────────────────────────────────────────
+
+    def _content_type(self) -> str:
+        """The media type alone, lowercased, without its parameters."""
+        return (self.headers.get("content-type") or "").split(";")[0].strip().lower()
+
+    def _is_document(self) -> bool:
+        """Is this POST carrying a document rather than a record?
+
+        Stated as "not JSON" rather than as a list of document types, and that
+        is deliberate in both directions. A missing content type is JSON, which
+        is what every existing caller and every existing test relies on; and a
+        caller sending a .docx, a PDF or plain bytes does not have to be added
+        to a list here before the system will take their paper. What the bytes
+        ARE is the receiving act's question, not the transport's.
+        """
+        kind = self._content_type()
+        return bool(kind) and kind != "application/json"
+
+    def _read_document(self) -> tuple[Upload | None, Response | None]:
+        """Bytes in, measured, named, and not touched on the way.
+
+        Every refusal here is a 400 that names the problem or the 413 that says
+        the document is too large. None of them is a 500: a caller sending a
+        malformed upload made a mistake, and "we broke" would send them to
+        argue with somebody about a bug that is not there.
+        """
+        try:
+            length = int(self.headers.get("content-length") or 0)
+        except ValueError:
+            return None, Response(400, {"error": "unreadable request"})
+        if length > MAX_DOCUMENT_BYTES:
+            # Refused UNREAD, which is the entire point of checking the header
+            # first: a service that reads a gigabyte before deciding it did not
+            # want it can be exhausted by one request.
+            return None, Response(413, {"error": "that document is too large"})
+        if length <= 0:
+            return None, Response(400, {"error": "that request carried no document"})
+
+        body = self.rfile.read(length)
+        if len(body) != length:
+            # A short read is a truncated upload. Passed on, it would be stored
+            # and hashed as though it were the whole document — a provenance
+            # record of a file nobody ever sent.
+            return None, Response(400, {"error": "that document arrived incomplete"})
+
+        return Upload(body=body, content_type=self._content_type(),
+                      filename=self._upload_filename()), None
+
+    def _upload_filename(self) -> str | None:
+        """What the caller said the file is called, or nothing.
+
+        NOT SANITISED HERE, on the same principle as the outbound path: a name
+        is the caller's claim about their own document, and a transport that
+        rewrites it is a transport that can be argued with about what the name
+        was. Whichever act records the document refuses the names it cannot
+        accept.
+        """
+        header = self.headers.get("content-disposition") or ""
+        marker = "filename="
+        at = header.lower().find(marker)
+        if at < 0:
+            return None
+        value = header[at + len(marker):].strip()
+        if value.startswith('"'):
+            closing = value.find('"', 1)
+            value = value[1:closing] if closing > 0 else value[1:]
+        else:
+            value = value.split(";")[0].strip()
+        return value or None
 
     def _serve_static(self, path: str) -> bool:
         """Serve a file from the static root, or report that there is none.

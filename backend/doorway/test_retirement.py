@@ -348,11 +348,23 @@ def test_the_service_reads_exactly_one_header(running):
             re.findall(r"""self\.headers\.get\(\s*["']([^"']+)["']""", source)}
 
     assert "authorization" in read, "the bearer token is not being read at all"
-    assert read == {"authorization", "content-length"}, (
-        f"server.py reads {sorted(read)}. Only two headers may be read: the one "
-        "naming the session, and the length of the body. Anything else is a new "
-        "way for a caller to influence a request."
+    assert read == {"authorization", "content-length", "content-type",
+                    "content-disposition"}, (
+        f"server.py reads {sorted(read)}. Only these four headers may be read: "
+        "the one naming the SESSION, and three describing the BODY — its "
+        "length, its kind, and, for a document, the name the caller gave it. "
+        "Anything else is a new way for a caller to influence a request."
     )
+    # WIDENED FROM TWO TO FOUR when the system learned to RECEIVE a document
+    # (2026-07-27), and the distinction the rule actually protects is unchanged:
+    # not one of these four says anything about WHO is calling or WHAT THEY MAY
+    # DO. Authorization names a session, never a person and never a role;
+    # content-type chooses between a record and a document and nothing else;
+    # content-disposition is a name carried through untouched for whichever act
+    # records the document to accept or refuse. Identity still comes from the
+    # session, the role still comes from the database, and the rows still come
+    # from a policy. A header that influenced any of those three would be the
+    # thing this test exists to stop, and none of these does.
 
 
 # ── Concurrency, which is new ───────────────────────────────────────────────

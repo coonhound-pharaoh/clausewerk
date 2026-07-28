@@ -163,6 +163,26 @@ MUTATIONS = [
         "test_server.py::test_a_download_leaves_as_bytes_with_its_own_content_type",
     ),
     (
+        # Bytes in, and the mirror of the row above. A .docx is a zip: read as
+        # JSON it is refused as malformed, so the system simply cannot be given
+        # a document — which is the state this package found.
+        "an inbound document is read as JSON",
+        "doorway/server.py",
+        "        if self._is_document():",
+        "        if False:",
+        "test_server.py::test_a_document_arrives_as_bytes_and_reaches_the_app_unchanged",
+    ),
+    (
+        # The size limit is a product fact, and the check has to happen on the
+        # declared length BEFORE the read. Broken, one request reads whatever it
+        # likes into memory.
+        "a document over the limit is read anyway",
+        "doorway/server.py",
+        "        if length > MAX_DOCUMENT_BYTES:",
+        "        if False:",
+        "test_server.py::test_a_document_over_the_limit_is_refused_unread",
+    ),
+    (
         "the sign-in reply exports the raw session clock again",
         "doorway/app.py",
         '            "expiresInSeconds": length,',

@@ -29,7 +29,8 @@ from pathlib import Path
 import psycopg
 import pytest
 
-from doorway.app import DOCX_TYPE, Download, Response
+from doorway import server as server_module
+from doorway.app import DOCX_TYPE, Download, Response, Upload
 from doorway.seed_demo import PEOPLE, seed
 from doorway.server import serve
 
@@ -419,9 +420,10 @@ class Records:
         self.answer = answer
         self.seen: list[dict] = []
 
-    def handle(self, method, path, token=None, body=None, query=None):
+    def handle(self, method, path, token=None, body=None, query=None,
+               upload=None):
         self.seen.append({"method": method, "path": path,
-                          "body": body, "query": query})
+                          "body": body, "query": query, "upload": upload})
         return self.answer
 
 
@@ -539,6 +541,135 @@ def test_every_json_endpoint_still_answers_as_json(running):
         assert json.loads(over_the_wire) == json.loads(
             json.dumps(direct.body, default=str)), (
             f"{path} arrives as something other than what App.handle answered")
+
+
+# ── And not everything that arrives here is JSON ────────────────────────────
+#
+# The inbound transport seam, and only the seam. NOTHING in the service consumes
+# an Upload yet — the first thing that will is recording a received redline — so
+# these tests stand up a stub App and prove the WIRE, exactly as the outbound
+# tests above do. Nothing is stored: this package receives, it does not persist.
+
+
+def post_bytes(base: str, path: str, payload: bytes, content_type: str,
+               filename: str | None = None):
+    """A POST that is a document rather than a record."""
+    headers = {"content-type": content_type}
+    if filename is not None:
+        headers["content-disposition"] = f'attachment; filename="{filename}"'
+    request = urllib.request.Request(base + path, method="POST", data=payload,
+                                     headers=headers)
+    try:
+        with urllib.request.urlopen(request) as reply:
+            return reply.status, json.loads(reply.read() or b"null")
+    except urllib.error.HTTPError as refused:
+        raw = refused.read()
+        try:
+            return refused.code, json.loads(raw or b"null")
+        except json.JSONDecodeError:
+            return refused.code, {"error": raw.decode("utf-8", "replace")}
+
+
+def test_a_document_arrives_as_bytes_and_reaches_the_app_unchanged():
+    """The exact bytes, the caller's own content type, the caller's own name.
+
+    The payload is deliberately neither valid UTF-8 nor valid JSON: a real
+    .docx is a zip, and the JSON path would not merely mangle it — it would
+    refuse it as malformed, which is what happened before this package.
+    """
+    payload = b"PK\x03\x04\x14\x00\x06\x00\xff\xfe not json, not text"
+    app = Records(Response(404, {"error": "no such endpoint"}))
+
+    with stub_serving(app) as base:
+        status, body = post_bytes(base, "/api/negotiation/redline", payload,
+                                  DOCX_TYPE, filename="round-3.docx")
+
+    arrived = app.seen[-1]["upload"]
+    assert isinstance(arrived, Upload), app.seen[-1]
+    assert arrived.body == payload, "the bytes were changed on the way in"
+    assert arrived.content_type == DOCX_TYPE
+    assert arrived.filename == "round-3.docx"
+    assert app.seen[-1]["body"] is None, (
+        "a document arrived as a record as well as a document")
+    # Nothing consumes an upload yet, so the ordinary 404 is the honest answer.
+    assert status == 404 and body.get("error") != "refused"
+
+
+def test_a_document_over_the_limit_is_refused_unread():
+    """The size limit is the product fact this package owns. Over it, the
+    request is refused on its declared length — before the bytes are read,
+    which is the whole point: a service that reads a gigabyte before deciding
+    it did not want it can be exhausted by one request."""
+    app = Records(Response(404, {"error": "no such endpoint"}))
+    held = server_module.MAX_DOCUMENT_BYTES
+    server_module.MAX_DOCUMENT_BYTES = 1_000
+    try:
+        with stub_serving(app) as base:
+            status, body = post_bytes(base, "/api/negotiation/redline",
+                                      b"x" * 4_000, DOCX_TYPE)
+    finally:
+        server_module.MAX_DOCUMENT_BYTES = held
+
+    assert status == 413, f"an oversized document got {status}: {body}"
+    assert body.get("error") != "refused", (
+        "a document that is too large is not a permission problem")
+    assert not app.seen, "the oversized document reached the app anyway"
+
+
+def test_a_document_that_is_not_there_is_a_400_and_not_a_crash():
+    """An upload with nothing in it is the caller's mistake, named as such.
+    Never a 500: "we broke" would send somebody to argue about a bug."""
+    app = Records(Response(404, {"error": "no such endpoint"}))
+
+    with stub_serving(app) as base:
+        status, body = post_bytes(base, "/api/negotiation/redline", b"",
+                                  DOCX_TYPE)
+
+    assert status == 400, f"an empty upload got {status}: {body}"
+    assert body.get("error") != "refused"
+    assert not app.seen
+
+
+# A DECLARED LENGTH LARGER THAN WHAT ARRIVES is guarded in `_read_document`
+# (the short-read check) and is deliberately NOT tested here: proving it needs a
+# client that promises bytes and then stops, which leaves the socket waiting for
+# a reply that cannot come until the read times out. It carries no mutation row
+# for the same reason — a row whose test cannot run reads as protection.
+
+
+def test_a_json_post_is_still_a_record_and_carries_no_document():
+    """The old path, proved unchanged rather than assumed unchanged: the branch
+    that chooses between bytes and JSON is the kind of edit that works for the
+    new case and quietly spoils the old one."""
+    app = Records(Response(404, {"error": "no such endpoint"}))
+
+    with stub_serving(app) as base:
+        Client(base).call("POST", "/api/accounts", {"person": "x@clausewerk"})
+
+    assert app.seen[-1]["body"] == {"person": "x@clausewerk"}
+    assert app.seen[-1]["upload"] is None, (
+        "a JSON record was taken for a document")
+
+
+def test_a_json_post_answers_byte_identically_to_what_the_app_said(running):
+    """The POST half of the parity check above, since do_POST is the method
+    this package changed."""
+    from doorway.server import Handler
+
+    request = urllib.request.Request(
+        running + "/api/sign-in", method="POST",
+        data=json.dumps({"person": "a.okafor@clausewerk"}).encode(),
+        headers={"content-type": "application/json"})
+    with urllib.request.urlopen(request) as reply:
+        over_the_wire = json.loads(reply.read())
+        assert reply.headers["content-type"] == "application/json"
+
+    direct = Handler.app.handle("POST", "/sign-in",
+                                body={"person": "a.okafor@clausewerk"})
+    assert set(over_the_wire) == set(direct.body), (
+        "the sign-in reply's fields moved between App.handle and the wire")
+    for field in ("expiresInSeconds", "person", "role", "display_name", "unit"):
+        assert over_the_wire[field] == direct.body[field]
 
 
 # ── The guard that must survive every package ───────────────────────────────
