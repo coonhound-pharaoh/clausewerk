@@ -257,12 +257,29 @@ await test('retiring IS permitted (the one allowed mutation)', async () => {
   await db.exec(`insert into cw.clause (clause_id,category_key,severity) values ('DP-H-021','data','High')
                  on conflict do nothing;
                  insert into cw.clause_version (clause_id,version,title,body,approved_on,expires_on,retired,retired_reason)
-                 values ('DP-H-021',1,'HIPAA','BAA required.','2024-02-01','2027-02-01',false,null);
-                 update cw.clause_version set retired=true, retired_reason='Policy withdrawn', retired_on=current_date
-                 where clause_id='DP-H-021' and version=1;`);
+                 values ('DP-H-021',1,'HIPAA','BAA required.','2024-02-01','2027-02-01',false,null);`);
+  const retired = await queryAs('legal_admin', `
+    update cw.clause_version
+       set retired=true, retired_reason='Policy withdrawn', retired_on='2000-01-01'
+     where clause_id='DP-H-021' and version=1
+     returning retired_on=current_date as retired_today`, [], 'test@clausewerk');
+  eq(retired[0].retired_today, true,
+     'the caller-supplied retirement date survived');
   const r = await one(`select state, selectable from cw.clause_version_state
                        where clause_id='DP-H-021' and version=1`);
   eq(r.state, 'retired'); eq(r.selectable, false);
+});
+await test('retirement evidence cannot be rewritten', async () => {
+  await throws(() => queryAs('legal_admin', `
+    update cw.clause_version
+       set retired_reason='A more convenient explanation', retired_on='2099-01-01'
+     where clause_id='DP-H-021' and version=1`,
+    [], 'test@clausewerk'), 'retirement evidence is immutable');
+  const r = await one(`select retired_reason, retired_on=current_date as retired_today
+                       from cw.clause_version
+                       where clause_id='DP-H-021' and version=1`);
+  eq(r.retired_reason, 'Policy withdrawn');
+  eq(r.retired_today, true);
 });
 await test('retiring without a reason is refused', async () => {
   await throws(

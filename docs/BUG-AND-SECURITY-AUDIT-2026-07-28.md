@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 97 — clause retirement evidence remained rewritable
+
+**Observed defect.** Retirement was one-way, but an already retired clause
+version's `retired_reason` and `retired_on` remained editable. The initial
+governed transition also accepted a caller-supplied date. Permanent withdrawal
+history could therefore be backdated and its rationale rewritten later.
+
+**Fix.** Both authoritative definitions of the version-immutability trigger now
+derive the governed retirement date on the one allowed transition and freeze
+the reason and date thereafter. The later migration replacement is covered so
+the invariant survives the complete migration chain.
+
+**Regression proof.** A legal admin submits a year-2000 retirement date; the
+database stores today. A subsequent attempt to replace both reason and date is
+refused, and the original evidence remains unchanged.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 82 passed
+- `node backend/db/test/executed.test.mjs` — 53 passed
+
 ## Cycle 96 — override-request opening time was caller-controlled
 
 **Observed defect.** Governed override requests bound the authenticated

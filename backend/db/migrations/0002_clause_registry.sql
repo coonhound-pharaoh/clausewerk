@@ -144,12 +144,24 @@ create trigger clause_version_bind_publication
 create or replace function cw.clause_version_immutable() returns trigger
 language plpgsql as $$
 begin
+  if old.retired
+     and (new.retired_reason is distinct from old.retired_reason
+          or new.retired_on is distinct from old.retired_on) then
+    raise exception
+      'clause_version %@v% retirement evidence is immutable; publish a new '
+      'version for a new legal decision',
+      old.clause_id, old.version
+      using errcode = 'restrict_violation';
+  end if;
   if old.retired and not new.retired then
     raise exception
       'clause_version %@v% is retired; un-retiring it is not an edit but a new '
       'approval — create a new version instead',
       old.clause_id, old.version
       using errcode = 'restrict_violation';
+  end if;
+  if not old.retired and new.retired and cw.app_role() is not null then
+    new.retired_on := current_date;
   end if;
   if new.clause_id is distinct from old.clause_id
      or new.version is distinct from old.version
