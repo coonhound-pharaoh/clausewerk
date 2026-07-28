@@ -180,7 +180,7 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
     except (urllib.error.URLError, TimeoutError, OSError) as unreachable:
         return _absent(f"the model could not be reached ({type(unreachable).__name__})",
                        model=model, prompt=prompt, inputs=inputs)
-    except (ValueError, json.JSONDecodeError):
+    except (ValueError, json.JSONDecodeError, RecursionError):
         return _absent("the model's reply was not readable",
                        model=model, prompt=prompt, inputs=inputs)
 
@@ -189,7 +189,7 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
         content = payload["choices"][0]["message"]["content"]
         answered = json.loads(content)
         score = float(answered["score"])
-    except (KeyError, IndexError, TypeError, ValueError):
+    except (KeyError, IndexError, TypeError, ValueError, RecursionError):
         return _absent("the model answered, but not with a judgment in the "
                        "shape that was asked for",
                        model=model, model_version=version,

@@ -2502,3 +2502,8 @@ with their diagnostic detail and returned as redacted 500 service failures.
 The advisory adapter accepts at most one megabyte from the model provider. It
 reads one sentinel byte beyond the limit and records an absent judgment instead
 of parsing or retaining an oversized reply.
+
+## S22 — Recursive model JSON becomes an absence — SETTLED 2026-07-28
+Excessive JSON nesting from the model provider is handled at both parsing
+layers. A RecursionError records an unreadable absent judgment and cannot
+interrupt the caller's governed work.

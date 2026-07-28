@@ -193,6 +193,18 @@ def test_the_adapter_bounds_the_providers_response(monkeypatch):
     assert oversized.tell() == advisory.MAX_RESPONSE_BYTES + 1
 
 
+def test_the_adapter_refuses_excessively_nested_provider_json(monkeypatch):
+    monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
+    nested = BytesIO(b"[" * 2_000 + b"]" * 2_000)
+    monkeypatch.setattr(advisory.urllib.request, "urlopen",
+                        lambda request, timeout: nested)
+
+    judgment = advisory.judge_semantic_difference(AI_TEXT, APPROVED)
+
+    assert judgment.outcome == "absent"
+    assert "not readable" in judgment.absent_reason
+
+
 def test_a_judgment_asked_for_without_a_model_is_answered_not_refused(people, db):
     answered = advisory.semantic_difference(db, LEGAL_CALLER,
                                             {"ticket_id": decided_ticket(db)})

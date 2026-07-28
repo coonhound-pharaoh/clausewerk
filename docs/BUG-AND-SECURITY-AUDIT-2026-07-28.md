@@ -58,6 +58,23 @@ reads only the bounded amount and returns an absence naming the oversized reply.
 - `python -m pytest doorway/test_advisory.py -q -k "adapter"`
 - `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
 
+## Cycle 8 — recursive model-provider JSON escaped the adapter
+
+**Observed defect.** A deeply nested but size-bounded provider reply caused
+`json.loads` to raise `RecursionError`. The adapter did not catch it, violating
+its promise that an advisory judgment can never interrupt the caller's work.
+
+**Fix.** Treat excessive JSON nesting at either the provider envelope or the
+model-content layer as an unreadable reply and record an absent judgment.
+
+**Regression proof.** A fake provider returns 2,000 nested arrays; the adapter
+returns an absence rather than raising.
+
+**Validation.**
+
+- `python -m pytest doorway/test_advisory.py -q -k "adapter"`
+- `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
+
 ## Cycle 5 — malformed query percent escapes
 
 **Observed defect.** Query parsing accepted malformed percent escapes literally.
