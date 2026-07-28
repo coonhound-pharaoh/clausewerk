@@ -227,6 +227,27 @@ def test_the_adapter_does_not_coerce_non_numeric_scores(monkeypatch, score):
     assert judgment.score is None
 
 
+@pytest.mark.parametrize("basis", [{"sentence": "not text"}, ["not", "text"], 7, True])
+def test_the_adapter_does_not_stringify_a_structured_basis(monkeypatch, basis):
+    class Reply(BytesIO):
+        def close(self):
+            pass
+
+    monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
+    response = json.dumps({
+        "model": "test-model",
+        "choices": [{"message": {"content": json.dumps(
+            {"score": 0.5, "basis": basis})}}],
+    }).encode()
+    monkeypatch.setattr(advisory.urllib.request, "urlopen",
+                        lambda request, timeout: Reply(response))
+
+    judgment = advisory.judge_semantic_difference(AI_TEXT, APPROVED)
+
+    assert judgment.outcome == "absent"
+    assert judgment.basis is None
+
+
 def test_a_judgment_asked_for_without_a_model_is_answered_not_refused(people, db):
     answered = advisory.semantic_difference(db, LEGAL_CALLER,
                                             {"ticket_id": decided_ticket(db)})

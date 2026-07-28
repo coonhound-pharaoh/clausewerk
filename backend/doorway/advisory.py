@@ -193,6 +193,9 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
         if isinstance(raw_score, bool) or not isinstance(raw_score, (int, float)):
             raise TypeError("score is not a JSON number")
         score = float(raw_score)
+        basis = answered.get("basis")
+        if basis is not None and not isinstance(basis, str):
+            raise TypeError("basis is not text")
     except (KeyError, IndexError, TypeError, ValueError, RecursionError):
         return _absent("the model answered, but not with a judgment in the "
                        "shape that was asked for",
@@ -208,7 +211,7 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
 
     return Judgment(
         score=score,
-        basis=str(answered.get("basis") or "") or None,
+        basis=basis or None,
         absent_reason=None,
         model=model, model_version=version, prompt=prompt, inputs=inputs)
 

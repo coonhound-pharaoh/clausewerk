@@ -58,6 +58,23 @@ reads only the bounded amount and returns an absence naming the oversized reply.
 - `python -m pytest doorway/test_advisory.py -q -k "adapter"`
 - `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
 
+## Cycle 15 — structured model basis was stringified
+
+**Observed defect.** A list, object, number, or boolean in the model's `basis`
+field was converted with `str()` and stored as if it were the requested
+explanatory sentence.
+
+**Fix.** Accept a basis only when it is text or absent. Structured and scalar
+non-text values make the whole reply an absent malformed judgment.
+
+**Regression proof.** Object, list, number, and boolean basis values must not
+produce recorded judgments or stored basis text.
+
+**Validation.**
+
+- `python -m pytest doorway/test_advisory.py -q -k "structured_basis"`
+- `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
+
 ## Cycle 9 — ambiguous duplicate DOCX members
 
 **Observed defect.** A ZIP can contain two entries with the same

@@ -2537,3 +2537,8 @@ from the text Legal reviews.
 The advisory adapter does not coerce booleans, strings, nulls, NaN, or infinity
 into scores. Only a finite JSON integer or float inside the zero-to-one range
 can become a recorded judgment.
+
+## S29 — Advisory basis is text, never a stringified object — SETTLED 2026-07-28
+The model basis may be text or absent. Objects, arrays, numbers, and booleans
+are malformed replies and cannot be converted into plausible-looking stored
+explanations.
