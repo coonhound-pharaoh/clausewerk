@@ -533,9 +533,15 @@ await test('a reviewer cannot decide a request they opened', async () => {
   await db.exec(`insert into cw.override_socialisation
                    (request_id,window_closes,window_setting,notified_count)
                  values (${own}, now() - interval '1 minute','48h',1)`);
-  await throws(() => queryAs('legal_reviewer',
-    `select cw.decide_override_finding($1,'data:F1','approved')`, [own], PAT),
+  await throws(() => queryAs('legal_reviewer', `
+    update cw.override_finding
+       set decision='approved', decided_by='forged@clausewerk', decided_at=now()
+     where request_id=$1 and finding_ref='data:F1'`, [own], PAT),
     'nobody decides their own override request');
+  const f = await one(`
+    select decision from cw.override_finding
+     where request_id=$1 and finding_ref='data:F1'`, [own]);
+  eq(f.decision, null, 'the direct self-decision bypass changed the finding');
 });
 
 // ── The record, and who can read it ──────────────────────────────────────

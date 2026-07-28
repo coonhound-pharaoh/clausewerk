@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S79 — Override self-decision separation lives on the row — SETTLED 2026-07-28
+The authenticated actor deciding an override finding cannot be the parent
+request opener. The row transition enforces this for helper calls and direct
+Legal SQL alike.
+
 ## S78 — Finding decision consequences live on the row transition — SETTLED 2026-07-28
 Every override-finding decision emits its audit event and, when it is the last
 decision, derives and closes the parent request. Helper calls and direct Legal

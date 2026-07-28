@@ -4,6 +4,24 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 65 — direct decisions bypassed self-review separation
+
+**Observed defect.** The no-self-decision check existed only in the helper
+function. A Legal person who opened an override request could directly update a
+finding after the review window and decide their own request.
+
+**Fix.** The finding transition trigger now compares the authenticated decision
+actor with the parent request opener and refuses self-decision on every update
+path.
+
+**Regression proof.** A reviewer-authored request with an elapsed window is
+approved by direct SQL from the same reviewer. The row trigger refuses it and
+the finding remains undecided.
+
+**Validation.**
+
+- `node backend/db/test/override.test.mjs` — 37 passed
+
 ## Cycle 64 — direct decisions skipped audit and parent closure
 
 **Observed defect.** Once a socialisation window elapsed, a direct Legal update

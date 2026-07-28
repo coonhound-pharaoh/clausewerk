@@ -426,7 +426,7 @@ end $$;
 -- ── Append-only-ish: a decision is not revisited ──────────────────────────
 create or replace function cw.override_finding_decided_once() returns trigger
 language plpgsql as $$
-declare s cw.override_socialisation%rowtype;
+declare s cw.override_socialisation%rowtype; r cw.override_request%rowtype;
 begin
   if old.decision is not null then
     raise exception 'finding % on request % was decided %; a decision is not '
@@ -442,6 +442,14 @@ begin
   end if;
 
   if new.decision is not null then
+    select * into r from cw.override_request
+     where request_id = old.request_id;
+    if r.requested_by = cw.app_actor() then
+      raise exception
+        'nobody decides their own override request — % asked for request %',
+        cw.app_actor(), old.request_id
+        using errcode = 'insufficient_privilege';
+    end if;
     select * into s from cw.override_socialisation
      where request_id = old.request_id;
     if not found then
