@@ -100,6 +100,15 @@ await test('a category short code cannot invalidate existing clause IDs', async 
 // ── WP-23 · the ID must agree with the category (finding D8) ────────────────
 console.log('\nclause ids agree with their category (WP-23, finding D8)');
 
+await test('a category label cannot invalidate existing manifests', async () => {
+  await throws(() => queryAs('legal_admin', `
+    update cw.category set label='Personal Data' where key='data'`,
+    [], 'test@clausewerk'), 'used by existing clause manifests');
+  const r = await one(`select label from cw.category where key='data'`);
+  eq(r.label, 'Data Privacy',
+    'the canonical manifest label changed underneath existing clauses');
+});
+
 await test('a clause id whose prefix disagrees with its category is refused', async () => {
   // cw.category.short is documented as "the two-letter code embedded in clause
   // IDs" and is UNIQUE so that "a clause ID always identifies exactly one

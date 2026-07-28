@@ -51,6 +51,26 @@ create trigger category_short_after_use_immutable
   before update on cw.category
   for each row execute function cw.category_short_after_use_immutable();
 
+-- Manifests cross the engine boundary with this canonical label rather than
+-- the storage key. Once a clause exists, renaming the label would make a
+-- previously valid manifest unresolvable without changing any clause evidence.
+create or replace function cw.category_label_after_use_immutable() returns trigger
+language plpgsql as $$
+begin
+  if new.label is distinct from old.label
+     and exists (select 1 from cw.clause where category_key = old.key) then
+    raise exception
+      'category % label % is used by existing clause manifests and cannot be '
+      'changed to %',
+      old.key, old.label, new.label using errcode = 'restrict_violation';
+  end if;
+  return new;
+end $$;
+
+create trigger category_label_after_use_immutable
+  before update on cw.category
+  for each row execute function cw.category_label_after_use_immutable();
+
 -- ════════════════════════════════════════════════════════════════════════════
 -- THE ID MUST AGREE WITH THE CATEGORY (WP-23 · finding D8)
 -- ════════════════════════════════════════════════════════════════════════════

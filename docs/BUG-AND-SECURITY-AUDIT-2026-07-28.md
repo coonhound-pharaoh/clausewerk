@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 109 — used category labels could invalidate manifests
+
+**Observed defect.** Engine manifests identify categories by their canonical
+database label, not their storage key. Legal could rename a category after
+clauses existed, causing previously valid manifests to fail resolution even
+though their clause evidence had not changed.
+
+**Fix.** A category label becomes immutable once the category has a clause,
+matching the existing protection for its clause-ID short code. Unused setup
+categories remain editable.
+
+**Regression proof.** Legal attempts to rename Data Privacy after its clauses
+exist. The database refuses the rename and preserves the canonical label that
+the engine uses at its trust boundary.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 87 passed
+- `python -m pytest backend/engine/test_loader.py` — 14 passed
+
 ## Cycle 108 — records-delegation evidence was rewritable
 
 **Observed defect.** Administrator UPDATE permission existed to revoke delegated
