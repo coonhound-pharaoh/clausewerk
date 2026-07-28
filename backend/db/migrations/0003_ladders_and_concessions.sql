@@ -285,6 +285,14 @@ begin
     new.approved_by := cw.app_actor();
   end if;
 
+  if cw.app_role() = 'requester'
+     and not cw.owns_agreement(new.agreement_id) then
+    raise exception
+      'requester % does not own agreement % and cannot record its concessions',
+      cw.app_actor(), new.agreement_id
+      using errcode = 'insufficient_privilege';
+  end if;
+
   -- The severity of the position we opened with. Single source of truth.
   select c.severity into sev
   from cw.clause c where c.clause_id = new.standard_clause_id;

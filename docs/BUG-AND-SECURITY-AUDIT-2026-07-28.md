@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 55 — requesters could write concessions to foreign deals
+
+**Observed defect.** The concession insert policy checked only the caller’s
+role. A requester could create immutable, audited commercial history against
+another buyer’s agreement, even though the requester could not read that deal
+or the injected concession afterward.
+
+**Fix.** The concession authority trigger now requires a requester to own the
+referenced agreement. Legal reviewer and Legal admin cross-deal authority is
+unchanged.
+
+**Regression proof.** A foreign requester attempts to concede on an owned test
+deal; the insert raises and the concession count remains unchanged.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs` — 47 passed
+- `node backend/db/test/ladder.test.mjs` — 56 passed
+
 ## Cycle 54 — requesters could forge deal ownership
 
 **Observed defect.** A requester creating an agreement could name another

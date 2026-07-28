@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S69 — Requester concessions are deal-owner scoped — SETTLED 2026-07-28
+A requester may record a concession only against an agreement they own. Legal
+reviewer and Legal admin cross-deal authority remains intact; a foreign
+requester cannot inject immutable commercial history into another deal.
+
 ## S68 — Requester-created deals bind ownership to session — SETTLED 2026-07-28
 A requester opening an agreement becomes its requester; they cannot inject a
 deal into another person’s RLS scope. Legal admins may still create and assign

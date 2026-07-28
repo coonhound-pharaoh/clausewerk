@@ -101,6 +101,14 @@ await test('a requester can record a concession — as the real role', async () 
   eq(f.n, 0, 'and nothing reads it as agreed');
 });
 
+await test('a requester cannot record a concession on another buyer’s deal', async () => {
+  await throws(() => concede('AG-001', 1, 'somebody.else@clausewerk'),
+    'does not own agreement AG-001');
+  const c = await one(`select count(*)::int n from cw.concession
+                        where agreement_id='AG-001'`);
+  eq(c.n, 1, 'the foreign requester must leave no immutable commercial record');
+});
+
 await test('a deal with no assigned attorney cannot settle anything', async () => {
   // Fail closed. An unassigned deal is a configuration gap, and the honest
   // behaviour is to refuse and say so — not to quietly need one fewer approval.
