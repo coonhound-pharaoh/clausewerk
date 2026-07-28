@@ -373,6 +373,8 @@ class Handler(BaseHTTPRequestHandler):
             decoded = unquote(path, errors="strict")
         except UnicodeDecodeError:
             return None, Response(400, {"error": "the path is not valid UTF-8"})
+        if "\0" in decoded:
+            return None, Response(400, {"error": "the path contains a null byte"})
         return decoded.lstrip("/") or "index.html", None
 
     def _serve_static(self, path: str) -> bool:

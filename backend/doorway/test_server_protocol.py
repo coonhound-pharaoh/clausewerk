@@ -143,6 +143,16 @@ def test_invalid_utf8_path_is_not_replaced_into_another_filename():
     assert refused.status == 400
 
 
+def test_null_byte_path_is_refused_before_filesystem_resolution():
+    handler = handler_with_headers()
+
+    relative, refused = handler._static_relative("/assets/app%00.js")
+
+    assert relative is None
+    assert refused is not None
+    assert refused.status == 400
+
+
 def test_malformed_absolute_request_target_is_a_400_not_a_crash():
     handler = handler_with_headers()
 

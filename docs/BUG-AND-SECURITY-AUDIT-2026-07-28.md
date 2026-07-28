@@ -22,6 +22,23 @@ and DOCX media types, asserts a 400 response, and proves no body byte was read.
 
 - `python -m pytest doorway/test_server_protocol.py -q`
 - `python -m py_compile doorway/server.py doorway/test_server_protocol.py`
+
+## Cycle 3 — embedded NUL in static paths
+
+**Observed defect.** A `%00` escape decoded into an embedded NUL and was passed
+to `Path.resolve()`, which raises an unexpected exception. Malformed caller
+input therefore became a 500 instead of a bounded 400 response.
+
+**Fix.** Reject decoded NUL characters before constructing or resolving a
+filesystem path.
+
+**Regression proof.** The protocol suite submits `/assets/app%00.js` and
+requires a 400 refusal from the URL-decoding boundary.
+
+**Validation.**
+
+- `python -m pytest doorway/test_server_protocol.py -q`
+- `python -m py_compile doorway/server.py doorway/test_server_protocol.py`
 - `python -m pytest engine -q`
 - Results: 12 protocol tests passed, both changed Python files compiled, and
   197 engine tests passed.

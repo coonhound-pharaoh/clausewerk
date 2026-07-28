@@ -2478,3 +2478,8 @@ already used for duplicate Content-Length and Authorization fields.
 The doorway preserves blank query-string values while counting occurrences.
 `run=&run=RUN-2` is two selectors and fails closed; a blank spelling cannot
 erase evidence that a security-sensitive document selector was duplicated.
+
+## S17 — Decoded NUL paths are caller errors — SETTLED 2026-07-28
+Static URL decoding rejects an embedded NUL before filesystem resolution.
+Malformed `%00` input receives a bounded 400 response rather than escaping as
+an internal service failure.
