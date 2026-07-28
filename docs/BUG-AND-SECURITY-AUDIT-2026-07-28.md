@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 106 — agreement-share evidence was rewritable
+
+**Observed defect.** Legal reviewers had UPDATE permission on agreement shares
+so that they could revoke access, but no transition guard limited that update.
+They could silently replace the agreement, viewer, purpose, sharer, or sharing
+time on a live row, or rewrite a revoked row's permanent evidence.
+
+**Fix.** Agreement shares now freeze their identity and creation evidence,
+permit exactly one live-to-revoked transition, and reject every later update.
+Changing the audience or rationale requires revoking the old share and creating
+a new, independently audited record.
+
+**Regression proof.** Legal attempts to replace the audience, attribution,
+timestamp, and purpose of a live share, then attempts to rewrite its revocation.
+Both updates are refused and the original evidence remains intact.
+
+**Validation.**
+
+- `node backend/db/test/reading-room.test.mjs` — 25 passed
+- `node backend/db/test/executed.test.mjs` — 53 passed
+
 ## Cycle 105 — unused drafts could rewrite creation provenance and expiry
 
 **Observed defect.** Governed draft inserts derived creator, creation time, and

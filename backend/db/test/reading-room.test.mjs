@@ -265,6 +265,25 @@ await test('the same agreement is not shared with the same person twice', async 
 });
 
 // ── Unsharing ────────────────────────────────────────────────────────────
+await test('share evidence cannot be rewritten instead of revoked', async () => {
+  await throws(() => queryAs('legal_reviewer',
+    `update cw.agreement_share
+        set shared_with = '${KIM}',
+            shared_by = 'impostor@clausewerk',
+            shared_at = '2000-01-01T00:00:00Z',
+            purpose = 'a different explanation'
+      where share_id = ${SHARE}`, [], PAT),
+    'evidence is immutable',
+    'Legal rewrote who could see an agreement, why, and the sharing provenance');
+  const r = await one(
+    `select shared_with, shared_by, purpose,
+            shared_at > now() - interval '1 minute' as shared_at_is_original
+       from cw.agreement_share where share_id = ${SHARE}`);
+  eq([r.shared_with, r.shared_by, r.shared_at_is_original],
+    [SAM, PAT, true]);
+  assert(/socialising/.test(r.purpose), 'the recorded sharing purpose was rewritten');
+});
+
 console.log('\nunsharing is recorded, and the reach closes');
 
 await test('revoking a share closes the viewer\'s access', async () => {
@@ -301,6 +320,15 @@ await test('the row survives — that they COULD see it does not stop being true
   eq(r.n, 1);
   await throws(() => db.exec(`delete from cw.agreement_share where share_id=${SHARE}`),
     'revoked, never deleted');
+});
+
+await test('a revoked share cannot be rewritten', async () => {
+  await throws(() => queryAs('legal_admin',
+    `update cw.agreement_share
+        set revoked_by = '${PAT}', revoked_at = now()
+      where share_id = ${SHARE}`, [], LEGAL),
+    'was revoked and cannot be rewritten',
+    'a revoked share still accepted edits to its permanent evidence');
 });
 
 await test('the same agreement can be shared again afterwards', async () => {

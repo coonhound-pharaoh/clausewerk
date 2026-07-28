@@ -70,6 +70,37 @@ comment on table cw.agreement_share is
   'Who was shown which signed agreement, by whom, why, and until when. Before '
   'this existed a viewer could read every executed agreement in the system.';
 
+create or replace function cw.agreement_share_evidence_immutable()
+returns trigger
+language plpgsql as $$
+begin
+  if new.share_id is distinct from old.share_id
+     or new.agreement_id is distinct from old.agreement_id
+     or new.shared_with is distinct from old.shared_with
+     or new.shared_by is distinct from old.shared_by
+     or new.shared_at is distinct from old.shared_at
+     or new.purpose is distinct from old.purpose then
+    raise exception 'share % evidence is immutable; revoke it and create a new share',
+      old.share_id using errcode = 'restrict_violation';
+  end if;
+
+  if old.revoked_at is not null then
+    raise exception 'share % was revoked and cannot be rewritten', old.share_id
+      using errcode = 'restrict_violation';
+  end if;
+
+  if new.revoked_at is null or new.revoked_by is null then
+    raise exception 'share % may only be updated by recording its revocation',
+      old.share_id using errcode = 'restrict_violation';
+  end if;
+
+  return new;
+end $$;
+
+create trigger agreement_share_evidence_immutable
+  before update on cw.agreement_share
+  for each row execute function cw.agreement_share_evidence_immutable();
+
 create or replace function cw.audit_agreement_share() returns trigger
 language plpgsql as $$
 begin
