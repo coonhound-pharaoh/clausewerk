@@ -189,7 +189,14 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
         return _absent("the model answered, but its response was not a JSON object",
                        model=model, prompt=prompt, inputs=inputs)
 
-    version = str(payload.get("model") or model)
+    reported_model = payload.get("model")
+    if reported_model is None:
+        version = model
+    elif not isinstance(reported_model, str) or not reported_model.strip():
+        return _absent("the model answered without usable model provenance",
+                       model=model, prompt=prompt, inputs=inputs)
+    else:
+        version = reported_model
     try:
         content = payload["choices"][0]["message"]["content"]
         answered = json.loads(content)

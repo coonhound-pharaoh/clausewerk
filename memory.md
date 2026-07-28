@@ -2547,3 +2547,8 @@ explanations.
 A syntactically valid JSON array, scalar, or null is not a provider response
 envelope. It records an absent judgment before any object fields are read and
 cannot escape the advisory adapter as AttributeError.
+
+## S31 — Model provenance must be nonblank text — SETTLED 2026-07-28
+Provider-reported model identity is accepted only as nonblank text. Structured
+or scalar non-text provenance cannot be stringified into an audit record; an
+omitted field alone falls back to the requested model.

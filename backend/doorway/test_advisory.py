@@ -264,6 +264,27 @@ def test_the_adapter_refuses_a_non_object_provider_envelope(monkeypatch, payload
     assert "not a JSON object" in judgment.absent_reason
 
 
+@pytest.mark.parametrize("reported_model", [{}, [], 7, True, ""])
+def test_the_adapter_refuses_structured_model_provenance(monkeypatch, reported_model):
+    class Reply(BytesIO):
+        def close(self):
+            pass
+
+    monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
+    response = json.dumps({
+        "model": reported_model,
+        "choices": [{"message": {"content": json.dumps(
+            {"score": 0.5, "basis": "test"})}}],
+    }).encode()
+    monkeypatch.setattr(advisory.urllib.request, "urlopen",
+                        lambda request, timeout: Reply(response))
+
+    judgment = advisory.judge_semantic_difference(AI_TEXT, APPROVED)
+
+    assert judgment.outcome == "absent"
+    assert judgment.model_version == advisory.UNKNOWN_VERSION
+
+
 def test_a_judgment_asked_for_without_a_model_is_answered_not_refused(people, db):
     answered = advisory.semantic_difference(db, LEGAL_CALLER,
                                             {"ticket_id": decided_ticket(db)})

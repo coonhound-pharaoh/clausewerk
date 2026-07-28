@@ -58,6 +58,24 @@ reads only the bounded amount and returns an absence naming the oversized reply.
 - `python -m pytest doorway/test_advisory.py -q -k "adapter"`
 - `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
 
+## Cycle 17 — structured model provenance was stringified
+
+**Observed defect.** A provider's object, array, number, boolean, or blank
+`model` field was converted to text and stored as the model version, fabricating
+provenance for an otherwise valid judgment.
+
+**Fix.** Accept provider-reported model identity only as nonblank text. Use the
+requested model only when the response omits the field; malformed supplied
+provenance makes the judgment absent.
+
+**Regression proof.** Five malformed model values must return absent judgments
+with unknown model-version provenance.
+
+**Validation.**
+
+- `python -m pytest doorway/test_advisory.py -q -k "structured_model_provenance"`
+- `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
+
 ## Cycle 16 — non-object provider envelope raised
 
 **Observed defect.** A syntactically valid top-level JSON array, string, number,
