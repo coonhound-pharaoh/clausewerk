@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 91 — supersession decision date was caller-controlled
+
+**Observed defect.** Governed supersession inserts bound the authenticated
+Legal approver but accepted caller-supplied `decided_on`. An immutable library
+history record could therefore falsely claim that Legal made the replacement
+decision years earlier or later. The separately meaningful `effective_on`
+remains schedulable.
+
+**Fix.** The supersession attribution trigger now derives `decided_on` from the
+database clock for governed writes. Owner historical imports remain explicit.
+
+**Regression proof.** A legal admin submits a year-2000 decision date and a
+forged approver. The stored approver is authenticated and the decision date is
+the current database date.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 81 passed
+- `node backend/db/test/executed.test.mjs` — 53 passed
+
 ## Cycle 90 — advisory-judgment creation time was caller-controlled
 
 **Observed defect.** Advisory-assessment inserts bound the authenticated

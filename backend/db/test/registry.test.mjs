@@ -388,12 +388,16 @@ await test('a retired conflict rule cannot be brought back by an edit', async ()
 console.log('\nsupersession and state (ADR-0009)');
 await test('superseding marks the predecessor superseded, not retired', async () => {
   const inserted = await queryAs('legal_admin', `insert into cw.supersession
-    (clause_id,predecessor_version,successor_version,reason,approver,predecessor_disposition)
+    (clause_id,predecessor_version,successor_version,reason,approver,
+     decided_on,predecessor_disposition)
     values ('DP-H-014',1,2,'Added SCC module for post-2026 transfers',
-            'forged-approver@clausewerk','retire_now')
-    returning approver`, [], 'test@clausewerk');
+            'forged-approver@clausewerk','2000-01-01','retire_now')
+    returning approver, decided_on=current_date as decided_today`,
+    [], 'test@clausewerk');
   eq(inserted[0].approver, 'test@clausewerk',
      'supersession attribution must name the authenticated Legal actor');
+  eq(inserted[0].decided_today, true,
+     'supersession decision date must come from the database clock');
   const p = await one(`select state, selectable, superseded_reason from cw.clause_version_state
                        where clause_id='DP-H-014' and version=1`);
   eq(p.state, 'superseded', 'replaced-by-better is distinct from withdrawn');

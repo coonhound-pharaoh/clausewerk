@@ -227,6 +227,7 @@ language plpgsql as $$
 begin
   if cw.app_role() is not null then
     new.approver := cw.app_actor();
+    new.decided_on := current_date;
   end if;
   return new;
 end $$;
