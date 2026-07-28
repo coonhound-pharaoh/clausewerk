@@ -744,6 +744,19 @@ def test_bearer_authentication_scheme_is_case_insensitive():
     assert app.seen[-1]["token"] == "session-token"
 
 
+def test_sensitive_api_responses_are_not_stored_by_browsers_or_proxies():
+    app = Records(Response(200, {"token": "secret"}))
+
+    with stub_serving(app) as base:
+        with urllib.request.urlopen(base + "/api/sign-in") as reply:
+            assert reply.headers["cache-control"] == "no-store"
+
+    download = Records(Download(200, b"contract", DOCX_TYPE, "contract.docx"))
+    with stub_serving(download) as base:
+        with urllib.request.urlopen(base + "/api/runs/contract") as reply:
+            assert reply.headers["cache-control"] == "no-store"
+
+
 # A DECLARED LENGTH LARGER THAN WHAT ARRIVES is guarded in `_read_document`
 # (the short-read check) and is deliberately NOT tested here: proving it needs a
 # client that promises bytes and then stops, which leaves the socket waiting for

@@ -80,3 +80,16 @@ all non-bearer schemes remain rejected.
 
 **Proof.** `test_bearer_authentication_scheme_is_case_insensitive` exercises the
 wire and mixed-case parser result.
+
+## 7. Tokens and contracts could be retained in caches
+
+**Risk.** API replies had no cache prohibition. A browser or shared intermediary
+could retain a sign-in response containing a bearer token or a generated
+contract after the user left the screen.
+
+**Fix.** Every JSON response and every document download now carries
+`Cache-Control: no-store`.
+
+**Proof.**
+`test_sensitive_api_responses_are_not_stored_by_browsers_or_proxies` verifies
+the header on both response paths.
