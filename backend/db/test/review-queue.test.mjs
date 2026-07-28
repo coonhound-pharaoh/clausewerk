@@ -89,12 +89,14 @@ console.log('\nthe front door (WP-16b)');
 await test('a requester can open an ordinary ticket (positive control)', async () => {
   const r = await queryAs('requester', `
     insert into cw.review_ticket
-      (agreement_id,category_key,severity,reason_code,provenance_badge,proposed_text)
+      (agreement_id,category_key,severity,reason_code,provenance_badge,proposed_text,opened_by)
     values ('AG-001','data','High','human-escalated','VENDOR LANGUAGE',
-            'Supplier shall notify Customer within seventy-two (72) hours.')
+            'Supplier shall notify Customer within seventy-two (72) hours.',
+            'forged-opener@clausewerk')
     returning ticket_id, state, opened_by`, [], 'buyer@clausewerk');
   eq(r[0].state, 'pending', 'a ticket opens pending');
-  eq(r[0].opened_by, 'buyer@clausewerk', 'and it records who opened it');
+  eq(r[0].opened_by, 'buyer@clausewerk',
+     'and it records the authenticated opener, not caller-supplied attribution');
 });
 
 await test('a requester cannot open a ticket that is already rejected', async () => {
@@ -314,12 +316,15 @@ await test('an unused draft is still ordinary work in progress', async () => {
   // only then. A freeze that also stops routine drafting would be refused by
   // its users and switched off.
   await queryAs('legal_reviewer', `
-    insert into cw.clause_draft (draft_id,text,prompt,model,model_version)
-    values (9,'first attempt','p','claude','v4.5')`, [], 'legal@clausewerk');
+    insert into cw.clause_draft (draft_id,text,prompt,model,model_version,created_by)
+    values (9,'first attempt','p','claude','v4.5','forged-author@clausewerk')`,
+    [], 'legal@clausewerk');
   await queryAs('legal_reviewer',
     `update cw.clause_draft set text='second attempt' where draft_id=9`, [], 'legal@clausewerk');
-  const d = await one(`select text from cw.clause_draft where draft_id=9`);
+  const d = await one(`select text, created_by from cw.clause_draft where draft_id=9`);
   eq(d.text, 'second attempt');
+  eq(d.created_by, 'legal@clausewerk',
+     'draft provenance is bound to the authenticated actor');
 });
 
 await test('the ticket text cannot be moved under a pending decision', async () => {

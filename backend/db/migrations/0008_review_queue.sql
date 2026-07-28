@@ -156,6 +156,32 @@ comment on column cw.review_ticket.edited_before_approval is
    quality, so this figure may never be self-reported by the caller.';
 
 -- ── The redline, one segment at a time (ADR-0007) ───────────────────────────
+-- Provenance is observed at the database boundary, never accepted from the
+-- caller. In particular, nobody may forge review_ticket.opened_by to evade the
+-- separation-of-duties check in cw.verify_review_ticket(). Database-owner
+-- imports retain their supplied historical attribution because they have no
+-- governed app role.
+create or replace function cw.bind_review_queue_actor() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    if tg_table_name = 'clause_draft' then
+      new.created_by := cw.app_actor();
+    elsif tg_table_name = 'review_ticket' then
+      new.opened_by := cw.app_actor();
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger clause_draft_bind_actor
+  before insert on cw.clause_draft
+  for each row execute function cw.bind_review_queue_actor();
+
+create trigger review_ticket_bind_actor
+  before insert on cw.review_ticket
+  for each row execute function cw.bind_review_queue_actor();
+
 create table cw.review_segment (
   ticket_id bigint not null references cw.review_ticket(ticket_id),
   seq       int    not null,

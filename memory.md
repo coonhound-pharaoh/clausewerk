@@ -5,6 +5,12 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S57 — Review-queue provenance binds actors to session — SETTLED 2026-07-28
+Application-role inserts bind draft `created_by` and review-ticket `opened_by`
+to `cw.app_actor()`. The opener identity used by self-review controls is
+observed by the database rather than accepted from the caller; owner-mode
+historical imports retain explicit attribution.
+
 ## S56 — Run provenance binds creator to session — SETTLED 2026-07-28
 Application-role inserts bind `cw.run.created_by` to `cw.app_actor()`. Immutable
 run provenance and requester read scoping cannot be redirected with a

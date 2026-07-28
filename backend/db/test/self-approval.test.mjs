@@ -74,14 +74,18 @@ await test('the system knows the Legal admin as Legal, and the requester as neit
   eq(b, undefined, 'the requester holds no effective role — nobody granted them one');
 });
 
-// A ticket opener helper. opened_by is never supplied: it defaults to the
-// connection's actor, which is the whole basis of this rule.
+// A ticket opener helper. It deliberately supplies a forged opener: the
+// database must replace it with the connection's actor, which is the basis of
+// the separation rule.
 const openTicket = async (role, actor, body, severity = 'Standard') => {
   const r = await queryAs(role, `
     insert into cw.review_ticket
-      (category_key,severity,reason_code,provenance_badge,proposed_text)
-    values ('data',${q(severity)},'human-edit','VENDOR LANGUAGE',${q(body)})
-    returning ticket_id`, [], actor);
+      (category_key,severity,reason_code,provenance_badge,proposed_text,opened_by)
+    values ('data',${q(severity)},'human-edit','VENDOR LANGUAGE',${q(body)},
+            'forged-opener@clausewerk')
+    returning ticket_id, opened_by`, [], actor);
+  eq(r[0].opened_by, actor,
+     'the database must bind the opener before separation-of-duties checks rely on it');
   return r[0].ticket_id;
 };
 

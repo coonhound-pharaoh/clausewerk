@@ -4,6 +4,28 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 43 — review-queue provenance accepted false actors
+
+**Observed defect.** Governed inserts could supply arbitrary values for
+`clause_draft.created_by` and `review_ticket.opened_by`. Besides falsifying
+permanent provenance, a forged ticket opener reached the self-review control,
+allowing the actual opener to conceal their identity from the
+separation-of-duties check.
+
+**Fix.** A before-insert trigger now binds both fields to `cw.app_actor()` for
+application-role sessions. Database-owner imports remain able to preserve
+historical attribution.
+
+**Regression proof.** The review-queue tests submit forged draft and ticket
+actors and require the stored actors to match the authenticated session. The
+self-approval suite now attempts every ticket open with a forged identity and
+still proves that the real opener cannot approve their own request.
+
+**Validation.**
+
+- `node backend/db/test/review-queue.test.mjs` — 43 passed
+- `node backend/db/test/self-approval.test.mjs` — 9 passed
+
 ## Cycle 42 — run records accepted false creators
 
 **Observed defect.** A permitted requester or Legal caller could insert a run
