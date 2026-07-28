@@ -30,3 +30,15 @@ def test_duplicate_content_lengths_are_refused_as_ambiguous():
     assert refused is not None
     assert refused.status == 400
     assert handler.rfile.tell() == 0
+
+
+def test_content_length_accepts_only_the_http_ascii_decimal_grammar():
+    for ambiguous in ("+2", " 2", "2 ", "٢"):
+        handler = handler_with_headers(("Content-Length", ambiguous), body=b"{}")
+
+        body, refused = handler._read_body()
+
+        assert body is None, ambiguous
+        assert refused is not None, ambiguous
+        assert refused.status == 400, ambiguous
+        assert handler.rfile.tell() == 0, ambiguous

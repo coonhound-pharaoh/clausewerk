@@ -75,6 +75,7 @@ import argparse
 import json
 import mimetypes
 import os
+import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -204,10 +205,10 @@ class Handler(BaseHTTPRequestHandler):
         values = self.headers.get_all("content-length", [])
         if len(values) > 1:
             return None, Response(400, {"error": "content length is ambiguous"})
-        try:
-            length = int(values[0]) if values else 0
-        except ValueError:
+        raw = values[0] if values else "0"
+        if re.fullmatch(r"[0-9]+", raw) is None:
             return None, Response(400, {"error": "unreadable request"})
+        length = int(raw)
         if length < 0:
             return None, Response(400, {"error": "content length cannot be negative"})
         return length, None
