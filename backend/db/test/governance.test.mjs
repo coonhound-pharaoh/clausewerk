@@ -109,9 +109,12 @@ await test('only a legal admin assigns the attorney', async () => {
   await mustNotWrite('requester',
     `insert into cw.agreement_attorney (agreement_id,attorney,assigned_by)
      values ('AG-001','${ATTY}','${BUYER}')`);
-  await mustWrite('legal_admin',
+  const assignment = await mustWrite('legal_admin',
     `insert into cw.agreement_attorney (agreement_id,attorney,assigned_by)
-     values ('AG-001','${ATTY}','legal@clausewerk') returning agreement_id`);
+     values ('AG-001','${ATTY}','impostor@clausewerk')
+     returning agreement_id, assigned_by`, [], 'legal@clausewerk');
+  eq(assignment[0].assigned_by, 'legal@clausewerk',
+    'the caller-supplied assigner entered the permanent attorney record');
 });
 
 await test('with an attorney assigned, the missing approvals are named', async () => {
@@ -209,10 +212,13 @@ await test('with no Required Approver configured, two approvals are enough', asy
 await test('adding a Required Approver changes the outcome', async () => {
   // The proof that this is genuinely configurable rather than a hard-coded pair
   // of names: the same two approvals, on the same deal, now settle nothing.
-  await mustWrite('legal_admin',
+  const required = await mustWrite('legal_admin',
     `insert into cw.required_approver (agreement_id,body,label,approver,added_by)
      values ('AG-002','privacy','Data Protection Officer','dpo@clausewerk',
-             'legal@clausewerk') returning required_approver_id`);
+             'impostor@clausewerk')
+     returning required_approver_id, added_by`, [], 'legal@clausewerk');
+  eq(required[0].added_by, 'legal@clausewerk',
+    'the caller-supplied adder entered the permanent approver record');
   C3 = await concede('AG-002', 1);
   await mustWrite('requester',
     `insert into cw.concession_approval (concession_id,approver_kind,approver)

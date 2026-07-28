@@ -176,6 +176,26 @@ create table cw.required_approver (
   unique (agreement_id, approver)
 );
 
+create or replace function cw.bind_governance_config_actor() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    if tg_table_name = 'agreement_attorney' then
+      new.assigned_by := cw.app_actor();
+    else
+      new.added_by := cw.app_actor();
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger agreement_attorney_bind_actor
+  before insert on cw.agreement_attorney
+  for each row execute function cw.bind_governance_config_actor();
+create trigger required_approver_bind_actor
+  before insert on cw.required_approver
+  for each row execute function cw.bind_governance_config_actor();
+
 -- ── The approvals themselves ────────────────────────────────────────────────
 create table cw.concession_approval (
   approval_id   bigserial primary key,

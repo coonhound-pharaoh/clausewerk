@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 39 — governance configuration accepted false actors
+
+**Observed defect.** A Legal Admin could assign an attorney or add a required
+approver while placing an arbitrary identity in `assigned_by` or `added_by`.
+Those provenance fields permanently claimed somebody else configured the
+approval obligations.
+
+**Fix.** Before-insert triggers bind the configuration provenance fields to
+`cw.app_actor()` for application-role sessions while leaving the configured
+attorney and approver identities unchanged. Owner writes remain available for
+migrations and historical imports.
+
+**Regression proof.** The governance suite supplies `impostor@clausewerk` for
+both operations and verifies the rows name the authenticated Legal Admin as the
+configuring actor.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs`
+- Result: 44 passed, 0 failed.
+
 ## Cycle 38 — override-watcher evidence accepted false actors
 
 **Observed defect.** An Administrator could add or remove an override watcher

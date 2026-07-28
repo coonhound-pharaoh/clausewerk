@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S53 — Governance configuration binds actors to session — SETTLED 2026-07-28
+Application-role inserts bind attorney `assigned_by` and required-approver
+`added_by` to `cw.app_actor()`, without changing the configured attorney or
+approver subject. Approval configuration cannot name a false configuring actor.
+
 ## S52 — Watcher-list evidence binds actors to session — SETTLED 2026-07-28
 Application-role writes bind override-watcher `added_by` and `removed_by` to
 `cw.app_actor()` before auditing. Notification-audience changes cannot be
