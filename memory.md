@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S50 — Records-delegation evidence binds actors to session — SETTLED 2026-07-28
+Application-role writes bind delegation `granted_by` and `revoked_by` to
+`cw.app_actor()` before auditing. Authority over irreversible redaction cannot
+be granted or withdrawn under a caller-supplied identity.
+
 ## S49 — Agreement-share evidence binds actors to session — SETTLED 2026-07-28
 Application-role writes bind `shared_by` and `revoked_by` to `cw.app_actor()`
 before the share audit trigger records the action. Reading-room attribution and

@@ -147,10 +147,13 @@ await test('only the administrator may delegate, and it lands on the chain', asy
   await mustNotWrite('legal_admin',
     `insert into cw.records_delegate (person,reason)
      values ('${PAT}','helping with the backlog')`);
-  await mustWrite('administrator',
-    `insert into cw.records_delegate (person,reason)
-     values ('${PAT}','records clean-up for the 2020 cohort') returning delegate_id`,
-    [], ADMIN);
+  const d = await mustWrite('administrator',
+    `insert into cw.records_delegate (person,granted_by,reason)
+     values ('${PAT}','impostor@clausewerk',
+             'records clean-up for the 2020 cohort')
+     returning delegate_id, granted_by`, [], ADMIN);
+  eq(d[0].granted_by, ADMIN,
+    'the caller-supplied grantor entered the permanent delegation record');
   const e = await one(`select actor, subject, payload->>'reason' as why
                        from cw.audit_event where event_type='records_delegate_granted'`);
   eq([e.actor, e.subject], [ADMIN, PAT]);
@@ -177,6 +180,19 @@ await test('the delegate may now redact, and it is marked as delegated', async (
 });
 
 await test('and STILL cannot purge — the delegation does not carry that', async () => {
+  const d = await mustWrite('administrator',
+    `update cw.records_delegate
+        set revoked_by='impostor@clausewerk', revoked_at=now()
+      where person='${PAT}' and revoked_at is null
+      returning revoked_by`, [], ADMIN);
+  eq(d[0].revoked_by, ADMIN,
+    'the caller-supplied revoker entered the permanent delegation record');
+  const e = await one(`select actor, payload->>'by' as revoked_by
+                       from cw.audit_event
+                       where event_type='records_delegate_revoked'`);
+  eq([e.actor, e.revoked_by], [ADMIN, ADMIN],
+    'the caller-supplied revoker entered the audit chain');
+
   // The asymmetry is the owner's decision, not an oversight. Removing content
   // can be handed out; removing the record cannot.
   await throws(() => queryAs('legal_reviewer',

@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 36 — records delegation accepted false actors
+
+**Observed defect.** An Administrator could override `granted_by` when
+delegating redaction authority and supply any `revoked_by` when withdrawing it.
+The false revoker was copied into the audit chain, falsifying accountability
+around authority that permits irreversible content removal.
+
+**Fix.** The existing before-write delegation trigger binds grant and
+revocation attribution to `cw.app_actor()` for application-role sessions before
+it creates audit events. Owner writes remain available for migrations and
+historical imports.
+
+**Regression proof.** The redaction suite supplies `impostor@clausewerk` for
+both operations and verifies the stored fields and revocation audit payload
+contain the authenticated Administrator.
+
+**Validation.**
+
+- `node backend/db/test/redaction.test.mjs`
+- Result: 22 passed, 0 failed.
+
 ## Cycle 35 — agreement-share evidence accepted false actors
 
 **Observed defect.** Legal callers could explicitly override `shared_by` and

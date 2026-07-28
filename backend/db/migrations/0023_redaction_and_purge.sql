@@ -104,6 +104,17 @@ comment on table cw.records_delegate is
 create or replace function cw.audit_records_delegate() returns trigger
 language plpgsql as $$
 begin
+  -- Delegation attribution is the authenticated Administrator, not a second
+  -- identity supplied in the statement. Preserve owner-authored historical
+  -- imports, for which cw.app_role() is null.
+  if cw.app_role() is not null then
+    if tg_op = 'INSERT' then
+      new.granted_by := cw.app_actor();
+    elsif old.revoked_at is null and new.revoked_at is not null then
+      new.revoked_by := cw.app_actor();
+    end if;
+  end if;
+
   if tg_op = 'INSERT' then
     perform cw.audit('records_delegate_granted', new.person,
       jsonb_build_object('reason', new.reason));
