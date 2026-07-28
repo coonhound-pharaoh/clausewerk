@@ -390,6 +390,28 @@ await test('the provenance badge cannot be relabelled after opening', async () =
      'the AI proposal was relabelled after entering review');
 });
 
+await test('the ticket expiry cannot be moved while deciding it', async () => {
+  const r = await queryAs('requester', `
+    insert into cw.review_ticket
+      (agreement_id,category_key,severity,reason_code,provenance_badge,
+       proposed_text,expires_on)
+    values ('AG-001','data','High','human-escalated','VENDOR LANGUAGE',
+            'A proposal with a fixed review deadline.',current_date + 7)
+    returning ticket_id, expires_on`, [], 'buyer@clausewerk');
+  await throws(() => queryAs('legal_reviewer', `
+    update cw.review_ticket
+       set state='rejected', decided_by='legal@clausewerk',
+           decision_note='The proposed wording is not acceptable.',
+           expires_on='2099-01-01'
+     where ticket_id=${r[0].ticket_id}`, [], 'legal@clausewerk'),
+    'cannot be rewritten, only decided');
+  const t = await one(`select state, expires_on from cw.review_ticket
+                       where ticket_id=${r[0].ticket_id}`);
+  eq(t.state, 'pending');
+  eq(t.expires_on, r[0].expires_on,
+     'the review deadline moved during a decision');
+});
+
 await test('the unedited-approval rate is computable', async () => {
   const r = await one(`select verified, verified_unedited, unedited_rate from cw.review_quality`);
   assert(r.verified >= 3, 'three verified tickets so far');

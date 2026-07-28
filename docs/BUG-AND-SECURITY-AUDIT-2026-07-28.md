@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 104 — review-ticket expiry could be rewritten during decision
+
+**Observed defect.** Review tickets could carry an explicit stale date, but
+`expires_on` was omitted from both immutable-evidence checks. Legal could move
+the opening deadline while taking an otherwise valid terminal decision,
+rewriting how long the proposal had been live.
+
+**Fix.** Both review-ticket transition definitions now freeze `expires_on`
+after opening. This preserves explicit per-ticket deadlines without inventing a
+new global expiry policy.
+
+**Regression proof.** Legal attempts to reject a pending ticket while moving
+its seven-day deadline to 2099. The whole update is refused; the ticket remains
+pending with its original deadline.
+
+**Validation.**
+
+- `node backend/db/test/review-queue.test.mjs` — 47 passed
+- `node backend/db/test/self-approval.test.mjs` — 9 passed
+
 ## Cycle 103 — review-ticket provenance badges were rewritable
 
 **Observed defect.** Review-ticket immutability froze the proposed text and

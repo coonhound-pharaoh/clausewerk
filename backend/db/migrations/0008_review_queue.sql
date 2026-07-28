@@ -307,6 +307,7 @@ begin
      or new.proposed_text is distinct from old.proposed_text
      or new.draft_id      is distinct from old.draft_id
      or new.opened_by     is distinct from old.opened_by
+     or new.expires_on    is distinct from old.expires_on
      or new.created_at    is distinct from old.created_at then
     raise exception
       'review ticket % records what was proposed and by whom; that cannot be '
