@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 52 — attorney reassignment bypassed provenance and audit
+
+**Observed defect.** A Legal admin could update an `agreement_attorney` row in
+place, changing both the attorney and `assigned_by` without actor binding or an
+audit event. Deleting an assignment also emitted no removal event, despite the
+configuration contract saying removals are audited.
+
+**Fix.** In-place attorney updates now raise. Reassignment must be an audited
+delete followed by an insert, whose `assigned_by` remains session-bound. The
+attorney audit trigger now records both assignment and removal.
+
+**Regression proof.** A real Legal admin’s silent update is refused; a
+delete-plus-insert succeeds, binds the new assignment to the authenticated
+actor, and leaves ordered `attorney_removed` and `attorney_assigned` events.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs` — 45 passed
+
 ## Cycle 51 — clause-tag history was rewriteable and removable
 
 **Observed defect.** Clause tags drive conflict evaluation but could be updated

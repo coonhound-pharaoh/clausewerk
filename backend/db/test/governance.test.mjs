@@ -122,6 +122,30 @@ await test('only a legal admin assigns the attorney', async () => {
     'the caller-supplied assigner entered the permanent attorney record');
 });
 
+await test('attorney reassignment is an audited removal and addition', async () => {
+  await throws(() => queryAs('legal_admin', `
+    update cw.agreement_attorney
+       set attorney='somebody-else@clausewerk',
+           assigned_by='forged-assigner@clausewerk'
+     where agreement_id='AG-001'`, [], 'legal@clausewerk'),
+    'cannot be updated in place');
+  await queryAs('legal_admin',
+    `delete from cw.agreement_attorney where agreement_id='AG-001'`,
+    [], 'legal@clausewerk');
+  const replacement = await queryAs('legal_admin', `
+    insert into cw.agreement_attorney (agreement_id,attorney,assigned_by)
+    values ('AG-001','${ATTY}','forged-assigner@clausewerk')
+    returning assigned_by`, [], 'legal@clausewerk');
+  eq(replacement[0].assigned_by, 'legal@clausewerk');
+  const events = await rows(`
+    select event_type from cw.audit_event
+     where subject='AG-001'
+       and event_type in ('attorney_assigned','attorney_removed')
+     order by seq desc limit 2`);
+  eq(events.map(e => e.event_type), ['attorney_assigned','attorney_removed'],
+     'reassignment must leave both halves in the audit chain');
+});
+
 await test('with an attorney assigned, the missing approvals are named', async () => {
   const m = await queryAs('legal_reviewer',
     `select approver_kind, approver from cw.concession_missing_approvers($1)

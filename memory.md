@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S66 — Attorney reassignment is remove-plus-add — SETTLED 2026-07-28
+Agreement-attorney configuration cannot be updated in place. Reassignment is
+an audited removal followed by an actor-bound addition, so both the old and new
+governance facts remain attributable.
+
 ## S65 — Published clause tags are append-only — SETTLED 2026-07-28
 Clause tags are policy inputs attached to immutable approved wording. After
 publication they cannot be updated, deleted, or truncated; a correction belongs

@@ -197,6 +197,22 @@ create trigger required_approver_bind_actor
   for each row execute function cw.bind_governance_config_actor();
 
 -- ── The approvals themselves ────────────────────────────────────────────────
+-- Governance configuration changes are remove-plus-add so both sides are
+-- attributable. An in-place update would bypass the insert actor binding and
+-- the removal/addition audit pair.
+create or replace function cw.governance_config_no_update() returns trigger
+language plpgsql as $$
+begin
+  raise exception
+    '% configuration cannot be updated in place; remove it and add the '
+    'replacement so both acts are audited', tg_table_name
+    using errcode = 'restrict_violation';
+end $$;
+
+create trigger agreement_attorney_no_update
+  before update on cw.agreement_attorney
+  for each row execute function cw.governance_config_no_update();
+
 create table cw.concession_approval (
   approval_id   bigserial primary key,
   concession_id bigint not null references cw.concession(concession_id),
@@ -513,12 +529,17 @@ create trigger audit_required_approver
 create or replace function cw.audit_agreement_attorney() returns trigger
 language plpgsql as $$
 begin
-  perform cw.audit('attorney_assigned', new.agreement_id,
-    jsonb_build_object('attorney', new.attorney, 'assigned_by', new.assigned_by));
-  return new;
+  if tg_op = 'INSERT' then
+    perform cw.audit('attorney_assigned', new.agreement_id,
+      jsonb_build_object('attorney', new.attorney, 'assigned_by', new.assigned_by));
+    return new;
+  end if;
+  perform cw.audit('attorney_removed', old.agreement_id,
+    jsonb_build_object('attorney', old.attorney, 'assigned_by', old.assigned_by));
+  return old;
 end $$;
 
-create trigger audit_agreement_attorney after insert on cw.agreement_attorney
+create trigger audit_agreement_attorney after insert or delete on cw.agreement_attorney
   for each row execute function cw.audit_agreement_attorney();
 
 -- ── The CLA §4 state, derived rather than stored ────────────────────────────
