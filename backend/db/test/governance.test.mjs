@@ -123,11 +123,16 @@ await test('only a legal admin assigns the attorney', async () => {
     `insert into cw.agreement_attorney (agreement_id,attorney,assigned_by)
      values ('AG-001','${ATTY}','${BUYER}')`);
   const assignment = await mustWrite('legal_admin',
-    `insert into cw.agreement_attorney (agreement_id,attorney,assigned_by)
-     values ('AG-001','${ATTY}','impostor@clausewerk')
-     returning agreement_id, assigned_by`, [], 'legal@clausewerk');
+    `insert into cw.agreement_attorney
+       (agreement_id,attorney,assigned_by,assigned_on)
+     values ('AG-001','${ATTY}','impostor@clausewerk','2000-01-01')
+     returning agreement_id, assigned_by,
+               assigned_on = current_date as assigned_today`,
+    [], 'legal@clausewerk');
   eq(assignment[0].assigned_by, 'legal@clausewerk',
     'the caller-supplied assigner entered the permanent attorney record');
+  eq(assignment[0].assigned_today, true,
+    'the caller-supplied assignment date entered the permanent attorney record');
 });
 
 await test('attorney reassignment is an audited removal and addition', async () => {
@@ -268,12 +273,16 @@ await test('adding a Required Approver changes the outcome', async () => {
   // The proof that this is genuinely configurable rather than a hard-coded pair
   // of names: the same two approvals, on the same deal, now settle nothing.
   const required = await mustWrite('legal_admin',
-    `insert into cw.required_approver (agreement_id,body,label,approver,added_by)
+    `insert into cw.required_approver
+       (agreement_id,body,label,approver,added_by,added_on)
      values ('AG-002','privacy','Data Protection Officer','dpo@clausewerk',
-             'impostor@clausewerk')
-     returning required_approver_id, added_by`, [], 'legal@clausewerk');
+             'impostor@clausewerk','2099-01-01')
+     returning required_approver_id, added_by,
+               added_on = current_date as added_today`, [], 'legal@clausewerk');
   eq(required[0].added_by, 'legal@clausewerk',
     'the caller-supplied adder entered the permanent approver record');
+  eq(required[0].added_today, true,
+    'the caller-supplied addition date entered the permanent approver record');
   C3 = await concede('AG-002', 1);
   await mustWrite('requester',
     `insert into cw.concession_approval (concession_id,approver_kind,approver)

@@ -182,8 +182,10 @@ begin
   if cw.app_role() is not null then
     if tg_table_name = 'agreement_attorney' then
       new.assigned_by := cw.app_actor();
+      new.assigned_on := current_date;
     else
       new.added_by := cw.app_actor();
+      new.added_on := current_date;
     end if;
   end if;
   return new;

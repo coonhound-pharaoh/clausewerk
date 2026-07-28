@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 81 — governance configuration dates were caller-controlled
+
+**Observed defect.** Legal-admin attorney assignments and required-approver
+configuration bound the authenticated actor but accepted caller-supplied
+`assigned_on` and `added_on` dates. These immutable, audited governance records
+could therefore permanently misstate when access and approval duties changed.
+
+**Fix.** The shared governance-configuration trigger now derives both dates
+from the database clock for governed writes. Owner historical imports retain
+the ability to supply their original dates.
+
+**Regression proof.** A legal admin submits a year-2000 attorney assignment and
+a year-2099 required-approver addition. Both records store the current database
+date while retaining the authenticated legal-admin identity.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs` — 47 passed
+- `node backend/db/test/executed.test.mjs` — 53 passed
+
 ## Cycle 80 — SOW proposal and settlement chronology was caller-controlled
 
 **Observed defect.** Governed SOW override proposals and settlements bound the
