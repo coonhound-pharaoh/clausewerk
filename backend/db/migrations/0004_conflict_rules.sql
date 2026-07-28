@@ -36,6 +36,22 @@ create index on cw.clause_tag (tag);
 -- Versioned and immutable, exactly like clause wording. A rule change silently
 -- alters which contracts are blocked, so it is change-controlled and every
 -- finding cites the rule version that raised it.
+-- Tags are policy inputs, and their audit event names tagged_by. Governed
+-- publication therefore takes the author from the session rather than from a
+-- second identity in the statement. Owner imports retain historical authors.
+create or replace function cw.bind_clause_tag_author() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    new.tagged_by := cw.app_actor();
+  end if;
+  return new;
+end $$;
+
+create trigger clause_tag_bind_author
+  before insert on cw.clause_tag
+  for each row execute function cw.bind_clause_tag_author();
+
 create table cw.conflict_rule (
   rule_id     text not null check (rule_id ~ '^[A-Z]{2,4}-[0-9]{3}$'),
   version     int  not null check (version >= 1),

@@ -195,6 +195,14 @@ await test('versions insert', async () => {
       ('CF-S-001',2,'Confidentiality v2','Recipient shall not disclose; 5-year tail.','Extended tail',
        array['Policy-CF-001'],'M. Okafor','2026-02-01','2028-02-01');`);
 });
+await test('a clause tag records the authenticated Legal author', async () => {
+  const r = await queryAs('legal_admin', `
+    insert into cw.clause_tag (clause_id,version,tag,tagged_by)
+    values ('DP-H-014',1,'audit:cycle48','forged-tagger@clausewerk')
+    returning tagged_by`, [], 'test@clausewerk');
+  eq(r[0].tagged_by, 'test@clausewerk',
+     'policy-driving tag provenance must come from the governed session');
+});
 await test('editing clause body is refused', async () => {
   await throws(
     () => db.exec(`update cw.clause_version set body='tampered' where clause_id='DP-H-014' and version=1`),

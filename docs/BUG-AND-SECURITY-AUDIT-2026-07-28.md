@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 48 — clause tags accepted false authors
+
+**Observed defect.** A Legal admin attaching a policy-driving clause tag could
+supply any `tagged_by` identity. The database copied that unverified identity
+into the tag’s audit event even though tags are the facts conflict rules
+evaluate.
+
+**Fix.** A before-insert trigger binds `tagged_by` to `cw.app_actor()` for
+governed sessions. Database-owner seed and historical imports retain explicit
+authors.
+
+**Regression proof.** A real `cw_legal_admin` inserts a valid tag while naming
+a forged author, and the returned row must name the authenticated actor.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 78 passed
+- `node backend/db/test/writer-sql.test.mjs` — 16 passed
+- `node backend/db/test/loader-sql.test.mjs` — 19 passed
+
 ## Cycle 47 — conflict rules accepted false approvers
 
 **Observed defect.** A Legal admin publishing a conflict rule could supply any
