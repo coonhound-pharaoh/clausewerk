@@ -203,6 +203,23 @@ await test('a clause tag records the authenticated Legal author', async () => {
   eq(r[0].tagged_by, 'test@clausewerk',
      'policy-driving tag provenance must come from the governed session');
 });
+await test('a published clause tag cannot be rewritten or removed', async () => {
+  await throws(() => queryAs('legal_admin', `
+    update cw.clause_tag
+       set tag='audit:rewritten', tagged_by='somebody-else@clausewerk'
+     where clause_id='DP-H-014' and version=1 and tag='audit:cycle48'`,
+    [], 'test@clausewerk'), 'immutable');
+  await throws(() => db.exec(`
+    delete from cw.clause_tag
+     where clause_id='DP-H-014' and version=1 and tag='audit:cycle48'`),
+    'cannot be deleted');
+  await throws(() => db.exec('truncate cw.clause_tag'), 'cannot be truncated');
+  const r = await one(`select tagged_by from cw.clause_tag
+                        where clause_id='DP-H-014' and version=1
+                          and tag='audit:cycle48'`);
+  eq(r.tagged_by, 'test@clausewerk',
+     'the original policy input must survive every refused mutation path');
+});
 await test('editing clause body is refused', async () => {
   await throws(
     () => db.exec(`update cw.clause_version set body='tampered' where clause_id='DP-H-014' and version=1`),

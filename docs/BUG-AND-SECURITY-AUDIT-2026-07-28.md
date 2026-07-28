@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 51 — clause-tag history was rewriteable and removable
+
+**Observed defect.** Clause tags drive conflict evaluation but could be updated
+or deleted after their insert-only audit event. Owner-level truncate also had
+no explicit guard. Policy inputs could therefore silently change or disappear
+while the audit chain continued to describe the original tag.
+
+**Fix.** Published clause tags are now append-only: update, delete, and truncate
+each raise. Corrections require a corrected clause version and its own tags.
+
+**Regression proof.** A real Legal admin attempts to rewrite a tag and its
+author, while owner-level statements attempt delete and truncate. Every path is
+refused and the original tag and authenticated author remain.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 81 passed
+- `node backend/db/test/writer-sql.test.mjs` — 16 passed
+- `node backend/db/test/loader-sql.test.mjs` — 19 passed
+
 ## Cycle 50 — supersession history was rewriteable and removable
 
 **Observed defect.** A published supersession controls which clause version is

@@ -5,6 +5,12 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S65 — Published clause tags are append-only — SETTLED 2026-07-28
+Clause tags are policy inputs attached to immutable approved wording. After
+publication they cannot be updated, deleted, or truncated; a correction belongs
+on a corrected clause version so the old conflict-evaluation history remains
+resolvable.
+
 ## S64 — Published supersessions are append-only — SETTLED 2026-07-28
 A supersession changes live clause selectability and is historical evidence.
 After publication it cannot be updated, deleted, or truncated, including

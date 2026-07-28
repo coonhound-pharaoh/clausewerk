@@ -52,6 +52,40 @@ create trigger clause_tag_bind_author
   before insert on cw.clause_tag
   for each row execute function cw.bind_clause_tag_author();
 
+-- A tag is part of the approved version's policy meaning. Changing or removing
+-- it after publication silently changes which conflict rules fire, while the
+-- insert-only audit event continues to describe the old fact. Corrections go
+-- on a new clause version.
+create or replace function cw.clause_tag_immutable() returns trigger
+language plpgsql as $$
+begin
+  raise exception
+    'clause tag %@v% % is immutable; publish a corrected clause version instead',
+    old.clause_id, old.version, old.tag
+    using errcode = 'restrict_violation';
+end $$;
+
+create trigger clause_tag_no_edit
+  before update on cw.clause_tag
+  for each row execute function cw.clause_tag_immutable();
+
+create or replace function cw.clause_tag_no_delete() returns trigger
+language plpgsql as $$
+begin
+  raise exception
+    'clause tag %@v% % cannot be deleted: published policy history must remain',
+    old.clause_id, old.version, old.tag
+    using errcode = 'restrict_violation';
+end $$;
+
+create trigger clause_tag_no_delete
+  before delete on cw.clause_tag
+  for each row execute function cw.clause_tag_no_delete();
+
+create trigger clause_tag_no_truncate
+  before truncate on cw.clause_tag
+  for each statement execute function cw.no_truncate();
+
 create table cw.conflict_rule (
   rule_id     text not null check (rule_id ~ '^[A-Z]{2,4}-[0-9]{3}$'),
   version     int  not null check (version >= 1),
