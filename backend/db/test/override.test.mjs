@@ -183,6 +183,18 @@ await test('a requester cannot assert workflow states directly', async () => {
      'unsupported state claims must leave the request untouched');
 });
 
+await test('Legal cannot rewrite a finding’s severity before deciding it', async () => {
+  await throws(() => queryAs('legal_reviewer', `
+    update cw.override_finding set severity='Standard'
+     where request_id=${REQ} and finding_ref='data:F1'`,
+    [], PAT), 'what a request covers cannot be rewritten');
+  const f = await one(`
+    select severity, decision from cw.override_finding
+     where request_id=${REQ} and finding_ref='data:F1'`);
+  eq([f.severity, f.decision], ['High', null],
+     'the blocking severity must remain the one the requester submitted');
+});
+
 await test('a request on its own passes NOTHING', async () => {
   // The whole product, in one assertion. If this ever returns a row for a
   // request that has only been asked for, the blanket button is back.

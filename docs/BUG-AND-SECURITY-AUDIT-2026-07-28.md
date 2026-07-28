@@ -4,6 +4,24 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 62 — override finding severity was rewriteable
+
+**Observed defect.** The override-finding update guard froze its request,
+reference, and summary but omitted `severity`. Legal could silently downgrade a
+High blocking finding before deciding it, changing what the submitted override
+covered.
+
+**Fix.** Finding severity is now immutable alongside every other submitted
+finding-evidence field.
+
+**Regression proof.** A real Legal reviewer attempts to change a pending High
+finding to Standard; the update raises and both severity and undecided state
+remain unchanged.
+
+**Validation.**
+
+- `node backend/db/test/override.test.mjs` — 36 passed
+
 ## Cycle 61 — override workflow states were directly assertable
 
 **Observed defect.** A requester could directly update an untouched override

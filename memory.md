@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S76 — Override finding severity is immutable — SETTLED 2026-07-28
+The severity submitted on an override finding is part of what the request
+covers. Legal may decide the finding but cannot downgrade or otherwise rewrite
+its severity first.
+
 ## S75 — Override state is evidence-derived — SETTLED 2026-07-28
 An override becomes socialised only after its audience and window exist, and
 becomes approved or rejected only from completed per-finding decisions.

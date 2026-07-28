@@ -453,6 +453,7 @@ begin
   end if;
   if new.request_id is distinct from old.request_id
      or new.finding_ref is distinct from old.finding_ref
+     or new.severity is distinct from old.severity
      or new.summary is distinct from old.summary then
     raise exception 'what a request covers cannot be rewritten, only decided'
       using errcode = 'restrict_violation';
