@@ -143,6 +143,28 @@ create trigger ladder_rung_matches_ladder
   before insert or update on cw.ladder_rung
   for each row execute function cw.ladder_rung_matches_ladder();
 
+-- The coherence check above runs when a rung moves. The parent cannot be
+-- allowed to move around already-published rungs and bypass that check.
+create or replace function cw.published_ladder_classification_immutable()
+returns trigger
+language plpgsql as $$
+begin
+  if exists (select 1 from cw.ladder_rung where ladder_id = old.ladder_id)
+     and (new.ladder_id is distinct from old.ladder_id
+          or new.category_key is distinct from old.category_key
+          or new.severity is distinct from old.severity) then
+    raise exception
+      'published ladder % category and severity are immutable; publish a new '
+      'ladder instead',
+      old.ladder_id using errcode = 'restrict_violation';
+  end if;
+  return new;
+end $$;
+
+create trigger published_ladder_classification_immutable
+  before update on cw.ladder
+  for each row execute function cw.published_ladder_classification_immutable();
+
 -- A published rung is immutable (WP-07). Concessions are recorded as "we went
 -- to rung 2", and every one of them stays readable forever. If the wording
 -- sitting on rung 2 can be swapped afterwards, every past concession silently

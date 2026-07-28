@@ -105,6 +105,15 @@ await test('a ladder with contiguous rungs and a floor is accepted', async () =>
   const h = await one(`select status, rungs, has_floor from cw.ladder_health where ladder_id=1`);
   eq(h.status, 'intact'); eq(h.rungs, 3); eq(h.has_floor, true);
 });
+await test('a published ladder cannot move around its validated rungs', async () => {
+  await throws(() => queryAs('legal_admin',
+    `update cw.ladder set category_key='liab', severity='High'
+      where ladder_id=1`, [], 'legal@clausewerk'),
+    'category and severity are immutable',
+    'the parent ladder moved after its rung coherence checks had passed');
+  const l = await one(`select category_key, severity from cw.ladder where ladder_id=1`);
+  eq([l.category_key, l.severity], ['data', 'High']);
+});
 await test('rungs must be contiguous from 0', async () => {
   // FIXTURE CORRECTED (WP-23). Rung 5 named DP-H-052 — a HIGH DATA PRIVACY
   // clause on a STANDARD LIABILITY ladder. Under the rung-coherence constraint

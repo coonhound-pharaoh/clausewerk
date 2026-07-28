@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 111 — published ladder classifications were rewritable
+
+**Observed defect.** Rungs were validated against their parent ladder's
+category and severity when inserted, but the parent remained writable. Legal
+could later move a published ladder to another category or severity, bypassing
+the rung trigger and making every rung incoherent at once.
+
+**Fix.** Once a ladder has any rung, its identity, category, and severity are
+immutable. A changed retreat-path classification requires a new ladder and
+fresh rung validation.
+
+**Regression proof.** Legal attempts to move a published High Data Privacy
+ladder to High Liability. The database refuses the move and preserves the
+classification against which all rungs were validated.
+
+**Validation.**
+
+- `node backend/db/test/ladder.test.mjs` — 58 passed
+- `node backend/db/test/loader-sql.test.mjs` — 19 passed
+
 ## Cycle 110 — published clause classifications were rewritable
 
 **Observed defect.** Clause versions froze wording, but the parent clause row
