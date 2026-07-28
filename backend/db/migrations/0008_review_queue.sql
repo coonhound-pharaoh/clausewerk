@@ -303,6 +303,7 @@ begin
      or new.category_key  is distinct from old.category_key
      or new.severity      is distinct from old.severity
      or new.reason_code   is distinct from old.reason_code
+     or new.provenance_badge is distinct from old.provenance_badge
      or new.proposed_text is distinct from old.proposed_text
      or new.draft_id      is distinct from old.draft_id
      or new.opened_by     is distinct from old.opened_by

@@ -373,6 +373,23 @@ await test('the ticket text cannot be moved under a pending decision', async () 
     'cannot be rewritten, only decided');
 });
 
+await test('the provenance badge cannot be relabelled after opening', async () => {
+  const r = await queryAs('requester', `
+    insert into cw.review_ticket
+      (agreement_id,category_key,severity,reason_code,provenance_badge,proposed_text)
+    values ('AG-001','data','High','ai-draft','AI CANDIDATE',
+            'Model-proposed notification language.')
+    returning ticket_id`, [], 'buyer@clausewerk');
+  await throws(() => queryAs('legal_reviewer', `
+    update cw.review_ticket set provenance_badge='EDITED BY LEGAL'
+     where ticket_id=${r[0].ticket_id}`, [], 'legal@clausewerk'),
+    'cannot be rewritten, only decided');
+  const t = await one(`select provenance_badge from cw.review_ticket
+                       where ticket_id=${r[0].ticket_id}`);
+  eq(t.provenance_badge, 'AI CANDIDATE',
+     'the AI proposal was relabelled after entering review');
+});
+
 await test('the unedited-approval rate is computable', async () => {
   const r = await one(`select verified, verified_unedited, unedited_rate from cw.review_quality`);
   assert(r.verified >= 3, 'three verified tickets so far');

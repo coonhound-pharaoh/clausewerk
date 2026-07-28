@@ -4,6 +4,24 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 103 — review-ticket provenance badges were rewritable
+
+**Observed defect.** Review-ticket immutability froze the proposed text and
+opener but omitted `provenance_badge` in both authoritative trigger versions.
+Legal could relabel an AI candidate or vendor-language proposal after opening,
+undermining the origin warning shown to reviewers.
+
+**Fix.** Both review-ticket transition definitions now treat the provenance
+badge as immutable opening evidence.
+
+**Regression proof.** Legal attempts to relabel an open `AI CANDIDATE` as
+`EDITED BY LEGAL`. The update is refused and the original badge remains stored.
+
+**Validation.**
+
+- `node backend/db/test/review-queue.test.mjs` — 46 passed
+- `node backend/db/test/draft-record.test.mjs` — 19 passed
+
 ## Cycle 102 — published ladder rungs could be deleted
 
 **Observed defect.** Published ladder rungs rejected wording and rung-number
