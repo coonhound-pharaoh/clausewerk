@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 46 — concession records accepted false approvers
+
+**Observed defect.** Any role permitted to record a concession could supply an
+arbitrary `approved_by`. The field is immutable evidence, is emitted into the
+audit chain, and identifies who put the commercial retreat forward, so a caller
+could permanently attribute their act to another person.
+
+**Fix.** The concession authority trigger now binds `approved_by` to
+`cw.app_actor()` for governed sessions before it validates the commercial
+floor. Owner-mode historical imports retain explicit attribution.
+
+**Regression proof.** Every governed concession helper supplies a forged
+approver, and the positive control requires the stored immutable record to name
+the authenticated requester.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs` — 44 passed
+- `node backend/db/test/ladder.test.mjs` — 56 passed
+
 ## Cycle 45 — override requests accepted false requesters
 
 **Observed defect.** Requesters hold direct insert privilege on

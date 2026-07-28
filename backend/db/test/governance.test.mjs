@@ -82,13 +82,18 @@ const concede = async (agreement, rung, actor = BUYER, kind = 'human') =>
      (agreement_id,category_key,standard_clause_id,standard_version,conceded_rung,
       reason,approved_by,proposer_kind)
      values ($1,'data','DP-H-014',1,$2,'Vendor could not meet 24h',$3,$4)
-     returning concession_id`, [agreement, rung, actor, kind], actor))[0].concession_id;
+     returning concession_id`, [agreement, rung, 'forged-approver@clausewerk', kind],
+     actor))[0].concession_id;
 
 console.log('\na concession is a proposal until named people settle it (WP-18a)');
 
 let C1;
 await test('a requester can record a concession — as the real role', async () => {
   C1 = await concede('AG-001', 1);
+  const c = await oneAs('legal_reviewer',
+    `select approved_by from cw.concession where concession_id=$1`, [C1]);
+  eq(c.approved_by, BUYER,
+     'immutable concession attribution must name the authenticated proposer');
   const s = await oneAs('legal_reviewer', `select state from cw.concession_state where concession_id=$1`, [C1]);
   eq(s.state, 'proposed', 'nothing is in force merely because it was written down');
   const f = await oneAs('legal_reviewer', `select count(*)::int n from cw.concession_in_force

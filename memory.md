@@ -5,6 +5,12 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S60 — Concession provenance binds proposer to session — SETTLED 2026-07-28
+Application-role concession inserts bind immutable `approved_by` provenance to
+`cw.app_actor()`. The commercial record and audit event cannot attribute a
+governed proposal to a second caller-supplied identity; owner-mode historical
+imports retain explicit attribution.
+
 ## S59 — Override requests bind requester to session — SETTLED 2026-07-28
 Application-role inserts bind override-request `requested_by` to
 `cw.app_actor()`. The identity used for requester scope and the no-self-decision

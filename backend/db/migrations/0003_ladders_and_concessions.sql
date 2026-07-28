@@ -261,6 +261,13 @@ create or replace function cw.concession_requires_authority() returns trigger
 language plpgsql as $$
 declare floor_rung int; lid bigint; sev text;
 begin
+  -- The immutable approver/proposer identity is observed from the governed
+  -- session, not accepted beside the commercial facts. Owner-mode historical
+  -- imports retain explicit attribution.
+  if cw.app_role() is not null then
+    new.approved_by := cw.app_actor();
+  end if;
+
   -- The severity of the position we opened with. Single source of truth.
   select c.severity into sev
   from cw.clause c where c.clause_id = new.standard_clause_id;
