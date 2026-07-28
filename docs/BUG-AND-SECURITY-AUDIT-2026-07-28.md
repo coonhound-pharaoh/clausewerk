@@ -4,6 +4,28 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 33 — direct negotiation writes accepted false actors
+
+**Observed defect.** Negotiation row policies correctly scoped who could write,
+but the append-only identity fields remained supplied by that writer.
+`opened_by`, `baseline_chosen_by`, round `actor`, and movement `actor` could all
+name somebody other than the session person, permanently falsifying the
+commercial history.
+
+**Fix.** Before-insert triggers bind all four fields to `cw.app_actor()` for
+application-role writes. Owner-run migrations retain the ability to preserve
+actors while importing historical records.
+
+**Regression proof.** A requester writes their owned negotiation, round, and
+movement while naming a different requester in every actor field. The stored
+record names the authenticated requester in all four places, and every
+append-only, ordering, access, renewal, and Legal control remains green.
+
+**Validation.**
+
+- `node backend/db/test/negotiation.test.mjs`
+- Result: 55 passed, 0 failed.
+
 ## Cycle 32 — renewal decisions could be attributed to another person
 
 **Observed defect.** `cw.open_renewal` authorizes the session actor against the

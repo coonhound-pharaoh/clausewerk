@@ -460,12 +460,12 @@ await test('the requester who owns the deal can still record all four rows', asy
   // would look like a pass.
   const n = await mustWrite('requester',
     `insert into cw.negotiation (agreement_id,paper,opened_by,baseline_chosen_by)
-     values ('AG-300','ours','${BUYER}','${BUYER}') returning negotiation_id`, [], BUYER);
+     values ('AG-300','ours','${OTHER}','${OTHER}') returning negotiation_id`, [], BUYER);
   NEG_OWNED = n[0].negotiation_id;
   await mustWrite('requester',
     `insert into cw.negotiation_round
        (negotiation_id,round_no,direction,document_sha256,storage_uri,sent_on,actor)
-     values (${NEG_OWNED},1,'issued','${D3}','s3://cw/neg/300-1.docx','2026-07-01','${BUYER}')
+     values (${NEG_OWNED},1,'issued','${D3}','s3://cw/neg/300-1.docx','2026-07-01','${OTHER}')
      returning round_no`, [], BUYER);
   const p = await mustWrite('requester',
     `insert into cw.negotiation_position
@@ -475,7 +475,19 @@ await test('the requester who owns the deal can still record all four rows', asy
   POS_OWNED = p[0].position_id;
   await mustWrite('requester',
     `insert into cw.position_movement (position_id,round_no,to_state,actor)
-     values (${POS_OWNED},1,'held','${BUYER}') returning movement_id`, [], BUYER);
+     values (${POS_OWNED},1,'held','${OTHER}') returning movement_id`, [], BUYER);
+  const actors = await one(
+    `select n.opened_by, n.baseline_chosen_by, r.actor as round_actor,
+            m.actor as movement_actor
+       from cw.negotiation n
+       join cw.negotiation_round r using (negotiation_id)
+       join cw.position_movement m on m.position_id = $1
+      where n.negotiation_id = $2 and m.to_state = 'held'`,
+    [POS_OWNED, NEG_OWNED]);
+  eq([actors.opened_by, actors.baseline_chosen_by,
+      actors.round_actor, actors.movement_actor],
+     [BUYER, BUYER, BUYER, BUYER],
+     'the append-only negotiation record accepted caller-supplied identities');
 });
 
 // Each of the four is attempted separately and on purpose: closing one without

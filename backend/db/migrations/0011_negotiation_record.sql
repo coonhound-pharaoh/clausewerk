@@ -162,6 +162,39 @@ create table cw.position_movement (
   moved_at     timestamptz not null default now()
 );
 
+-- Every identity on the append-only negotiation record is the connection's
+-- person, never a second claim in an INSERT. Owner-run migrations have no
+-- application role and remain able to preserve imported historical actors.
+create or replace function cw.bind_negotiation_actor() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    new.opened_by := cw.app_actor();
+    new.baseline_chosen_by := cw.app_actor();
+  end if;
+  return new;
+end $$;
+
+create trigger negotiation_binds_actor
+  before insert on cw.negotiation
+  for each row execute function cw.bind_negotiation_actor();
+
+create or replace function cw.bind_negotiation_history_actor() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    new.actor := cw.app_actor();
+  end if;
+  return new;
+end $$;
+
+create trigger negotiation_round_binds_actor
+  before insert on cw.negotiation_round
+  for each row execute function cw.bind_negotiation_history_actor();
+create trigger position_movement_binds_actor
+  before insert on cw.position_movement
+  for each row execute function cw.bind_negotiation_history_actor();
+
 create trigger position_movement_no_edit
   before update or delete on cw.position_movement
   for each row execute function cw.negotiation_append_only();

@@ -2631,3 +2631,8 @@ the destruction decision or its audit event.
 The renewal actor must equal `cw.app_actor()` before ownership and baseline
 checks. The session-authorized person is also the person recorded in
 `opened_by` and `baseline_chosen_by`.
+
+## S47 — Negotiation history binds actors to session — SETTLED 2026-07-28
+Application-role inserts bind negotiation `opened_by`, `baseline_chosen_by`,
+round `actor`, and movement `actor` to `cw.app_actor()`. The append-only
+commercial history cannot carry a second caller-supplied identity.
