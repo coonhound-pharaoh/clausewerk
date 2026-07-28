@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 28 — sharing relationships were probeable by other viewers
+
+**Observed defect.** `cw.is_shared_with` bypasses row security to avoid a policy
+recursion, and every viewer could execute it with any agreement and person.
+An unshared viewer could therefore discover whether a named person had live
+access to a specific signed agreement.
+
+**Fix.** Mirror the sharing table’s subject scope inside the helper. A viewer
+may ask only about their own identity; a requester may ask about an agreement
+they own; Legal, Audit, and the administrator retain their complete view.
+
+**Regression proof.** The shared viewer and deal owner still receive `true`.
+An unshared viewer asking the identical question about the shared person
+receives `false`, while all reading-room policies continue to work.
+
+**Validation.**
+
+- `node backend/db/test/reading-room.test.mjs`
+- Result: 23 passed, 0 failed.
+
 ## Cycle 27 — legal-hold status was probeable across deals
 
 **Observed defect.** `cw.agreement_under_hold` uses definer rights so retention

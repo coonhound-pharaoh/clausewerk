@@ -2604,3 +2604,9 @@ approver identities.
 The retention path sees every active legal hold. A requester calling the
 hold-existence helper sees `true` only for an agreement they own; another deal’s
 litigation status is not an existence oracle.
+
+## S42 — Share-existence checks preserve subject scope — SETTLED 2026-07-28
+The sharing helper may bypass row policies to prevent recursion, but a viewer
+can ask only whether they personally hold the share and a requester can ask
+only about an owned agreement. Other people’s sharing relationships are not
+probeable.

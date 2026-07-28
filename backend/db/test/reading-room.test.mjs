@@ -150,6 +150,19 @@ await test('a different viewer still sees nothing', async () => {
   eq(seen, [], 'a share with one person opened the agreement to another');
 });
 
+await test('a viewer cannot probe another person’s sharing status', async () => {
+  const own = await queryAs('viewer',
+    `select cw.is_shared_with('AG-1',$1) as shared`, [SAM], SAM);
+  eq(own[0].shared, true, 'the shared viewer lost their own access check');
+  const probed = await queryAs('viewer',
+    `select cw.is_shared_with('AG-1',$1) as shared`, [SAM], KIM);
+  eq(probed[0].shared, false,
+    'an unshared viewer learned another person’s sharing relationship');
+  const owner = await queryAs('requester',
+    `select cw.is_shared_with('AG-1',$1) as shared`, [SAM], DANA);
+  eq(owner[0].shared, true, 'the deal owner lost their sharing-status view');
+});
+
 await test('the certificate and signatories follow the same rule', async () => {
   // Four tables carry the signed contract. Narrowing one and forgetting the
   // others would leave the render reachable by another route, which is exactly

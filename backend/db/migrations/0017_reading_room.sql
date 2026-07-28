@@ -102,6 +102,9 @@ create trigger agreement_share_no_delete
 -- SECURITY DEFINER for the same reason cw.was_notified() is: the policies below
 -- consult this, and this consults a table whose own policy would consult them
 -- back. 0015 met that exact cycle and Postgres refused the pair outright.
+-- Definer rights break that recursion; they do not widen the reporting API.
+-- The predicate below restores agreement_share's viewer/requester scope for a
+-- direct call, while policy calls use the same actor and therefore still work.
 create or replace function cw.is_shared_with(p_agreement_id text, p_person text)
 returns boolean
 language sql stable
@@ -110,7 +113,21 @@ security definer set search_path = cw, pg_temp as $$
     select 1 from cw.agreement_share
      where agreement_id = p_agreement_id
        and shared_with = p_person
-       and revoked_at is null)
+       and revoked_at is null
+       and (
+         coalesce(nullif(current_setting('role', true), 'none'), session_user)
+           not in ('cw_viewer', 'cw_requester')
+         or (
+           coalesce(nullif(current_setting('role', true), 'none'), session_user)
+             = 'cw_viewer'
+           and p_person = cw.app_actor()
+         )
+         or (
+           coalesce(nullif(current_setting('role', true), 'none'), session_user)
+             = 'cw_requester'
+           and cw.owns_agreement(p_agreement_id)
+         )
+       ))
 $$;
 
 revoke all on function cw.is_shared_with(text, text) from public;
