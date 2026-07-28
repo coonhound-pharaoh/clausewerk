@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S56 — Run provenance binds creator to session — SETTLED 2026-07-28
+Application-role inserts bind `cw.run.created_by` to `cw.app_actor()`. Immutable
+run provenance and requester read scoping cannot be redirected with a
+caller-supplied creator identity.
+
 ## S55 — SOW override actions bind actors to session — SETTLED 2026-07-28
 Application-role inserts bind SOW override `proposed_by` and settlement
 `settled_by` to `cw.app_actor()`. Named approval subjects remain distinct from

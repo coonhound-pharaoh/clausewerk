@@ -126,6 +126,19 @@ create index on cw.run (ruleset_id);
 -- portfolio question "what has this person run?" is the common one.
 create index on cw.run (created_by);
 
+create or replace function cw.bind_run_actor() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    new.created_by := cw.app_actor();
+  end if;
+  return new;
+end $$;
+
+create trigger run_bind_actor
+  before insert on cw.run
+  for each row execute function cw.bind_run_actor();
+
 create table cw.run_decision (
   run_id        text not null references cw.run(run_id),
   seq           int  not null check (seq >= 0),

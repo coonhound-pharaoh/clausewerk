@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 42 — run records accepted false creators
+
+**Observed defect.** A permitted requester or Legal caller could insert a run
+with an arbitrary `created_by`. The field is permanent and participates in
+requester read scoping, so the write could falsify provenance or hide the run
+from its authenticated creator.
+
+**Fix.** A before-insert trigger binds `created_by` to `cw.app_actor()` for
+application-role sessions. Owner writes remain available for migrations and
+historical imports.
+
+**Regression proof.** The run-store suite records an owned-deal run while
+supplying `impostor@cw` and verifies the immutable row names the authenticated
+requester.
+
+**Validation.**
+
+- `node backend/db/test/run-store.test.mjs`
+- Result: 44 passed, 0 failed.
+
 ## Cycle 41 — SOW override actions accepted false actors
 
 **Observed defect.** Requesters or Legal callers could propose or authorize a

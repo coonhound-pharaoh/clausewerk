@@ -398,9 +398,17 @@ await test('a requester may record a run against a deal they own', async () => {
   await db.exec(`reset role;
     insert into cw.agreement (agreement_id,counterparty,requester)
       values ('AG-OWN','Contoso','buyer@cw');`);
-  await execAs('requester', runRow('RUN-OWN', 'AG-OWN', 'buyer@cw'), 'buyer@cw');
-  const r = await one(`select count(*)::int n from cw.run where run_id='RUN-OWN'`);
+  await execAs('requester',
+    runRow('RUN-OWN', 'AG-OWN', 'impostor@cw'), 'buyer@cw');
+  const r = await one(`select created_by, 1::int n
+                       from cw.run where run_id='RUN-OWN'`);
   eq(r.n, 1, 'a requester cannot record a run on their own deal — the rule is inverted');
+});
+
+await test('a run records the authenticated creator', async () => {
+  const r = await one(`select created_by from cw.run where run_id='RUN-OWN'`);
+  eq(r.created_by, 'buyer@cw',
+    'the caller-supplied creator entered the permanent run record');
 });
 
 await test("a requester may NOT record a run against another requester's deal", async () => {
