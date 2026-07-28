@@ -139,6 +139,19 @@ await test('a direct insert cannot forge the override requester', async () => {
      'the opener used for scope and self-decision checks must come from the session');
 });
 
+await test('a requester cannot append a finding to another requester’s request',
+  async () => {
+    await throws(() => queryAs('requester', `
+      insert into cw.override_finding
+        (request_id,finding_ref,severity,summary)
+      values (${REQ},'foreign:F99','High','Injected foreign finding')`,
+      [], 'somebody.else@clausewerk'), 'row-level security');
+    const held = await one(`
+      select count(*)::int n from cw.override_finding
+       where request_id=${REQ} and finding_ref='foreign:F99'`);
+    eq(held.n, 0, 'a foreign requester must leave no immutable finding');
+  });
+
 await test('a request on its own passes NOTHING', async () => {
   // The whole product, in one assertion. If this ever returns a row for a
   // request that has only been asked for, the blanket button is back.

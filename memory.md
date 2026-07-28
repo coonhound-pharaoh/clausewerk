@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S73 — Override findings inherit request scope — SETTLED 2026-07-28
+An override finding may be inserted only when the requester can see its parent
+override request through RLS. Guessing another request ID cannot append
+immutable foreign findings.
+
 ## S72 — Advisory writes inherit ticket scope — SETTLED 2026-07-28
 An advisory assessment may be appended only when the caller can see its parent
 review ticket through RLS. A requester cannot attach permanent model evidence

@@ -586,7 +586,11 @@ create policy state_moves on cw.override_request for update
   using (cw.app_role() in ('requester','legal_reviewer','legal_admin'))
   with check (cw.app_role() in ('requester','legal_reviewer','legal_admin'));
 create policy requester_lists_findings on cw.override_finding for insert
-  with check (cw.app_role() = 'requester');
+  with check (
+    cw.app_role() = 'requester'
+    and exists (
+      select 1 from cw.override_request r
+       where r.request_id = override_finding.request_id));
 create policy legal_decides on cw.override_finding for update
   using (cw.app_role() in ('legal_reviewer','legal_admin'))
   with check (cw.app_role() in ('legal_reviewer','legal_admin'));

@@ -4,6 +4,22 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 59 — requesters could append findings to foreign overrides
+
+**Observed defect.** Direct `override_finding` inserts checked only that the
+caller was a requester. A requester who knew another request ID could append an
+immutable finding to that override despite being unable to read its parent.
+
+**Fix.** Finding inserts now require the parent override request to be visible
+through its RLS policy as well as the requester role.
+
+**Regression proof.** A foreign requester attempts to append a finding to a
+real override request; RLS refuses the insert and no matching finding remains.
+
+**Validation.**
+
+- `node backend/db/test/override.test.mjs` — 33 passed
+
 ## Cycle 58 — requesters could append judgments to foreign tickets
 
 **Observed defect.** Advisory-assessment reads inherited review-ticket scope,
