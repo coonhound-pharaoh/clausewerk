@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 100 — clause-identity creation time remained rewritable
+
+**Observed defect.** Governed clause creation now derived `created_at`, but the
+clause table's permitted UPDATE surface did not freeze it. A legal admin could
+therefore rewrite the stable identity's creation chronology after publication.
+
+**Fix.** The clause identity validation trigger now refuses any UPDATE that
+changes `created_at`, while retaining the existing category-consistency checks
+and other permitted metadata updates.
+
+**Regression proof.** A legal admin attempts to move an existing clause
+identity's timestamp to 2099. The update is refused and the exact original
+timestamp remains stored.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 85 passed
+- `node backend/db/test/ladder.test.mjs` — 56 passed
+
 ## Cycle 99 — clause-version recording time remained rewritable
 
 **Observed defect.** Governed publication now derived `created_at`, but both

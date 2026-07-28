@@ -57,6 +57,11 @@ begin
   if tg_op = 'INSERT' and cw.app_role() is not null then
     new.created_at := now();
   end if;
+  if tg_op = 'UPDATE' and new.created_at is distinct from old.created_at then
+    raise exception
+      'clause % creation time is immutable',
+      old.clause_id using errcode = 'restrict_violation';
+  end if;
   select c.short into want from cw.category c where c.key = new.category_key;
   if want is not null and left(new.clause_id, 2) <> want then
     raise exception

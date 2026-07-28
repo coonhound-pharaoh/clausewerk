@@ -116,6 +116,19 @@ await test('moving a clause to a disagreeing category is refused too', async () 
   eq(r.category_key, 'data', 'and the clause stayed where it was');
 });
 
+await test('a clause identity creation time cannot be rewritten', async () => {
+  const before = await one(`select created_at from cw.clause
+                            where clause_id='DP-H-014'`);
+  await throws(() => queryAs('legal_admin', `
+    update cw.clause set created_at='2099-01-01 00:00:00+00'
+     where clause_id='DP-H-014'`,
+    [], 'test@clausewerk'), 'creation time is immutable');
+  const after = await one(`select created_at from cw.clause
+                           where clause_id='DP-H-014'`);
+  eq(after.created_at, before.created_at,
+     'stable clause identity chronology changed after creation');
+});
+
 await test('a clause id that agrees with its category still inserts', async () => {
   // The positive control. A constraint that refuses everything is not a
   // constraint, and the seed above would not prove it because it predates the
