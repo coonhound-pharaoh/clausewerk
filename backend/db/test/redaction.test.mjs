@@ -175,6 +175,25 @@ await test('an undelegated caller cannot borrow a delegate’s identity', async 
   eq(state.redacted_on, null, 'the impersonation refusal changed the record');
 });
 
+await test('delegation evidence cannot be transferred in place', async () => {
+  await throws(() => queryAs('administrator',
+    `update cw.records_delegate
+        set person = '${LEGAL}',
+            granted_by = 'impostor@clausewerk',
+            granted_at = '2000-01-01T00:00:00Z',
+            reason = 'a different authority'
+      where person = '${PAT}' and revoked_at is null`, [], ADMIN),
+    'evidence is immutable',
+    'the Administrator transferred destructive authority without a new grant');
+  const d = await one(
+    `select person, granted_by, reason,
+            granted_at > now() - interval '1 minute' as granted_at_is_original
+       from cw.records_delegate
+      where person = '${PAT}' and revoked_at is null`);
+  eq([d.person, d.granted_by, d.granted_at_is_original], [PAT, ADMIN, true]);
+  assert(/2020 cohort/.test(d.reason), 'the delegation reason was rewritten');
+});
+
 await test('the delegate may now redact, and it is marked as delegated', async () => {
   await execAs('legal_reviewer', `select cw.redact_agreement('AG-1','${PAT}')`, PAT);
   const e = await one(`select payload->>'delegated' as d, payload->>'redacted_by' as who
@@ -211,6 +230,15 @@ await test('and STILL cannot purge — the delegation does not carry that', asyn
 });
 
 // ── What redaction actually removed, and what it kept ─────────────────────
+await test('a revoked delegation cannot be rewritten', async () => {
+  await throws(() => queryAs('administrator',
+    `update cw.records_delegate
+        set revoked_by = '${PAT}', revoked_at = now()
+      where person = '${PAT}' and revoked_at is not null`, [], ADMIN),
+    'was revoked and cannot be rewritten',
+    'a revoked delegation still accepted permanent-evidence changes');
+});
+
 console.log('\nthe content is gone and the fact remains');
 
 await test('the certificate bytes are gone', async () => {

@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 108 — records-delegation evidence was rewritable
+
+**Observed defect.** Administrator UPDATE permission existed to revoke delegated
+redaction authority, but no transition guard constrained the update. An
+Administrator could transfer authority to another person, replace the grant
+reason or provenance, or rewrite an already revoked delegation in place.
+
+**Fix.** Delegation identity and grant evidence are now immutable. A live
+delegation permits exactly one transition to revoked, and revoked rows refuse
+all later updates; changed authority requires a separately audited revocation
+and grant.
+
+**Regression proof.** Administrator attempts to transfer a live delegation and
+replace its grant evidence, then attempts to rewrite its revoked state. Both
+updates are refused and the original delegation remains intact.
+
+**Validation.**
+
+- `node backend/db/test/redaction.test.mjs` — 24 passed
+- `node backend/db/test/administrator.test.mjs` — 46 passed
+
 ## Cycle 107 — override-watcher evidence was rewritable
 
 **Observed defect.** Administrator UPDATE permission existed to record a

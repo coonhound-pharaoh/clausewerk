@@ -131,6 +131,37 @@ create trigger audit_records_delegate
   before insert or update on cw.records_delegate
   for each row execute function cw.audit_records_delegate();
 
+create or replace function cw.records_delegate_evidence_immutable()
+returns trigger
+language plpgsql as $$
+begin
+  if new.delegate_id is distinct from old.delegate_id
+     or new.person is distinct from old.person
+     or new.granted_by is distinct from old.granted_by
+     or new.granted_at is distinct from old.granted_at
+     or new.reason is distinct from old.reason then
+    raise exception
+      'delegation % evidence is immutable; revoke it and grant a new delegation',
+      old.delegate_id using errcode = 'restrict_violation';
+  end if;
+
+  if old.revoked_at is not null then
+    raise exception 'delegation % was revoked and cannot be rewritten',
+      old.delegate_id using errcode = 'restrict_violation';
+  end if;
+
+  if new.revoked_at is null or new.revoked_by is null then
+    raise exception 'delegation % may only be updated by recording its revocation',
+      old.delegate_id using errcode = 'restrict_violation';
+  end if;
+
+  return new;
+end $$;
+
+create trigger records_delegate_evidence_immutable
+  before update on cw.records_delegate
+  for each row execute function cw.records_delegate_evidence_immutable();
+
 create or replace function cw.delegate_no_delete() returns trigger
 language plpgsql as $$
 begin
