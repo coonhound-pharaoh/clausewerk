@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 89 — draft creation and expiry chronology was caller-controlled
+
+**Observed defect.** Governed clause-draft inserts bound the authenticated
+creator but accepted caller-supplied `created_at` and `expires_on`. A writer
+could forge when an AI proposal was made or keep it live beyond the stated
+thirty-day stale-draft policy.
+
+**Fix.** The review-queue actor trigger now derives draft creation time and the
+thirty-day expiry date from the database clock for governed writes. Owner
+historical imports remain explicit.
+
+**Regression proof.** A legal reviewer submits a year-2099 creation timestamp
+and expiry date. The stored creation time is current and expiry is exactly
+thirty days from the database date.
+
+**Validation.**
+
+- `node backend/db/test/review-queue.test.mjs` — 45 passed
+- `node backend/db/test/draft-record.test.mjs` — 19 passed
+
 ## Cycle 88 — review-ticket creation time was caller-controlled
 
 **Observed defect.** Review-ticket inserts bound the authenticated opener but

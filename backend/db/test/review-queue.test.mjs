@@ -340,15 +340,25 @@ await test('an unused draft is still ordinary work in progress', async () => {
   // only then. A freeze that also stops routine drafting would be refused by
   // its users and switched off.
   await queryAs('legal_reviewer', `
-    insert into cw.clause_draft (draft_id,text,prompt,model,model_version,created_by)
-    values (9,'first attempt','p','claude','v4.5','forged-author@clausewerk')`,
+    insert into cw.clause_draft
+      (draft_id,text,prompt,model,model_version,created_by,created_at,expires_on)
+    values (9,'first attempt','p','claude','v4.5','forged-author@clausewerk',
+            '2099-01-01 00:00:00+00','2099-01-01')`,
     [], 'legal@clausewerk');
   await queryAs('legal_reviewer',
     `update cw.clause_draft set text='second attempt' where draft_id=9`, [], 'legal@clausewerk');
-  const d = await one(`select text, created_by from cw.clause_draft where draft_id=9`);
+  const d = await one(`select text, created_by,
+                              created_at between now() - interval '1 minute'
+                                             and now() as created_now,
+                              expires_on = current_date + 30 as expires_on_policy
+                       from cw.clause_draft where draft_id=9`);
   eq(d.text, 'second attempt');
   eq(d.created_by, 'legal@clausewerk',
      'draft provenance is bound to the authenticated actor');
+  eq(d.created_now, true,
+     'draft creation time is bound to the database clock');
+  eq(d.expires_on_policy, true,
+     'draft expiry is bound to the thirty-day policy');
 });
 
 await test('the ticket text cannot be moved under a pending decision', async () => {

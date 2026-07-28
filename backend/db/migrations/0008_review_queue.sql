@@ -167,6 +167,8 @@ begin
   if cw.app_role() is not null then
     if tg_table_name = 'clause_draft' then
       new.created_by := cw.app_actor();
+      new.created_at := now();
+      new.expires_on := current_date + 30;
     elsif tg_table_name = 'review_ticket' then
       new.opened_by := cw.app_actor();
       new.created_at := now();
