@@ -150,6 +150,31 @@ create table cw.clause_version (
     not retired or retired_reason is not null)
 );
 
+-- Once wording has been published against an identity, its classification is
+-- evidence too. Severity drives selection, and baseline membership and section
+-- drive mandatory assembly; changing any of them in place changes policy
+-- without publishing a new version.
+create or replace function cw.published_clause_identity_immutable() returns trigger
+language plpgsql as $$
+begin
+  if exists (select 1 from cw.clause_version where clause_id = old.clause_id)
+     and (new.clause_id is distinct from old.clause_id
+          or new.category_key is distinct from old.category_key
+          or new.severity is distinct from old.severity
+          or new.always_include is distinct from old.always_include
+          or new.framework_section is distinct from old.framework_section) then
+    raise exception
+      'published clause % identity and classification are immutable; publish a '
+      'new clause identity instead',
+      old.clause_id using errcode = 'restrict_violation';
+  end if;
+  return new;
+end $$;
+
+create trigger published_clause_identity_immutable
+  before update on cw.clause
+  for each row execute function cw.published_clause_identity_immutable();
+
 comment on table cw.clause_version is
   'Append-only. A contract executed under v1 must resolve v1 forever (ADR-0006),
    so body/title/citations are immutable once written. Retirement is the one

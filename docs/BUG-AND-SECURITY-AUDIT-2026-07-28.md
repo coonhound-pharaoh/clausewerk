@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 110 — published clause classifications were rewritable
+
+**Observed defect.** Clause versions froze wording, but the parent clause row
+remained broadly writable after publication. Legal could change severity,
+baseline membership, or framework section in place, altering selection and
+mandatory assembly without publishing a new identity or version.
+
+**Fix.** Once any version exists, the clause identity, category, severity,
+baseline flag, and framework section are immutable. Classification corrections
+must use a new clause identity and therefore receive their own publication
+history.
+
+**Regression proof.** Legal attempts to turn a published High clause into a
+Standard mandatory baseline clause and assign a framework section. The update
+is refused and all original classification fields remain intact.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 88 passed
+- `python -m pytest backend/engine/test_run.py` — 37 passed
+
 ## Cycle 109 — used category labels could invalidate manifests
 
 **Observed defect.** Engine manifests identify categories by their canonical

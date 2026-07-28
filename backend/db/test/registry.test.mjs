@@ -225,6 +225,19 @@ await test('versions insert', async () => {
       ('CF-S-001',2,'Confidentiality v2','Recipient shall not disclose; 5-year tail.','Extended tail',
        array['Policy-CF-001'],'M. Okafor','2026-02-01','2028-02-01');`);
 });
+await test('a published clause classification cannot be rewritten', async () => {
+  await throws(() => queryAs('legal_admin', `
+    update cw.clause
+       set severity='Standard', always_include=true, framework_section='1.1'
+     where clause_id='DP-H-014'`,
+    [], 'test@clausewerk'), 'identity and classification are immutable');
+  const c = await one(`
+    select severity, always_include, framework_section
+      from cw.clause where clause_id='DP-H-014'`);
+  eq([c.severity, c.always_include, c.framework_section],
+    ['High', false, null],
+    'published selection and baseline policy changed without a new identity');
+});
 await test('a clause tag records the authenticated Legal author', async () => {
   const r = await queryAs('legal_admin', `
     insert into cw.clause_tag (clause_id,version,tag,tagged_by,tagged_on)
