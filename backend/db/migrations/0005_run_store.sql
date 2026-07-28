@@ -131,6 +131,7 @@ language plpgsql as $$
 begin
   if cw.app_role() is not null then
     new.created_by := cw.app_actor();
+    new.created_at := now();
   end if;
   return new;
 end $$;

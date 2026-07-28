@@ -390,9 +390,10 @@ const { execAs, mustNotWrite } = roleHelpers(db);
 
 const runRow = (id, agreement, by) =>
   `insert into cw.run (run_id,agreement_id,vendor,manifest,manifest_source,
-                       snapshot_id,ruleset_id,result_hash,engine_version,gate_open,created_by)
+                       snapshot_id,ruleset_id,result_hash,engine_version,gate_open,
+                       created_by,created_at)
    values ('${id}','${agreement}','Contoso','{}','llm','${H1}','${R1}','${RH}',
-           'clausewerk-engine/3',true,'${by}')`;
+           'clausewerk-engine/3',true,'${by}','2099-01-01 00:00:00+00')`;
 
 await test('a requester may record a run against a deal they own', async () => {
   await db.exec(`reset role;
@@ -406,9 +407,14 @@ await test('a requester may record a run against a deal they own', async () => {
 });
 
 await test('a run records the authenticated creator', async () => {
-  const r = await one(`select created_by from cw.run where run_id='RUN-OWN'`);
+  const r = await one(`select created_by,
+                              created_at between now() - interval '1 minute'
+                                             and now() as created_now
+                       from cw.run where run_id='RUN-OWN'`);
   eq(r.created_by, 'buyer@cw',
     'the caller-supplied creator entered the permanent run record');
+  eq(r.created_now, true,
+    'the caller-supplied creation time entered the permanent run record');
 });
 
 await test("a requester may NOT record a run against another requester's deal", async () => {

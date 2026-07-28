@@ -4,6 +4,24 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 86 — assembly-run creation time was caller-controlled
+
+**Observed defect.** Governed run inserts bound the authenticated creator but
+accepted caller-supplied `created_at`. Since runs are immutable reproducibility
+records, a caller could permanently forge when an assembly was performed.
+
+**Fix.** The run actor-binding trigger now derives `created_at` from the
+database clock for governed writes. Owner historical imports remain explicit.
+
+**Regression proof.** A requester submits a year-2099 run timestamp and a
+forged creator. The stored creator is the authenticated requester and the
+timestamp falls within the current database-clock window.
+
+**Validation.**
+
+- `node backend/db/test/run-store.test.mjs` — 44 passed
+- `node backend/db/test/writer-sql.test.mjs` — 16 passed
+
 ## Cycle 85 — agreement creation time was caller-controlled
 
 **Observed defect.** A requester opening an agreement was bound as its owner,
