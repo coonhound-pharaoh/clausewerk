@@ -255,7 +255,8 @@ alter table cw.clause_version
 
 -- INSERT: a ticket may only be OPENED, never born decided.
 create or replace function cw.review_ticket_opens_pending() returns trigger
-language plpgsql as $$
+language plpgsql
+security definer set search_path = cw, pg_temp as $$
 declare d_text text;
 begin
   if new.state is distinct from 'pending' then
@@ -275,7 +276,10 @@ begin
       'a review ticket cannot be opened carrying a decision'
       using errcode = 'check_violation';
   end if;
-  -- A ticket that carries a draft must carry the DRAFT'S text. Otherwise the
+  -- A ticket that carries a draft must carry the DRAFT'S text. This trigger
+  -- deliberately sees the full draft table even when a requester cannot:
+  -- definer rights let it validate a known draft reference without reopening
+  -- direct access to every draft's prompt and model provenance. Otherwise the
   -- baseline can be pre-edited at open time and the unedited-approval rate is
   -- defeated before the reviewer ever sees the ticket.
   if new.draft_id is not null then
@@ -709,8 +713,10 @@ alter table cw.review_ticket    enable row level security;
 alter table cw.review_segment   enable row level security;
 alter table cw.review_candidate enable row level security;
 
-create policy read_all on cw.clause_draft for select
-  using (cw.app_role() in ('requester','legal_reviewer','legal_admin','auditor'));
+create policy read_scoped on cw.clause_draft for select
+  using (
+    cw.app_role() in ('legal_reviewer','legal_admin','auditor')
+    or (cw.app_role() = 'requester' and created_by = cw.app_actor()));
 create policy draft_writes on cw.clause_draft for insert
   with check (cw.app_role() in ('requester','legal_reviewer','legal_admin'));
 -- Explicit and narrow: only Legal edits a draft, and only while it is unused —

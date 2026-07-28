@@ -136,7 +136,8 @@ alter table cw.review_ticket
 -- cannot be born carrying. Replaced whole rather than patched, because the guard
 -- is an allow-list and an allow-list has to be read in one piece.
 create or replace function cw.review_ticket_opens_pending() returns trigger
-language plpgsql as $$
+language plpgsql
+security definer set search_path = cw, pg_temp as $$
 declare d_text text;
 begin
   if new.state is distinct from 'pending' then
@@ -158,6 +159,8 @@ begin
       using errcode = 'check_violation';
   end if;
   if new.draft_id is not null then
+    -- Validate the known reference with complete visibility without granting
+    -- requesters direct read access to every author's draft provenance.
     select text into d_text from cw.clause_draft where draft_id = new.draft_id;
     if new.proposed_text is distinct from d_text then
       raise exception

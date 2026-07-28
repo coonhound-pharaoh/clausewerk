@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 113 — requesters could read every clause draft
+
+**Observed defect.** Review tickets and their evidence were deal-scoped, but
+`cw.clause_draft` admitted every requester to every row. Requesters could read
+other authors' proposed clause text, prompts, model identity and version, input
+references, and expiry before those drafts entered a scoped ticket.
+
+**Fix.** Requesters now see only drafts whose authenticated `created_by` matches
+their session actor. Legal and Audit retain complete review-queue visibility;
+the Administrator's separate explicit read policy is unchanged.
+
+**Regression proof.** A requester creates a draft while Legal-authored drafts
+already exist. The requester sees only their own row and its database-bound
+authorship, while the auditor still sees the full draft record.
+
+**Validation.**
+
+- `node backend/db/test/review-queue.test.mjs` — 49 passed
+- `node backend/db/test/draft-record.test.mjs` — 19 passed
+
 ## Cycle 112 — run pins exposed cross-deal evidence
 
 **Observed defect.** Snapshot and ruleset tables granted direct SELECT to

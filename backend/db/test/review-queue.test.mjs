@@ -694,6 +694,23 @@ await test('the audit chain still verifies after all of this', async () => {
 
 console.log('\nrow-level security');
 
+await test('a requester sees only drafts they created', async () => {
+  const own = await queryAs('requester', `
+    insert into cw.clause_draft
+      (text,prompt,model,model_version,created_by)
+    values ('Buyer draft.','Buyer prompt.','claude','v4.5','impostor@clausewerk')
+    returning draft_id`, [], 'buyer@clausewerk');
+  const visible = await queryAs('requester',
+    `select draft_id, created_by from cw.clause_draft order by draft_id`,
+    [], 'buyer@clausewerk');
+  eq(visible, [{draft_id: own[0].draft_id, created_by: 'buyer@clausewerk'}],
+    "a requester read another author's draft text or model provenance");
+  const audited = await queryAs('auditor',
+    `select count(*)::int n from cw.clause_draft`, [], 'audit@clausewerk');
+  const all = await one(`select count(*)::int n from cw.clause_draft`);
+  eq(audited[0].n, all.n, 'the auditor lost the complete draft record');
+});
+
 await test('a viewer cannot read the review queue at all', async () => {
   await db.exec(`reset role; set role cw_viewer;`);
   await throws(() => db.exec(`select * from cw.review_ticket limit 1`),
