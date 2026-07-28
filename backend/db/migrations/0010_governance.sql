@@ -302,6 +302,7 @@ begin
   end if;
   if nullif(current_setting('role', true), 'none') is not null then
     new.approved_on := current_date;
+    new.recorded_at := now();
   end if;
   return new;
 end $$;

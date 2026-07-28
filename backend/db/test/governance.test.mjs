@@ -209,16 +209,23 @@ await test('the Requester and the attorney approve, each by name', async () => {
     'a Legal-role session manufactured the configured requester approval');
   await mustWrite('requester',
     `insert into cw.concession_approval
-       (concession_id,approver_kind,approver,approved_on)
-     values (${C1},'requester','${BUYER}','2000-01-01')
-     returning approval_id, approved_on=current_date as approved_today`, [], BUYER);
+       (concession_id,approver_kind,approver,approved_on,recorded_at)
+     values (${C1},'requester','${BUYER}','2000-01-01',
+             '2099-01-01 00:00:00+00')
+     returning approval_id, approved_on=current_date as approved_today,
+               recorded_at between statement_timestamp() - interval '5 seconds'
+                               and statement_timestamp() as recorded_now`,
+    [], BUYER);
   await mustWrite('legal_reviewer',
     `insert into cw.concession_approval (concession_id,approver_kind,approver)
      values (${C1},'attorney','${ATTY}') returning approval_id`, [], ATTY);
-  const approval = await one(`select approved_on=current_date as approved_today
+  const approval = await one(`select approved_on=current_date as approved_today,
+                                     recorded_at between now() - interval '1 minute'
+                                                     and now() as recorded_now
                               from cw.concession_approval
                               where concession_id=${C1} and approver='${BUYER}'`);
   eq(approval.approved_today, true, 'the caller-supplied approval date survived');
+  eq(approval.recorded_now, true, 'the caller-supplied recording time survived');
   const m = await queryAs('legal_reviewer',
     `select * from cw.concession_missing_approvers($1)`, [C1]);
   eq(m.length, 0, 'nobody outstanding');

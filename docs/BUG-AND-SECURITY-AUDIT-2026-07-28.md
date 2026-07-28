@@ -4,6 +4,24 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 82 — concession approval recording time was caller-controlled
+
+**Observed defect.** Governed concession approvals derived their business date
+but accepted a caller-supplied `recorded_at`. Because approval rows are
+append-only evidence, an approver could permanently forge when the system
+received their approval.
+
+**Fix.** The approval validation trigger now derives `recorded_at` from the
+database clock for governed writes. Owner historical imports remain explicit.
+
+**Regression proof.** A requester submits both a year-2000 approval date and a
+year-2099 recording timestamp. The stored approval date is today and its
+recording timestamp falls within the current database-clock window.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs` — 47 passed
+
 ## Cycle 81 — governance configuration dates were caller-controlled
 
 **Observed defect.** Legal-admin attorney assignments and required-approver
