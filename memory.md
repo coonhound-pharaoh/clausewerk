@@ -2567,3 +2567,8 @@ redirects to a different host.
 Ticket identifiers are 1 to 19 ASCII decimal digits before integer conversion.
 Unicode numerals, signs, decimals, and pathological digit strings are rejected
 as caller input and cannot become conversion failures.
+
+## S35 — Stored-run reconstruction failures are one refusal — SETTLED 2026-07-28
+Missing clause members, inconsistent ladder members, and unknown stored
+categories all fail closed as 409 reconstruction refusals before document bytes
+are built. None may escape as an internal error or produce partial paper.

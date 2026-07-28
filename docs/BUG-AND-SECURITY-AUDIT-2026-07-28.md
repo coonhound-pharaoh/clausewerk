@@ -58,6 +58,24 @@ reads only the bounded amount and returns an absence naming the oversized reply.
 - `python -m pytest doorway/test_advisory.py -q -k "adapter"`
 - `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
 
+## Cycle 21 — reconstruction inconsistencies became generic failures
+
+**Observed defect.** The document endpoint translated only
+`SnapshotIncomplete` into a fail-closed 409. Other detected stored-run
+inconsistencies, including missing ladder members and removed category mappings,
+escaped as generic 500 failures.
+
+**Fix.** Treat every engine-detected reconstruction inconsistency as the same
+refused-on-merits outcome before document generation.
+
+**Regression proof.** Forced missing-rung and unknown-category reconstruction
+errors must each return 409 and no ZIP bytes.
+
+**Validation.**
+
+- `python -m pytest doorway/test_documents.py -q -k "other_rebuild_inconsistencies"`
+- `python -m py_compile doorway/documents.py doorway/test_documents.py`
+
 ## Cycle 20 — malformed ticket IDs escaped integer conversion
 
 **Observed defect.** `str.isdigit()` accepts some Unicode numeral characters

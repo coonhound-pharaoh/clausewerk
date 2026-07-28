@@ -134,7 +134,8 @@ def contract(db: Database, caller: Caller, query: dict) -> "Response | Download"
                     request.rows(RUNG_SQL, (run["snapshot_id"],)),
                     taken_on[0]["taken_on"] if taken_on else None,
                     categories=categories)
-            except engine_run.SnapshotIncomplete as incomplete:
+            except (engine_run.SnapshotIncomplete, ValueError,
+                    manifests.UnknownCategory) as incomplete:
                 # The engine's own sentence, unchanged. It says exactly what is
                 # missing and why rebuilding without it would be worse than
                 # refusing.

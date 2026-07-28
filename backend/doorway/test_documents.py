@@ -38,6 +38,7 @@ from doorway.test_runs import (
     ADMIN, DANA, DEAL, LEGAL_ADMIN, REVIEWER, SAM, TUNDE, Client, as_person,
     manifest,
 )
+from engine.manifest import UnknownCategory
 
 SCREENS = Path(__file__).resolve().parents[2] / "prototype" / "v4"
 
@@ -241,6 +242,28 @@ def test_a_stored_member_with_no_clause_row_refuses_with_the_engine_s_sentence(
 
 
 # ── Whose run it is ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("failure", [
+    ValueError("snapshot rung GHOST@v1 is not a member"),
+    UnknownCategory("no category has key 'removed'"),
+])
+def test_other_rebuild_inconsistencies_are_409s_with_no_document(
+    library, monkeypatch, failure
+):
+    client, run = record_a_run(library)
+    from doorway import documents as documents_module
+
+    def refuse(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(documents_module.engine_run, "snapshot_from_rows", refuse)
+
+    status, _headers, data = download(library, client.token, run["run_id"])
+
+    assert status == 409
+    assert refusal(data)["kind"] == "refused_on_merits"
+    assert not data.startswith(b"PK")
 
 
 def test_a_caller_naming_a_run_that_is_not_theirs_is_refused_with_no_bytes(
