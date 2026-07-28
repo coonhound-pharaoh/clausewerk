@@ -54,6 +54,9 @@ create or replace function cw.clause_id_agrees_with_category() returns trigger
 language plpgsql as $$
 declare want text;
 begin
+  if tg_op = 'INSERT' and cw.app_role() is not null then
+    new.created_at := now();
+  end if;
   select c.short into want from cw.category c where c.key = new.category_key;
   if want is not null and left(new.clause_id, 2) <> want then
     raise exception

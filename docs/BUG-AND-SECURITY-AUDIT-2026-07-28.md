@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 95 — clause-identity creation time was caller-controlled
+
+**Observed defect.** A governed legal admin could supply `created_at` when
+creating the stable clause identity. The library's permanent parent record
+could therefore falsely claim it existed years before or after publication.
+
+**Fix.** The clause identity validation trigger now derives creation time from
+the database clock on governed inserts without changing it during permitted
+updates. Owner historical imports remain explicit.
+
+**Regression proof.** A legal admin creates a clause identity with a year-2099
+timestamp. The stored creation time falls inside the current statement window,
+and its version can still be published normally.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 81 passed
+- `node backend/db/test/ladder.test.mjs` — 56 passed
+
 ## Cycle 94 — clause-version publication provenance was caller-controlled
 
 **Observed defect.** A governed legal-admin insert could supply the immutable

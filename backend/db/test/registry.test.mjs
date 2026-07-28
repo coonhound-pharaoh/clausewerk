@@ -534,9 +534,14 @@ await test('the actor and role are captured on every event', async () => {
   // therefore had to move onto a governed write made by an actual
   // cw_legal_admin — which is the stronger test anyway: it proves the recorded
   // role is the one the connection genuinely holds, not one it claimed.
-  await mustWrite('legal_admin', `insert into cw.clause
-      (clause_id,category_key,severity) values ('DP-H-077','data','High')`,
+  const clause = await mustWrite('legal_admin', `insert into cw.clause
+      (clause_id,category_key,severity,created_at)
+    values ('DP-H-077','data','High','2099-01-01 00:00:00+00')
+    returning created_at between statement_timestamp() - interval '5 seconds'
+                           and statement_timestamp() as created_now`,
     [], 'test@clausewerk');
+  eq(clause[0].created_now, true,
+     'clause identity creation time must come from the database');
   const published = await mustWrite('legal_admin', `insert into cw.clause_version
       (clause_id,version,title,body,rationale,citations,reviewer,approved_on,
        expires_on,created_at)
