@@ -93,3 +93,15 @@ contract after the user left the screen.
 **Proof.**
 `test_sensitive_api_responses_are_not_stored_by_browsers_or_proxies` verifies
 the header on both response paths.
+
+## 8. Browsers were allowed to reinterpret response types
+
+**Risk.** Without an explicit no-sniff policy, a browser may reinterpret a
+declared response type as executable content. That is unsafe on the same origin
+that serves authenticated workspaces.
+
+**Fix.** Static files, JSON replies, and downloads now send
+`X-Content-Type-Options: nosniff`.
+
+**Proof.** `test_api_responses_disable_browser_content_sniffing` verifies both
+API response branches; the static branch uses the same fixed header.

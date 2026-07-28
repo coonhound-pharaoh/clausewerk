@@ -315,6 +315,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("content-type", kind)
         self.send_header("content-length", str(len(content)))
+        self.send_header("x-content-type-options", "nosniff")
         self.end_headers()
         self.wfile.write(content)
         return True
@@ -345,6 +346,7 @@ class Handler(BaseHTTPRequestHandler):
                          f'attachment; filename="{download.filename}"')
         self.send_header("content-length", str(len(download.body)))
         self.send_header("cache-control", "no-store")
+        self.send_header("x-content-type-options", "nosniff")
         # Kept, and it matters: the JSON path calls it, and a download that
         # skipped it would fail cross-origin during development in a way no
         # test covers and every browser reports differently.
@@ -362,6 +364,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("content-type", "application/json")
         self.send_header("content-length", str(len(payload)))
         self.send_header("cache-control", "no-store")
+        self.send_header("x-content-type-options", "nosniff")
         self._cors()
         self.end_headers()
         self.wfile.write(payload)
