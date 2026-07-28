@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 77 — negotiation chronology was caller-controlled
+
+**Observed defect.** Governed negotiation writes bound their actors but accepted
+caller-supplied system chronology: `opened_on`, round `recorded_at`, position
+`created_at`, and movement `moved_at`. The append-only commercial history could
+therefore be backdated or future-dated permanently.
+
+**Fix.** Governed writes now derive those four record-lifecycle fields from the
+database clock. Business facts such as the document's actual `sent_on` date
+remain explicit caller input, and owner historical imports remain unchanged.
+
+**Regression proof.** A requester supplies forged year-2000/year-2099 values
+while opening a negotiation and recording its round, position, and movement.
+Every stored lifecycle value falls within the current transition window and all
+four authenticated actor bindings remain correct.
+
+**Validation.**
+
+- `node backend/db/test/negotiation.test.mjs` — 55 passed
+- `node backend/db/test/executed.test.mjs` — 53 passed
+
 ## Cycle 76 — account lifecycle timestamps were caller-controlled
 
 **Observed defect.** Governed account creation and revocation bound the

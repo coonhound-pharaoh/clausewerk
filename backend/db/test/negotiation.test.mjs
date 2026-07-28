@@ -459,35 +459,55 @@ await test('the requester who owns the deal can still record all four rows', asy
   // for the four refusals below: without it, a policy that refuses everybody
   // would look like a pass.
   const n = await mustWrite('requester',
-    `insert into cw.negotiation (agreement_id,paper,opened_by,baseline_chosen_by)
-     values ('AG-300','ours','${OTHER}','${OTHER}') returning negotiation_id`, [], BUYER);
+    `insert into cw.negotiation
+       (agreement_id,paper,opened_by,baseline_chosen_by,opened_on)
+     values ('AG-300','ours','${OTHER}','${OTHER}','2000-01-01')
+     returning negotiation_id`, [], BUYER);
   NEG_OWNED = n[0].negotiation_id;
   await mustWrite('requester',
     `insert into cw.negotiation_round
-       (negotiation_id,round_no,direction,document_sha256,storage_uri,sent_on,actor)
-     values (${NEG_OWNED},1,'issued','${D3}','s3://cw/neg/300-1.docx','2026-07-01','${OTHER}')
+       (negotiation_id,round_no,direction,document_sha256,storage_uri,sent_on,
+        actor,recorded_at)
+     values (${NEG_OWNED},1,'issued','${D3}','s3://cw/neg/300-1.docx',
+             '2026-07-01','${OTHER}','2000-01-01T00:00:00Z')
      returning round_no`, [], BUYER);
   const p = await mustWrite('requester',
     `insert into cw.negotiation_position
-       (negotiation_id,category_key,our_clause_id,our_version,round_raised,opened_from)
-     values (${NEG_OWNED},'data','DP-H-014',2,1,'library_standard') returning position_id`,
+       (negotiation_id,category_key,our_clause_id,our_version,round_raised,
+        opened_from,created_at)
+     values (${NEG_OWNED},'data','DP-H-014',2,1,'library_standard',
+             '2000-01-01T00:00:00Z') returning position_id`,
     [], BUYER);
   POS_OWNED = p[0].position_id;
   await mustWrite('requester',
-    `insert into cw.position_movement (position_id,round_no,to_state,actor)
-     values (${POS_OWNED},1,'held','${OTHER}') returning movement_id`, [], BUYER);
+    `insert into cw.position_movement
+       (position_id,round_no,to_state,actor,moved_at)
+     values (${POS_OWNED},1,'held','${OTHER}','2099-01-01T00:00:00Z')
+     returning movement_id`, [], BUYER);
   const actors = await one(
     `select n.opened_by, n.baseline_chosen_by, r.actor as round_actor,
-            m.actor as movement_actor
+            m.actor as movement_actor, n.opened_on=current_date as opened_today,
+            r.recorded_at > now() - interval '1 minute'
+              and r.recorded_at <= now() as round_time_is_fresh,
+            p.created_at > now() - interval '1 minute'
+              and p.created_at <= now() as position_time_is_fresh,
+            m.moved_at > now() - interval '1 minute'
+              and m.moved_at <= now() as movement_time_is_fresh
        from cw.negotiation n
        join cw.negotiation_round r using (negotiation_id)
-       join cw.position_movement m on m.position_id = $1
-      where n.negotiation_id = $2 and m.to_state = 'held'`,
+       join cw.negotiation_position p using (negotiation_id)
+       join cw.position_movement m on m.position_id = p.position_id
+      where p.position_id = $1 and n.negotiation_id = $2
+        and m.to_state = 'held'`,
     [POS_OWNED, NEG_OWNED]);
   eq([actors.opened_by, actors.baseline_chosen_by,
       actors.round_actor, actors.movement_actor],
      [BUYER, BUYER, BUYER, BUYER],
      'the append-only negotiation record accepted caller-supplied identities');
+  eq([actors.opened_today, actors.round_time_is_fresh,
+      actors.position_time_is_fresh, actors.movement_time_is_fresh],
+     [true, true, true, true],
+     'the append-only negotiation chronology accepted caller-supplied times');
 });
 
 // Each of the four is attempted separately and on purpose: closing one without

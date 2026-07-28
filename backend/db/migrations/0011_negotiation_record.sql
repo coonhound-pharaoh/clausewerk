@@ -171,6 +171,7 @@ begin
   if cw.app_role() is not null then
     new.opened_by := cw.app_actor();
     new.baseline_chosen_by := cw.app_actor();
+    new.opened_on := current_date;
   end if;
   return new;
 end $$;
@@ -184,6 +185,11 @@ language plpgsql as $$
 begin
   if cw.app_role() is not null then
     new.actor := cw.app_actor();
+    if tg_table_name = 'negotiation_round' then
+      new.recorded_at := now();
+    else
+      new.moved_at := now();
+    end if;
   end if;
   return new;
 end $$;
@@ -194,6 +200,19 @@ create trigger negotiation_round_binds_actor
 create trigger position_movement_binds_actor
   before insert on cw.position_movement
   for each row execute function cw.bind_negotiation_history_actor();
+
+create or replace function cw.bind_negotiation_position_time() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    new.created_at := now();
+  end if;
+  return new;
+end $$;
+
+create trigger negotiation_position_binds_time
+  before insert on cw.negotiation_position
+  for each row execute function cw.bind_negotiation_position_time();
 
 create trigger position_movement_no_edit
   before update or delete on cw.position_movement
