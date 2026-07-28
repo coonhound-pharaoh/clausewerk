@@ -4,6 +4,24 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 58 — requesters could append judgments to foreign tickets
+
+**Observed defect.** Advisory-assessment reads inherited review-ticket scope,
+but inserts checked only the role. A requester who knew a foreign ticket ID
+could append permanent model evidence and an audit event to another person’s
+review.
+
+**Fix.** Advisory-assessment inserts now require the parent ticket to be
+visible through its own RLS policy as well as a permitted writer role.
+
+**Regression proof.** A foreign requester attempts to record a model judgment
+on a decided ticket; RLS refuses the insert and the append-only assessment count
+remains zero.
+
+**Validation.**
+
+- `node backend/db/test/advisory.test.mjs` — 20 passed
+
 ## Cycle 57 — requesters could append evidence to foreign review tickets
 
 **Observed defect.** Insert policies for `review_segment` and

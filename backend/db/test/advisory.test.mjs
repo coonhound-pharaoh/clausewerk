@@ -296,6 +296,18 @@ await test('a ticket with no judgment still appears, with the estimate empty', a
 // ════════════════════════════════════════════════════════════════════════════
 console.log('\nwho sees what');
 
+await test('a requester cannot record a judgment on another opener’s ticket',
+  async () => {
+    const id = await decidedTicket(BUYER);
+    await refused(() => record(id, {
+      role: 'requester',
+      who: 'foreign.requester@clausewerk',
+    }), 'a foreign requester appended model evidence to another ticket');
+    const held = await one(
+      `select count(*)::int n from cw.advisory_assessment where ticket_id=${id}`);
+    eq(held.n, 0, 'the refused model call must leave no append-only evidence row');
+  });
+
 await test('a requester sees their own ticket on the board and not a stranger\'s',
   async () => {
     await queryAs('administrator', `

@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S72 — Advisory writes inherit ticket scope — SETTLED 2026-07-28
+An advisory assessment may be appended only when the caller can see its parent
+review ticket through RLS. A requester cannot attach permanent model evidence
+or its audit event to another opener’s ticket.
+
 ## S71 — Review-evidence writes inherit parent scope — SETTLED 2026-07-28
 Redline segments and review candidates may be appended only when the caller can
 see the parent review ticket through its RLS policy. A requester cannot modify

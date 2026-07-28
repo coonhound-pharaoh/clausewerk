@@ -291,7 +291,11 @@ create policy read_scoped on cw.advisory_assessment for select using (
   exists (select 1 from cw.review_ticket t where t.ticket_id = advisory_assessment.ticket_id));
 
 create policy record_judgment on cw.advisory_assessment for insert
-  with check (cw.app_role() in ('requester','legal_reviewer','legal_admin'));
+  with check (
+    cw.app_role() in ('requester','legal_reviewer','legal_admin')
+    and exists (
+      select 1 from cw.review_ticket t
+       where t.ticket_id = advisory_assessment.ticket_id));
 
 -- Deliberately absent: any UPDATE or DELETE policy, and any UPDATE or DELETE
 -- grant. Append-only is enforced twice — by privilege and by the trigger above
