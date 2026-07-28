@@ -2621,3 +2621,8 @@ are not probeable.
 Redaction and purge actor arguments must equal `cw.app_actor()` before any
 delegation or lifecycle check. A caller cannot borrow another person’s records
 authority or place another person’s name on an irreversible disposal event.
+
+## S45 — Retention destruction binds actor to session — SETTLED 2026-07-28
+The retention-destruction actor must equal `cw.app_actor()` before hold and date
+checks. An administrator-role connection cannot place another person’s name on
+the destruction decision or its audit event.

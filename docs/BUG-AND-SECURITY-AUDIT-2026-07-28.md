@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 31 — retention destruction actors could be impersonated
+
+**Observed defect.** `cw.retention_destroy` permanently records its actor
+argument but did not bind that name to the session actor. An
+administrator-role connection could therefore make the destruction decision
+under another person’s identity, corrupting both the retention row and audit
+chain attribution.
+
+**Fix.** Require the actor argument to equal `cw.app_actor()` before checking
+holds, dates, or changing lifecycle state.
+
+**Regression proof.** An administrator-role session attempts to destroy under
+the records custodian’s name and is refused without changing `destroyed_on`.
+The real named custodian still exercises every hold, due-date, success, and
+repeat-destruction path.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs`
+- Result: 44 passed, 0 failed.
+
 ## Cycle 30 — records actors could be impersonated
 
 **Observed defect.** The irreversible redaction and purge definers accepted an

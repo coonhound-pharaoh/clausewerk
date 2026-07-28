@@ -416,7 +416,8 @@ await test('a record under legal hold cannot be destroyed by the retention path'
   // The guarantee. Past its retention date, otherwise destructible, and the
   // destruction is refused with the matter named.
   await throws(() => queryAs('administrator',
-    `select cw.retention_destroy('AG-001','records@clausewerk')`),
+    `select cw.retention_destroy('AG-001','records@clausewerk')`, [],
+    'records@clausewerk'),
     'under legal hold (Northwind v. Us, 2026-CV-4417)');
   const r = await one(`select destroyed_on from cw.agreement_retention
                        where agreement_id='AG-001'`);
@@ -463,9 +464,21 @@ await test('releasing a hold is an audited act', async () => {
     'which matter stopped holding it is the useful half');
 });
 
+await test('retention destruction cannot be attributed to another person', async () => {
+  await throws(() => queryAs('administrator',
+    `select cw.retention_destroy('AG-001','records@clausewerk')`, [],
+    'impostor@clausewerk'),
+    'retention actor must match the signed-in person',
+    'an administrator-role session destroyed a record under another name');
+  const state = await one(
+    `select destroyed_on from cw.agreement_retention where agreement_id='AG-001'`);
+  eq(state.destroyed_on, null, 'the impersonation refusal changed the record');
+});
+
 await test('one release is not enough while another matter is still open', async () => {
   await throws(() => queryAs('administrator',
-    `select cw.retention_destroy('AG-001','records@clausewerk')`),
+    `select cw.retention_destroy('AG-001','records@clausewerk')`, [],
+    'records@clausewerk'),
     'ICO investigation 2026/0912',
     'all holds must be released before an agreement is destructible');
 });
@@ -481,7 +494,9 @@ await test('with every hold released, destruction proceeds and is audited', asyn
   await mustWrite('legal_admin',
     `update cw.legal_hold set released_by='legal@clausewerk', released_on=current_date
      where agreement_id='AG-001' and released_on is null returning hold_id`);
-  await queryAs('administrator', `select cw.retention_destroy('AG-001','records@clausewerk')`);
+  await queryAs('administrator',
+    `select cw.retention_destroy('AG-001','records@clausewerk')`, [],
+    'records@clausewerk');
   const r = await one(`select destroyed_on, destroyed_by from cw.agreement_retention
                        where agreement_id='AG-001'`);
   assert(r.destroyed_on !== null, 'the clock resumes from where it was, and runs out');
@@ -493,13 +508,15 @@ await test('with every hold released, destruction proceeds and is audited', asyn
 
 await test('destruction before the retention date is refused', async () => {
   await throws(() => queryAs('administrator',
-    `select cw.retention_destroy('AG-003','records@clausewerk')`),
+    `select cw.retention_destroy('AG-003','records@clausewerk')`, [],
+    'records@clausewerk'),
     'it is not due');
 });
 
 await test('nothing is destroyed twice', async () => {
   await throws(() => queryAs('administrator',
-    `select cw.retention_destroy('AG-001','records@clausewerk')`),
+    `select cw.retention_destroy('AG-001','records@clausewerk')`, [],
+    'records@clausewerk'),
     'was already destroyed');
 });
 

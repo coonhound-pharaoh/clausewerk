@@ -755,6 +755,14 @@ language plpgsql
 security definer set search_path = cw, pg_temp as $$
 declare r cw.agreement_retention%rowtype; matters text;
 begin
+  -- The argument is permanent attribution, not an identity selector. Bind it
+  -- before checking holds or dates so no refusal or success is misattributed.
+  if p_actor is distinct from cw.app_actor() then
+    raise exception
+      'the retention actor must match the signed-in person; % cannot act as %',
+      cw.app_actor(), p_actor using errcode = 'insufficient_privilege';
+  end if;
+
   select * into r from cw.agreement_retention where agreement_id = p_agreement_id;
   if not found then
     raise exception 'no retention record for %; nothing to destroy', p_agreement_id
