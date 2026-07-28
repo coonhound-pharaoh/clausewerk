@@ -29,3 +29,21 @@ and DOCX media types, asserts a 400 response, and proves no body byte was read.
 The database-backed doorway suite could not reach terminal output while
 pre-existing session-store work and other test processes were using the shared
 development database. It is not claimed as passing evidence for this cycle.
+
+## Cycle 2 — blank duplicate query selectors
+
+**Observed defect.** Query parsing discarded blank values before counting a
+selector's occurrences. `run=&run=RUN-2` therefore passed as one selector even
+though the caller supplied two, allowing different HTTP components to disagree
+about which value named the requested document.
+
+**Fix.** Preserve blank query values during parsing so the existing
+exactly-once check sees and rejects every duplicate spelling.
+
+**Regression proof.** The protocol test now covers both two nonblank selectors
+and a blank plus nonblank selector; each must produce a 400.
+
+**Validation.**
+
+- `python -m pytest doorway/test_server_protocol.py -q`
+- `python -m py_compile doorway/server.py doorway/test_server_protocol.py`

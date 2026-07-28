@@ -94,11 +94,12 @@ def test_an_explicit_development_origin_is_granted(monkeypatch):
 def test_duplicate_document_selectors_are_refused():
     handler = handler_with_headers()
 
-    query, refused = handler._query("run=RUN-1&run=RUN-2")
+    for raw in ("run=RUN-1&run=RUN-2", "run=&run=RUN-2"):
+        query, refused = handler._query(raw)
 
-    assert query == {}
-    assert refused is not None
-    assert refused.status == 400
+        assert query == {}, raw
+        assert refused is not None, raw
+        assert refused.status == 400, raw
 
 
 def test_pathologically_long_content_length_is_a_caller_error_not_a_crash():

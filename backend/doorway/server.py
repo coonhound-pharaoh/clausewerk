@@ -211,7 +211,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _query(self, raw: str) -> tuple[dict[str, str], Response | None]:
         try:
-            parsed = parse_qs(raw, max_num_fields=MAX_QUERY_FIELDS)
+            parsed = parse_qs(
+                raw, keep_blank_values=True, max_num_fields=MAX_QUERY_FIELDS)
         except ValueError:
             return {}, Response(400, {"error": "the query string has too many fields"})
         for key in QUERY_KEYS:

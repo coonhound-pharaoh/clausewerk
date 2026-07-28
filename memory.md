@@ -2473,3 +2473,8 @@ The HTTP doorway rejects a POST carrying more than one Content-Type field before
 reading its body. Which parser handles a request must not depend on which
 duplicate field an HTTP hop chooses. This follows the same fail-closed rule
 already used for duplicate Content-Length and Authorization fields.
+
+## S16 — Blank query values still count — SETTLED 2026-07-28
+The doorway preserves blank query-string values while counting occurrences.
+`run=&run=RUN-2` is two selectors and fails closed; a blank spelling cannot
+erase evidence that a security-sensitive document selector was duplicated.
