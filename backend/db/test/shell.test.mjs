@@ -687,6 +687,68 @@ await test('edited-before-approval is shown as the derived fact it is', async ()
     + 'unedited — which is the figure Legal watches, inflated');
 });
 
+// ── Filing a signed agreement ────────────────────────────────────────────
+
+await test('the execute form sends no actor and no role', async () => {
+  // The same rule every write on every screen follows: who is acting comes off
+  // the connection, and there is nowhere here to put a name.
+  const fn = /function FileExecution[\s\S]*?\n\}\n/.exec(revSrc())[0];
+  const call = /API\.executeAgreement\(\{([\s\S]*?)\n\s{18}\}\)/.exec(stripComments(fn));
+  assert(call, 'the execute form does not call the endpoint');
+  assert(!/\b(actor|role|filed_by|executed_by|person)\s*:/.test(call[1]),
+    'the execute form names who is acting, which the connection already knows');
+});
+
+await test('the execute form carries the evidence and never a certificate', async () => {
+  // The settled decision is the document's fingerprint plus the named
+  // signatories. The certificate FILE has nowhere to live yet, and the endpoint
+  // refuses one — so a field collecting it would gather something unfilable.
+  const fn = stripComments(/function FileExecution[\s\S]*?\n\}\n/.exec(revSrc())[0]);
+  assert(/sha256:/.test(fn), 'the filing carries no document fingerprint');
+  assert(/signatories:/.test(fn), 'the filing names nobody who signed');
+
+  // CHECKED AS A FIELD, NOT AS A WORD, and the first version of this check got
+  // it wrong: the screen SAYS the certificate cannot be attached yet — that is
+  // the gap being shown honestly — so a word search fails on the sentence
+  // explaining the very thing it is policing. The same trap as trap 5.3.
+  //
+  // What must not exist is a field collecting one or a key sending one.
+  assert(!/certificate:\s/.test(fn),
+    'the execute form sends a signature certificate, which the endpoint refuses');
+  assert(!/data-testid="[^"]*certificate/i.test(fn),
+    'the execute form has an input for a signature certificate');
+});
+
+await test('nothing is filed without a confirmation showing what will be filed', async () => {
+  // Everything filed is frozen on landing. A one-click button on an
+  // irreversible act is how a typo becomes a permanent wrong fact.
+  const fn = /function FileExecution[\s\S]*?\n\}\n/.exec(revSrc())[0];
+  assert(/if \(!confirming\) \{ setConfirming\(true\); return; \}/.test(fn),
+    'the execute button files immediately instead of showing what will be filed');
+  assert(/data-testid=\{confirming \? 'confirm-execution' : 'review-execution'\}/.test(fn),
+    'the review step and the filing step are the same control');
+});
+
+await test('the reviewer reads runs through the endpoint list and opens no transport', async () => {
+  const src = stripComments(revSrc());
+  const fn = /function RunsForLegal[\s\S]*?\n\}\n/.exec(src)[0];
+  for (const needed of ['API.runs(', 'API.runDecisions(', 'API.runFindings('])
+    assert(fn.includes(needed), `the reviewer's run section never calls ${needed})`);
+  assert(!/\bfetch\s*\(/.test(src), 'reviewer.jsx opens its own transport');
+  assert(!/API\.contract\(/.test(src),
+    'the reviewer downloads the contract; that helper belongs to the requester');
+});
+
+await test('an execution refusal is rendered, not replaced', async () => {
+  // The refusal names the deal the assembly actually belongs to, or the clause
+  // that is no longer current, or the finding nobody approved. Every one of
+  // those is the only part anybody can act on.
+  const fn = /function FileExecution[\s\S]*?\n\}\n/.exec(revSrc())[0];
+  assert(/onError\(r\.reason\)/.test(fn),
+    'the execute surface composes its own sentence instead of showing the '
+    + "database's or the engine's");
+});
+
 await test('there is no approve-all on the override surface', async () => {
   // Per finding means the deciding person saw each finding. A single button
   // would be the blanket acknowledge button with a loop behind it.
@@ -881,8 +943,103 @@ await test('nothing invents findings or runs to make the form look finished', as
   const src = stripComments(reqSrc());
   assert(!/\[\s*\{[^}]*finding_ref:\s*['"]/.test(src.replace(/finding_ref: ''/g, '')),
     'the request form ships with example findings');
-  assert(/not built yet/.test(reqSrc()),
-    'the screen does not say which parts do not exist');
+
+  // MOVED DELIBERATELY, AND NOT DELETED, when the manifest and the assembly
+  // were built. This used to match the literal phrase "not built yet" in a
+  // caption saying the forge did not exist. The forge exists; the caption is
+  // gone; the honest fact it guarded — the screen says which parts of itself
+  // are not real — is still true and still worth guarding.
+  //
+  // It now checks the COMPONENT rather than the sentence. Wording is content:
+  // it changes, and a check pinned to it fails on correct work. What must not
+  // change is that the requester's screen still declares its own gaps, and
+  // that the one it declares is the intake interview, which genuinely is not
+  // built.
+  assert(/<NotBuiltYet/.test(src),
+    'the screen no longer says which parts of it do not exist');
+  assert(/intake/i.test(src),
+    'the remaining gap is not named — it is the intake interview');
+});
+
+// ── Assembling a contract, and taking it away ────────────────────────────
+
+await test('the manifest is checked before it can be assembled', async () => {
+  // Two acts, and the order is the point: checking records nothing, assembling
+  // records a run that can never be edited or removed. Finding out that a
+  // category was invented AFTER recording one is a worse way to learn it.
+  const src = stripComments(reqSrc());
+  const fn = /function AssembleContract[\s\S]*?\n\}\n/.exec(src)[0];
+  assert(/API\.checkManifest\(/.test(fn), 'the manifest panel never pre-flights');
+  assert(/API\.recordRun\(/.test(fn), 'the manifest panel never assembles');
+  assert(/disabled=\{busy \|\| !checked\?\.ok\}/.test(fn),
+    'assembling is reachable without the check having passed — a permanent '
+    + 'record can be made before anybody knows the manifest is sound');
+});
+
+await test('the deal is taken from the deal, never typed', async () => {
+  const src = stripComments(reqSrc());
+  const fn = /function AssembleContract[\s\S]*?\n\}\n/.exec(src)[0];
+  assert(/agreement_id: deal\.agreement_id/.test(fn),
+    'the manifest names a deal the browser supplied rather than the deal being '
+    + 'looked at');
+});
+
+await test('the run view renders what the endpoint returned and invents nothing', async () => {
+  const src = stripComments(reqSrc());
+  const fn = /function RunResult[\s\S]*?\n\}\n/.exec(src)[0];
+  // Every fact on screen is a field off a row. No literal clause id, rule id
+  // or reason sentence anywhere in the component.
+  assert(/\{d\.reason\}/.test(fn),
+    "the decision's own reason is not rendered — a sentence written here would "
+    + 'have to be kept in step with the engine forever');
+  assert(/\{f\.detail\}/.test(fn), "the finding's own detail is not rendered");
+  assert(/run\.gate_open/.test(fn), 'the gate state is not read from the run');
+  assert(!/DP-[A-Z]-\d|CR-\d{3}/.test(fn),
+    'the run view carries an example clause or rule reference');
+});
+
+await test('an override reference is derived from a real finding, never typed', async () => {
+  // The reference is what the gate at signature matches an approval against.
+  // A typed one can be typed wrong, and a wrong one is not caught when it is
+  // written — it is decided by Legal and then covers nothing at signature.
+  const src = stripComments(reqSrc());
+  assert(/function findingRef\(f\)\s*\{\s*return\s*`\$\{f\.rule_id\}@v\$\{f\.rule_version\}`/.test(src),
+    'the finding reference is not built from the rule that raised it');
+  const fn = /function RequestOverride[\s\S]*?\n\}\n/.exec(src)[0];
+  assert(!/finding_ref:\s*[a-z]\w*\.finding_ref/.test(fn),
+    'the request form still carries a hand-typed reference');
+  assert(/finding_ref: findingRef\(f\)/.test(fn),
+    'the request form does not send the reference the execute gate looks for');
+});
+
+await test('one screen downloads, and it is not the transport', async () => {
+  // ADR-0008 survives because SAVING A FILE is something one screen does
+  // rather than something the transport does for every screen. The literal
+  // reading of "no createElement anywhere" is unsatisfiable once a download
+  // exists at all — so what is checked is WHICH screen has it.
+  const api = stripComments(read('api.jsx'));
+  assert(!/createElement\('a'\)/.test(api),
+    'api.jsx builds the anchor itself. Every screen now downloads by calling '
+    + 'the transport, and the check below stops meaning anything');
+  assert(!/\.download\s*=/.test(api), 'api.jsx sets a download filename');
+
+  const named = readdirSync(APPDIR)
+    .filter((f) => f.endsWith('.jsx') && f !== 'api.jsx')
+    .filter((f) => /API\.contract\(/.test(stripComments(read(f))));
+  assert(named.length === 1 && named[0] === 'requester.jsx',
+    `API.contract() is called from ${named.join(', ') || 'nowhere'}; it belongs `
+    + 'to the requester and to no other screen');
+});
+
+await test('a refused download is a sentence and never a saved file', async () => {
+  const src = stripComments(reqSrc());
+  const fn = /function RunResult[\s\S]*?\n\}\n/.exec(src)[0];
+  const download = /API\.contract\([\s\S]*?revokeObjectURL/.exec(fn)[0];
+  const guard = download.indexOf('if (!r.ok)');
+  const save = download.indexOf('createObjectURL');
+  assert(guard > -1 && guard < save,
+    'the file is saved before the reply is checked — a refusal would land on '
+    + "somebody's desktop as a broken document");
 });
 
 await test('my record says the scoping happens in the database', async () => {

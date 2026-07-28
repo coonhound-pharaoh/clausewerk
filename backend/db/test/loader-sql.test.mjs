@@ -12,6 +12,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { roleHelpers } from './roles.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS = process.env.CW_MIGRATIONS || join(HERE, '..', 'migrations');
@@ -191,6 +192,72 @@ await test('rules are immutable once published', async () => {
                    where rule_id='GL-001' and version=1`);
   } catch (e) { threw = true; assert(String(e.message).includes('immutable')); }
   assert(threw, 'editing a published rule would rewrite why past contracts blocked');
+});
+
+// ── The same three queries, as each of the six signed-in roles ─────────────
+//
+// WHY THIS BLOCK EXISTS. POST /runs reads the library through the CALLER'S OWN
+// connection, so what a person can assemble is decided here and nowhere else.
+// Everything above ran as the owner, who bypasses every rule there is.
+//
+// The system has SIX application roles, which is the schema's own count
+// (0013_administrator.sql:57-59), and they do not split the way one would
+// guess.
+
+console.log('\nthe loader queries, as each of the six signed-in roles');
+
+const { queryAs } = roleHelpers(db);
+const LOADER_QUERIES = [['CLAUSE_SQL', CLAUSE_SQL],
+                        ['LADDER_SQL', LADDER_SQL],
+                        ['RULE_SQL', RULE_SQL]];
+const GRANTED = ['viewer', 'requester', 'legal_reviewer', 'legal_admin', 'auditor'];
+
+await test('five roles read the library, and every one of them reads all of it', async () => {
+  // Including the VIEWER, and that is the point rather than an accident: the
+  // library is what has been approved, not what any one deal contains. It is
+  // also why POST /runs cannot refuse a viewer on the read — the refusal has
+  // to come from the audit chain, which is a write.
+  for (const [name, sql] of LOADER_QUERIES) {
+    const counts = {};
+    for (const role of GRANTED) counts[role] = (await queryAs(role, sql)).length;
+    const distinct = [...new Set(Object.values(counts))];
+    assert(distinct.length === 1,
+      `${name} answered these roles differently: ${JSON.stringify(counts)}`);
+    assert(distinct[0] > 0, `${name} returned nothing for anybody — vacuous`);
+  }
+});
+
+await test('the administrator sees the library and the ladders — owner decision U11', async () => {
+  // 0002 and 0003 granted these five roles only; the administrator did not
+  // exist yet. 0018:170-190 recorded the resulting blindness as an open
+  // question about the boundary of the role rather than closing it inside a
+  // convenience view, and 0022_owner_decisions_u9_u11.sql:24-31 is the owner
+  // answering it: sight of the library, and still no write of any kind.
+  for (const [name, sql] of [LOADER_QUERIES[0], LOADER_QUERIES[1]]) {
+    const rows = await queryAs('administrator', sql);
+    assert(rows.length > 0, `${name} returned nothing to an administrator`);
+  }
+});
+
+await test('the administrator is refused the CONFLICT RULES, and that is what stops a run', async () => {
+  // The half U11 did NOT relax. cw.active_conflict_rule is granted at
+  // 0004_conflict_rules.sql:237-238 to the same five roles, and 0022 extends
+  // the library and the ladders to the administrator without touching it.
+  //
+  // THIS IS WHERE POST /runs REFUSES AN ADMINISTRATOR — not at the clause
+  // library, which that role now reads perfectly well. The loader asks for
+  // clauses, then ladders, then rules, so the refusal arrives on the third
+  // query and still lands before the engine is ever consulted.
+  //
+  // Asserted rather than skipped so the boundary stays visible: whoever
+  // decides the administrator should see the rules too has to change this
+  // test on purpose.
+  let refused = '';
+  try { await queryAs('administrator', RULE_SQL); }
+  catch (e) { refused = String(e.message); }
+  assert(refused, 'RULE_SQL answered an administrator; no grant line says it may');
+  assert(/permission denied/i.test(refused),
+    `RULE_SQL refused an administrator, but not for want of a grant: ${refused}`);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

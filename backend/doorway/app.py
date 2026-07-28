@@ -37,7 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from doorway import manifests, reads, writes
+from doorway import documents, executions, manifests, reads, runs, writes
 from doorway.db import Database
 from doorway.identity import (
     Caller, NoEffectiveRole, NoSession, caller_for, identity_of, session_length,
@@ -49,6 +49,28 @@ from doorway.sessions import Sessions
 class Response:
     status: int
     body: dict
+
+
+@dataclass(frozen=True)
+class Download:
+    """A reply that is bytes rather than a record.
+
+    Deliberately a SECOND type rather than a wider `Response`. `Response.body`
+    stays annotated `dict`, so no existing endpoint's typing moves and nothing
+    downstream has to ask "is this body a document or a record?" — `isinstance`
+    already knows. `server.py` branches on the type and on nothing else.
+    """
+    status: int
+    body: bytes
+    content_type: str
+    filename: str
+
+
+# THE ONLY SPELLING OF THIS STRING IN THE REPOSITORY. It lives here because
+# this file owns the Download type; server.py never learns what Word is, it
+# reads `download.content_type`. Two copies of one constant in two files is
+# how the two quietly stop agreeing.
+DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 class App:
@@ -103,7 +125,13 @@ class App:
         path: str,
         token: str | None = None,
         body: dict | None = None,
-    ) -> Response:
+        query: dict[str, str] | None = None,
+    ) -> Response | Download:
+        # What the browser named in the query string, already narrowed to the
+        # keys server.py will carry (server.QUERY_KEYS). Its one consumer is
+        # GET /runs/contract, which has to say WHICH run to build.
+        selector = dict(query or {})
+
         if method == "POST" and path == "/sign-in":
             return self.sign_in((body or {}).get("person"))
 
@@ -136,6 +164,24 @@ class App:
         # unchanged, pass its own words back out. See manifests.py.
         if key == "POST /manifests/check":
             answered = manifests.check(self._db, caller, body)
+            return Response(answered.status, answered.body)
+
+        # Not a writes.WRITES entry, and that is not an oversight: a Write
+        # holds exactly one SQL statement, and assembling a contract is a
+        # library read, an engine call and a chain entry. Filing it under
+        # Write would make that file's one promise untrue.
+        if key == "POST /runs":
+            answered = runs.run(self._db, caller, body)
+            return Response(answered.status, answered.body)
+
+        # Returns whatever documents.py built rather than re-wrapping a body: a
+        # Download carries bytes, a content type and a filename, none of which a
+        # Response can hold. See the Download type above.
+        if key == "GET /runs/contract":
+            return documents.contract(self._db, caller, selector)
+
+        if key == "POST /agreements/execute":
+            answered = executions.execute(self._db, caller, body or {})
             return Response(answered.status, answered.body)
 
         return Response(404, {"error": "no such endpoint", "path": path})

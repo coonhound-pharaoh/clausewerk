@@ -50,6 +50,39 @@ const API = (() => {
     };
   }
 
+  // A reply that is a FILE rather than a record.
+  //
+  // THIS FUNCTION OWNS TRANSPORT AND REFUSAL-SHAPING, AND NOTHING ELSE. It
+  // fetches, carries the token, reads the bytes and the filename, and turns a
+  // non-ok reply into exactly the shape `call` returns — so a refused download
+  // arrives as a sentence somebody can read rather than as a broken file on
+  // their desktop.
+  //
+  // IT DOES NOT SAVE THE FILE. Building the anchor, making the object URL,
+  // setting the download name and revoking it afterwards all belong to the ONE
+  // screen that downloads, and that split is checked rather than trusted:
+  // db/test/shell.test.mjs asserts this file contains no createElement('a'),
+  // and that only the requester's screen names the helper below. ADR-0008 gave
+  // the viewer no export path, and it survives precisely because the saving
+  // step lives in one screen instead of in the transport every screen uses.
+  async function download(path) {
+    const res = await fetch(base + path, {
+      headers: { ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null);
+      return {
+        ok: false,
+        status: res.status,
+        reason: payload?.reason ?? payload?.error ?? `the request failed (${res.status})`,
+        expired: res.status === 401,
+      };
+    }
+    const disposition = res.headers.get('content-disposition') || '';
+    const named = /filename="([^"]+)"/.exec(disposition);
+    return { ok: true, blob: await res.blob(), filename: named ? named[1] : 'contract.docx' };
+  }
+
   return {
     get session() { return identity; },
     get signedIn() { return token !== null; },
@@ -128,8 +161,36 @@ const API = (() => {
     library:          () => call('GET', '/library'),
     ladders:          () => call('GET', '/ladders'),
 
+    // ── Assembly runs ───────────────────────────────────────────────────
+    // NONE OF THESE THREE TAKES A PARAMETER, for the reading room's reason:
+    // the scoping is "these runs, this person" and it comes from the identity
+    // on the connection. A screen that wants one run filters what the rule
+    // already returned.
+    runs:             () => call('GET', '/runs'),
+    runDecisions:     () => call('GET', '/runs/decisions'),
+    runFindings:      () => call('GET', '/runs/findings'),
+
+    // AND THIS ONE DOES, which is the exception and needs its argument made.
+    // A run is the caller's OWN artefact, named by an id the server generated
+    // and which the database's own rule already decided they may see — not a
+    // share scoped by somebody else's identity, which is the case the reading
+    // room refused. The endpoint resolves the id through the run table first
+    // and treats "no such run of yours" as a refusal, so naming one you may
+    // not have gets a sentence and no bytes.
+    //
+    // THIS IS NOT A PRECEDENT FOR THE READING ROOM. Those two still take no
+    // argument and must not start.
+    contract:  (runId) => download('/runs/contract?run=' + encodeURIComponent(runId)),
+
     // ── Writes. Each one act. ───────────────────────────────────────────
     addCategory:   (b) => call('POST', '/categories', b),
+    // The pre-flight and the act. THE PRE-FLIGHT HAS NEVER BEEN CALLED FROM
+    // ANYWHERE until now — it has existed and been tested since the engine was
+    // first connected, with no screen behind it — so this is the first time its
+    // refusals are rendered to a person.
+    checkManifest: (b) => call('POST', '/manifests/check', b),
+    recordRun:     (b) => call('POST', '/runs', b),
+    executeAgreement: (b) => call('POST', '/agreements/execute', b),
     openDeal:      (b) => call('POST', '/deals', b),
     openHold:      (b) => call('POST', '/holds', b),
     openTicket:    (b) => call('POST', '/tickets', b),

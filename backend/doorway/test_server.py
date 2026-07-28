@@ -22,11 +22,14 @@ import json
 import threading
 import urllib.error
 import urllib.request
+from contextlib import contextmanager
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import psycopg
 import pytest
 
+from doorway.app import DOCX_TYPE, Download, Response
 from doorway.seed_demo import PEOPLE, seed
 from doorway.server import serve
 
@@ -41,9 +44,20 @@ WORKSPACE_READS = {
     "legal_admin": ["/me", "/tickets", "/quality", "/origin-mix", "/clauses",
                     "/clause-versions", "/entrance", "/concessions", "/holds",
                     "/settings", "/waiting/countersign"],
+    # THE RUN READS BELOW MOVED IN THE SAME CHANGE THAT ADDED THEM TO api.jsx,
+    # and that is not tidiness. This table is an INDEPENDENT COPY of that file's
+    # read list, and the sweep iterates only what is listed here — so a copy
+    # that falls behind cannot go red on its own. It reads as coverage while
+    # covering less and less.
+    #
+    # It is the third duplicated specification in this system, and the other two
+    # are already guarded by moving them in the same package: shell.test.mjs's
+    # copy of the tab table, and mutation-check.mjs's shell block.
     "legal_reviewer": ["/me", "/tickets", "/waiting/tickets", "/quality",
-                       "/overrides", "/overrides/findings"],
-    "requester": ["/me", "/deals", "/overrides", "/overrides/findings"],
+                       "/overrides", "/overrides/findings",
+                       "/runs", "/runs/decisions", "/runs/findings"],
+    "requester": ["/me", "/deals", "/overrides", "/overrides/findings",
+                  "/library", "/runs", "/runs/decisions", "/runs/findings"],
     "auditor": ["/me", "/record", "/people", "/people/activity", "/health",
                 "/access-history", "/quality", "/origin-mix"],
     "viewer": ["/me"],
@@ -389,6 +403,142 @@ def test_an_unexpected_failure_keeps_its_details_out_of_the_reply():
         server.server_close()
         thread.join(timeout=5)
         Handler.app, Handler.static_root = held_app, held_root
+
+
+# ── Not everything that leaves here is JSON ─────────────────────────────────
+#
+# The transport seam only. NOTHING in the service produces a Download yet — the
+# first thing that will is GET /runs/contract — so these tests stand up a stub
+# App and prove the WIRE, which is the only thing this package changed.
+
+
+class Records:
+    """An App that answers what it was told to and remembers what it was handed."""
+
+    def __init__(self, answer):
+        self.answer = answer
+        self.seen: list[dict] = []
+
+    def handle(self, method, path, token=None, body=None, query=None):
+        self.seen.append({"method": method, "path": path,
+                          "body": body, "query": query})
+        return self.answer
+
+
+@contextmanager
+def stub_serving(app):
+    """A listening server with no database behind it."""
+    from doorway.server import Handler
+
+    held_app, held_root = Handler.app, Handler.static_root
+    Handler.app, Handler.static_root = app, None
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+        Handler.app, Handler.static_root = held_app, held_root
+
+
+def test_a_download_leaves_as_bytes_with_its_own_content_type():
+    """The exact bytes, and the content type the Download itself carried.
+
+    The payload below is deliberately not valid UTF-8 and not valid JSON: a
+    real .docx is a zip, and anything on this path that reached for json.dumps
+    would not merely mangle it — it would raise.
+    """
+    payload = b"PK\x03\x04\x14\x00\x06\x00\xff\xfe not json, not text"
+    app = Records(Download(200, payload, DOCX_TYPE, "contract.docx"))
+
+    with stub_serving(app) as base:
+        with urllib.request.urlopen(base + "/api/runs/contract?run=RUN-1") as reply:
+            status = reply.status
+            content_type = reply.headers["content-type"]
+            served = reply.read()
+
+    assert status == 200
+    assert served == payload, "the bytes were changed on the way out"
+    assert content_type == DOCX_TYPE, (
+        "the content type must come from the Download, not from this file")
+    with pytest.raises(UnicodeDecodeError):
+        served.decode("utf-8")
+
+
+def test_a_download_names_its_file_and_its_length():
+    payload = b"PK\x03\x04" + b"\x00" * 500
+    app = Records(Download(200, payload, DOCX_TYPE, "RUN-7.docx"))
+
+    with stub_serving(app) as base:
+        with urllib.request.urlopen(base + "/api/runs/contract") as reply:
+            disposition = reply.headers["content-disposition"]
+            length = reply.headers["content-length"]
+            reply.read()
+
+    assert "attachment" in disposition
+    assert 'filename="RUN-7.docx"' in disposition
+    assert length == str(len(payload)), (
+        "a browser that is told the wrong length truncates or hangs")
+
+
+def test_a_query_string_reaches_the_app_and_is_consumed_by_nothing():
+    """The seam, and only the seam. `?run=` arrives; anything not on the
+    whitelist does not; and the reply is the ordinary 404 it always was,
+    because nothing in this package reads what arrived."""
+    app = Records(Response(404, {"error": "no such endpoint"}))
+
+    with stub_serving(app) as base:
+        status, body = Client(base).call(
+            "GET", "/api/nothing-here?run=RUN-1&agreement=AG-1")
+
+    assert app.seen[-1]["query"] == {"run": "RUN-1"}, app.seen[-1]
+    assert "agreement" not in app.seen[-1]["query"], (
+        "the browser named a parameter that is not on QUERY_KEYS and it "
+        "reached the app anyway")
+    assert status == 404 and body.get("error") != "refused"
+
+
+def test_every_json_endpoint_still_answers_as_json(running):
+    """The old path, proved unchanged rather than assumed unchanged.
+
+    A branch added to the one function every reply passes through is exactly
+    the kind of edit that works for the new case and quietly spoils the old
+    one. Each endpoint below is compared with what App.handle answers directly,
+    so a difference introduced by the wire has nowhere to hide.
+    """
+    from doorway.server import Handler
+
+    status, body = Client(running).call(
+        "POST", "/api/sign-in", {"person": "a.okafor@clausewerk"})
+    assert status == 200 and body["token"]
+
+    for person, path in (
+        ("a.okafor@clausewerk", "/me"),
+        ("d.buyer@clausewerk", "/deals"),
+        ("r.vance@clausewerk", "/clauses"),
+        ("t.imani@clausewerk", "/record"),
+    ):
+        client = Client(running)
+        assert client.sign_in(person)[0] == 200
+
+        request = urllib.request.Request(
+            running + "/api" + path, method="GET",
+            headers={"authorization": f"Bearer {client.token}"})
+        with urllib.request.urlopen(request) as reply:
+            over_the_wire = reply.read()
+            content_type = reply.headers["content-type"]
+
+        assert content_type == "application/json", (
+            f"{path} answered with {content_type!r}")
+
+        direct = Handler.app.handle("GET", path, token=client.token)
+        assert not isinstance(direct, Download)
+        assert json.loads(over_the_wire) == json.loads(
+            json.dumps(direct.body, default=str)), (
+            f"{path} arrives as something other than what App.handle answered")
 
 
 # ── The guard that must survive every package ───────────────────────────────

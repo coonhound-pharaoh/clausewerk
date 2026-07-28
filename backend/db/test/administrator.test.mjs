@@ -221,14 +221,50 @@ await test('the administrator holds select on the content tables — the U5 gran
   const missing = [];
   for (const t of ['agreement','clause','clause_version','concession','run',
                    'run_finding','review_ticket','negotiation',
-                   'negotiation_position','executed_agreement','sow_override',
-                   'legal_hold','agreement_retention']) {
+                   'negotiation_position','executed_agreement','sow_override']) {
     const held = (await one(
       `select has_table_privilege('cw_administrator', $1, 'SELECT') as held`,
       [`cw.${t}`])).held;
     if (!held) missing.push(`cw.${t}`);
   }
   eq(missing, [], 'content tables the administrator cannot read, contrary to U5');
+});
+
+// ── U13 NARROWED U5, AND THIS IS WHERE ─────────────────────────────────────
+//
+// cw.legal_hold and cw.agreement_retention were in the sweep above until
+// 2026-07-27. Owner decision U13 (migration 0024) took them away on purpose:
+// the Administrator is told THAT a contract is held and not WHICH matter holds
+// it. They are the person who destroys records on schedule, so they need the
+// flag to know they must not — and the matter behind it is Legal's.
+//
+// The sweep above and this test now disagree with each other by design, which
+// is why the two tables were moved rather than the assertion loosened: a
+// reader has to see that the absence is a decision and not an omission.
+
+await test('the administrator is refused the hold matter and the retention dates — U13', async () => {
+  const wrongly = [];
+  for (const t of ['legal_hold', 'agreement_retention']) {
+    const held = (await one(
+      `select has_table_privilege('cw_administrator', $1, 'SELECT') as held`,
+      [`cw.${t}`])).held;
+    if (held) wrongly.push(`cw.${t}`);
+  }
+  eq(wrongly, [],
+    'the administrator can read the hold matter or the retention dates again. '
+    + 'U13 revoked both deliberately — the flag, not the reason — so this is '
+    + 'either that decision reverted or a grant added without reading it');
+});
+
+await test('the administrator can still see THAT a contract is held', async () => {
+  // The half U13 kept, and the reason the revoke above is safe to make. An
+  // administrator refused a destruction has to be able to tell a held contract
+  // from a due one; what they cannot do is browse the matters at leisure.
+  const held = (await one(
+    `select has_table_privilege('cw_administrator', 'cw.retention_due', 'SELECT') as held`)).held;
+  assert(held,
+    'the administrator cannot read cw.retention_due, so the hold FLAG is gone '
+    + 'too — U13 removed the reason, not the flag');
 });
 
 // Real writes, on the write path, against seeded rows. The privilege sweep

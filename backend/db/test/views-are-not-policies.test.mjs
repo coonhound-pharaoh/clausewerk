@@ -201,6 +201,36 @@ await test("no view marked 'read-all' or 'derived' sits over a person-scoped tab
   }
 });
 
+await test('the two run views scope themselves in their own WHERE clause', async () => {
+  // The standing guard on migration 0025. Both views answered with EVERY run
+  // to anybody granted them: a view runs with its owner's rights, and
+  // row-level security on cw.run is ENABLED rather than FORCED, so cw.run's
+  // read policy was never consulted through either of them.
+  //
+  // WHY THIS IS A NAMED TEST RATHER THAN A WIDENING OF THE INVENTORY ABOVE.
+  // The catalogue query is built from what cw_viewer can read (21 views).
+  // Widening it to cw_requester (29) was measured rather than guessed: five of
+  // the eight requester-only views — cw.concession_in_force, cw.concession_state,
+  // cw.position_current, cw.position_revival and cw.renewal_drift — have this
+  // exact shape TODAY and belong to the negotiation and concession work, not
+  // to the run store. Widening here would fail this harness on five views
+  // nobody in this change owns. They are recorded as needing an owner.
+  //
+  // A SECOND LIMITATION, recorded rather than fixed: the reverse check above
+  // would not have caught cw.run_contract even after widening. Its risky-table
+  // set is matched on policy TEXT, and cw.run_decision's read policy scopes
+  // transitively through cw.run without naming app_actor or owns_agreement
+  // itself. The check has a blind spot for one-hop scoping.
+  for (const view of ['run_summary', 'run_contract']) {
+    const [d] = await rows(`select pg_get_viewdef($1::regclass, true) as def`,
+      [`cw.${view}`]);
+    assert(/app_role\(\)|app_actor\(\)|owns_agreement/.test(d.def),
+      `cw.${view} no longer consults who is asking. It is granted to the ` +
+      `requester and both Legal roles, so without a WHERE clause of its own it ` +
+      `hands every run in the system to all three.`);
+  }
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) {
   console.log('\nfailures:');

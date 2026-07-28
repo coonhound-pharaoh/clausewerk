@@ -356,6 +356,306 @@ function OverrideDecisions({ me, onError }) {
 }
 
 // ── The desk ─────────────────────────────────────────────────────────────
+// ── Filing an executed agreement ─────────────────────────────────────────
+//
+// The one act in this system that cannot be taken back. Everything filed here
+// is frozen the moment it lands — there is no correcting it, only superseding
+// it — which is why the last step is a confirmation showing exactly what will
+// be written rather than a button that does it.
+//
+// NO PERMISSION DECISION IS MADE ON THIS SCREEN. The button is offered to
+// whoever is looking at the pane. A requester, a viewer and an auditor are
+// refused by the database, and what they see is the database's own sentence.
+// A screen that hid the button would be a control-shaped decoration: it would
+// look like a rule while enforcing nothing, and the rule that does the work
+// would stop being the one anybody could point at.
+function FileExecution({ run, onDone, onError }) {
+  const [form, setForm] = useState({
+    executed_on: '', effective_on: '', term_end: '',
+    filename: '', byte_size: '', sha256: '', storage_uri: '', signed_on: '',
+    signature_evidence: '',
+  });
+  const [signatories, setSignatories] = useState([
+    { name: '', party: 'ours', method: 'electronic', signed_on: '', title: '' },
+  ]);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const named = signatories.filter((s) => s.name.trim() && s.signed_on.trim());
+  const complete = ['executed_on', 'effective_on', 'filename', 'byte_size',
+                    'sha256', 'storage_uri', 'signed_on']
+    .every((k) => String(form[k]).trim()) && named.length > 0;
+
+  const field = (k, label, extra) => (
+    <div className="flex-1">
+      <label className="caption">{label}</label>
+      <input className="mt-1 w-full" style={{ padding: '4px 8px' }}
+             data-testid={`exec-${k}`} value={form[k]} onChange={set(k)} {...extra} />
+    </div>
+  );
+
+  return (
+    <div className="panel p-4 mt-4">
+      <PanelHead
+        title="File the signed agreement"
+        sub="Frozen the moment it lands. There is no correcting a filing, only superseding it."
+      />
+
+      <div className="panel-2 p-3 mt-1">
+        <div className="tag" style={{ color: 'var(--accent-2)' }}>what is checked first</div>
+        <div className="text-[12.5px] mt-1.5" style={{ color: 'var(--mute)', lineHeight: 1.7 }}>
+          The assembly must belong to <strong>this</strong> deal, every clause in
+          it must still be one the library would choose, and any finding that
+          blocked it must have been individually approved. All three are checked
+          before anything is written.
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <div className="section-label mb-2">The signed document</div>
+        <div className="flex gap-2 mb-2 items-end">
+          {field('filename', 'File name')}
+          {field('byte_size', 'Size in bytes', { type: 'number' })}
+        </div>
+        <div className="flex gap-2 mb-2 items-end">
+          {field('sha256', 'Fingerprint (SHA-256)')}
+        </div>
+        <div className="flex gap-2 mb-2 items-end">
+          {field('storage_uri', 'Where it is kept')}
+        </div>
+        {/* SAID PLAINLY RATHER THAN DRESSED UP. There is no document store yet,
+            so whatever is typed here is written down exactly as given and is
+            not resolvable to anything. Inventing a location on the filer's
+            behalf would look real to every later reader, including the report
+            that exists to find missing evidence. */}
+        <div className="caption mt-1">
+          Written down exactly as you give it. There is no document store yet,
+          so this is a reference somebody will have to follow by hand.
+        </div>
+
+        {/* NO CERTIFICATE FIELD, AND THE ABSENCE IS SHOWN RATHER THAN HIDDEN —
+            the same way the system already reports evidence it does not have.
+            The endpoint refuses a certificate outright, so a field here would
+            collect something that could not be filed. */}
+        <div className="panel-2 p-3 mt-3">
+          <div className="tag" style={{ color: 'var(--mute-2)' }}>known gap</div>
+          <div className="text-[12.5px] mt-1.5" style={{ color: 'var(--mute)', lineHeight: 1.7 }}>
+            The signature certificate itself cannot be attached yet — there is
+            nowhere to keep the file. The fingerprint and the signatories are
+            filed now; the certificate is attached when the document store
+            exists.
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <div className="section-label mb-2">Dates</div>
+        <div className="flex gap-2 items-end">
+          {field('executed_on', 'Signed on', { type: 'date' })}
+          {field('effective_on', 'Effective from', { type: 'date' })}
+          {field('term_end', 'Term ends (optional)', { type: 'date' })}
+          {field('signed_on', 'Document dated', { type: 'date' })}
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <div className="section-label mb-2">Who signed</div>
+        {signatories.map((s, i) => (
+          <div className="flex gap-2 mb-2 items-end" key={i}>
+            <div className="flex-1">
+              <label className="caption">Name</label>
+              <input className="mt-1 w-full" style={{ padding: '4px 8px' }}
+                     data-testid={`signatory-name-${i}`} value={s.name}
+                     onChange={(e) => setSignatories(signatories.map((x, j) =>
+                       j === i ? { ...x, name: e.target.value } : x))} />
+            </div>
+            <div style={{ width: 150 }}>
+              <label className="caption">Title (optional)</label>
+              <input className="mt-1 w-full" style={{ padding: '4px 8px' }} value={s.title}
+                     onChange={(e) => setSignatories(signatories.map((x, j) =>
+                       j === i ? { ...x, title: e.target.value } : x))} />
+            </div>
+            <div style={{ width: 130 }}>
+              <label className="caption">Signed on</label>
+              <input className="mt-1 w-full" type="date" style={{ padding: '4px 8px' }}
+                     value={s.signed_on}
+                     onChange={(e) => setSignatories(signatories.map((x, j) =>
+                       j === i ? { ...x, signed_on: e.target.value } : x))} />
+            </div>
+            <select className="font-mono" style={{ padding: '5px 8px' }} value={s.party}
+                    onChange={(e) => setSignatories(signatories.map((x, j) =>
+                      j === i ? { ...x, party: e.target.value } : x))}>
+              <option value="ours">ours</option>
+              <option value="theirs">theirs</option>
+            </select>
+            <select className="font-mono" style={{ padding: '5px 8px' }} value={s.method}
+                    onChange={(e) => setSignatories(signatories.map((x, j) =>
+                      j === i ? { ...x, method: e.target.value } : x))}>
+              <option value="electronic">electronic</option>
+              <option value="wet_ink">wet ink</option>
+            </select>
+            {signatories.length > 1 && (
+              <button className="btn btn-sm"
+                      onClick={() => setSignatories(signatories.filter((_, j) => j !== i))}>−</button>
+            )}
+          </div>
+        ))}
+        <button className="btn btn-sm"
+                onClick={() => setSignatories([...signatories,
+                  { name: '', party: 'theirs', method: 'electronic', signed_on: '', title: '' }])}>
+          + another signatory
+        </button>
+      </div>
+
+      {confirming && (
+        <div className="panel-2 p-3 mt-4" style={{ borderColor: 'var(--warn)' }}>
+          <div className="tag" style={{ color: 'var(--warn)' }}>this cannot be undone</div>
+          <div className="text-[12.5px] mt-1.5" style={{ color: 'var(--mute)', lineHeight: 1.8 }}>
+            Filing <span className="font-mono">{form.filename}</span>{' '}
+            ({form.byte_size} bytes) against{' '}
+            <span className="font-mono">{run.agreement_id}</span>, citing
+            assembly <span className="font-mono">{run.run_id}</span>, signed{' '}
+            {form.executed_on} and effective {form.effective_on}, by{' '}
+            {named.map((s) => s.name).join(', ')}.
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2 mt-4">
+        {confirming && (
+          <button className="btn" onClick={() => setConfirming(false)}>back</button>
+        )}
+        <button className={confirming ? 'btn btn-primary' : 'btn'}
+                disabled={busy || !complete}
+                data-testid={confirming ? 'confirm-execution' : 'review-execution'}
+                onClick={async () => {
+                  if (!confirming) { setConfirming(true); return; }
+                  setBusy(true); onError(null);
+                  const r = await API.executeAgreement({
+                    agreement_id: run.agreement_id,
+                    run_id: run.run_id,
+                    executed_on: form.executed_on,
+                    effective_on: form.effective_on,
+                    term_end: form.term_end || null,
+                    filename: form.filename,
+                    byte_size: Number(form.byte_size),
+                    sha256: form.sha256.trim(),
+                    storage_uri: form.storage_uri.trim(),
+                    signed_on: form.signed_on,
+                    signature_evidence: form.signature_evidence.trim() || null,
+                    signatories: named.map((s) => ({
+                      name: s.name.trim(), party: s.party, method: s.method,
+                      signed_on: s.signed_on, title: s.title.trim() || null,
+                    })),
+                  });
+                  setBusy(false);
+                  // The refusal's own sentence, unchanged. It names the deal the
+                  // assembly actually belongs to, or the clause that is no
+                  // longer current, or the finding nobody approved — and every
+                  // one of those is the only part anybody can act on.
+                  if (!r.ok) { setConfirming(false); onError(r.reason); return; }
+                  onDone();
+                }}>
+          {confirming ? '✓ file it' : 'review what will be filed…'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── The assemblies Legal can see ─────────────────────────────────────────
+function RunsForLegal({ onError, onFiled }) {
+  const runs = usePane(() => API.runs());
+  const decisions = usePane(() => API.runDecisions());
+  const findings = usePane(() => API.runFindings());
+  // Named for what it holds rather than reusing the shorter name below, and
+  // not for taste: the review desk's own state declaration is the exact line a
+  // standing check keys on, and a second identical copy in this file would
+  // leave that check silently watching the wrong one. The name is also the
+  // reason this comment does not quote the line.
+  const [openRun, setOpenRun] = useState(null);
+
+  if (runs.status === 'failed') return <LoadFailed reason={runs.reason} />;
+
+  const chosen = (runs.rows ?? []).find((r) => r.run_id === openRun);
+
+  return (
+    <div>
+      <PanelHead
+        title="Assembled contracts"
+        sub="What the engine selected, what the rules found, and whether it may be signed."
+      />
+      {(runs.rows ?? []).length === 0 ? (
+        <Empty
+          kicker="assemblies"
+          line="No contract has been assembled yet."
+          sub="A requester assembles one from their deal; it appears here when they do." />
+      ) : (runs.rows ?? []).map((r) => (
+        <div className="panel p-3 mb-2" key={r.run_id}>
+          <div className="flex items-baseline justify-between gap-2">
+            <div className="min-w-0">
+              <span className="text-[13px]">{r.vendor}</span>
+              <span className="font-mono ml-2" style={{ fontSize: 11, color: 'var(--mute-2)' }}>
+                {r.agreement_id}
+              </span>
+              <div className="caption mt-0.5">
+                {new Date(r.created_at).toLocaleString()} · {r.decisions} clauses ·{' '}
+                {r.findings} findings
+              </div>
+            </div>
+            <div className="flex gap-2 items-center">
+              {r.gate_open
+                ? <span className="chip chip-ok">nothing blocking</span>
+                : <span className="chip chip-err">{r.blocking} blocking</span>}
+              <button className="btn btn-sm" data-testid={`open-run-${r.run_id}`}
+                      onClick={() => setOpenRun(openRun === r.run_id ? null : r.run_id)}>
+                {openRun === r.run_id ? 'close' : 'open'}
+              </button>
+            </div>
+          </div>
+
+          {openRun === r.run_id && (
+            <div className="mt-3 pt-3 border-t hair">
+              {(decisions.rows ?? []).filter((d) => d.run_id === r.run_id).map((d) => (
+                <div className="py-1" key={d.seq}>
+                  <span className="text-[13px]">{d.category}</span>
+                  {d.clause_id
+                    ? <span className="font-mono ml-2" style={{ fontSize: 11, color: 'var(--mute-2)' }}>
+                        {d.clause_id}@v{d.version}
+                      </span>
+                    : <span className="chip chip-unknown ml-2">no clause</span>}
+                  <div className="caption mt-0.5">{d.reason}</div>
+                </div>
+              ))}
+              {(findings.rows ?? []).filter((f) => f.run_id === r.run_id).map((f) => (
+                <div className="py-1" key={`f${f.seq}`}
+                     style={{ borderTop: '1px solid var(--line)' }}>
+                  <span className={f.severity === 'High' ? 'chip chip-err' : 'chip chip-pending'}>
+                    {f.severity}
+                  </span>
+                  <span className="text-[13px] ml-2">{f.title}</span>
+                  <span className="font-mono ml-2" style={{ fontSize: 11, color: 'var(--mute-2)' }}>
+                    {f.rule_id}@v{f.rule_version}
+                  </span>
+                  <div className="caption mt-0.5">{f.detail}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {chosen && (
+        <FileExecution
+          run={chosen}
+          onError={onError}
+          onDone={() => { setOpenRun(null); runs.reload(); onFiled(); }} />
+      )}
+    </div>
+  );
+}
+
 function ReviewDeskPane({ me }) {
   const tickets = usePane(() => API.waitingTickets());
   const queue   = usePane(() => API.countersignQueue());
@@ -413,6 +713,10 @@ function ReviewDeskPane({ me }) {
           onDone={() => { setOpen(null); tickets.reload(); }}
         />
       )}
+
+      <div className="mt-8">
+        <RunsForLegal onError={setError} onFiled={() => overrides.reload()} />
+      </div>
 
       {queue.status === 'loaded' && queue.rows.length > 0 && (
         <div className="mt-8">
