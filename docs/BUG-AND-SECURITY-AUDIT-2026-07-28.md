@@ -4,6 +4,30 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 71 — an execution header alone marked a deal signed
+
+**Observed defect.** Inserting `executed_agreement` immediately moved the deal
+to `executed`, although the signed bytes live in the separate document-zero row.
+A governed Legal caller could therefore create a phantom execution with no
+signed original; the immutable orphan header also prevented a clean retry.
+
+**Fix.** Governed execution filings now have a deferred transaction-bound
+constraint requiring signed agreement document zero. This permits the
+foreign-key-required parent-then-child insertion order but rolls the entire
+filing back if the original is absent. Owner-mode historical imports retain
+their phased-loading lane.
+
+**Regression proof.** A Legal reviewer files only an execution header. Commit is
+refused, the agreement remains negotiating, and no execution header survives.
+The existing real-role complete-filing test still reaches executed state.
+
+**Validation.**
+
+- `node backend/db/test/executed.test.mjs` — 53 passed
+- `node backend/db/test/health.test.mjs` — 24 passed
+- `node backend/db/test/reading-room.test.mjs` — 23 passed
+- `node backend/db/test/redaction.test.mjs` — 22 passed
+
 ## Cycle 70 — a Legal session could manufacture named approvals
 
 **Observed defect.** The concession-approval gate checked that the supplied name

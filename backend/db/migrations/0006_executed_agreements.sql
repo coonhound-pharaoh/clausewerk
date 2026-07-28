@@ -228,6 +228,37 @@ create trigger executed_agreement_moves_status
   after insert on cw.executed_agreement
   for each row execute function cw.agreement_execute();
 
+-- The header and its signed original are one filing. Defer the check until the
+-- transaction boundary so callers can insert the parent before document zero,
+-- as the foreign key requires, while a header-only transaction rolls back
+-- instead of leaving an immutable phantom execution.
+create or replace function cw.execution_requires_original() returns trigger
+language plpgsql as $$
+begin
+  -- Owner-mode migrations and historical imports may load evidence in phases.
+  -- Governed application writes always carry SET ROLE and must be atomic.
+  if nullif(current_setting('role', true), 'none') is null then
+    return new;
+  end if;
+  if not exists (
+    select 1 from cw.executed_document d
+     where d.agreement_id = new.agreement_id
+       and d.doc_seq = 0
+       and d.kind = 'agreement'
+  ) then
+    raise exception
+      'execution % has no signed original document; the header and document zero '
+      'must be filed in the same transaction',
+      new.agreement_id using errcode = 'check_violation';
+  end if;
+  return new;
+end $$;
+
+create constraint trigger execution_requires_original
+  after insert on cw.executed_agreement
+  deferrable initially deferred
+  for each row execute function cw.execution_requires_original();
+
 -- ── The agreement as it stands ──────────────────────────────────────────────
 -- The ordered chain of signed instruments. Effective terms are the composition
 -- of the original plus its amendments, under the Order of Precedence clause —

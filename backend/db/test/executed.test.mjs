@@ -270,6 +270,22 @@ await test('nobody can set a deal to executed by hand', async () => {
   eq(a.status, 'negotiating', 'and it is still unsigned');
 });
 
+await test('an execution header without signed bytes rolls back', async () => {
+  await db.exec(`insert into cw.agreement (agreement_id,counterparty,requester)
+                 values ('AG-005','Adventure Works','buyer@cw')`);
+  await throws(() => queryAs('legal_reviewer',
+    `insert into cw.executed_agreement
+       (agreement_id,executed_on,effective_on)
+     values ('AG-005','2026-08-01','2026-09-01')`),
+    'has no signed original document',
+    'a bare header marked an agreement executed without signed bytes');
+  const a = await one(`select status from cw.agreement where agreement_id='AG-005'`);
+  eq(a.status, 'negotiating', 'the failed filing changed agreement status');
+  const e = await one(`select count(*)::int n from cw.executed_agreement
+                       where agreement_id='AG-005'`);
+  eq(e.n, 0, 'the failed filing left an immutable orphan header');
+});
+
 console.log('\nthe library moves on; the contract does not');
 
 await test('superseding the clause it used changes nothing about the contract', async () => {
