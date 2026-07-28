@@ -401,6 +401,17 @@ await test('opening a hold is a named, audited act', async () => {
   eq(u.held, true);
 });
 
+await test('a requester cannot probe another deal’s legal-hold status', async () => {
+  const own = await queryAs('requester',
+    `select cw.agreement_under_hold('AG-001') as held`, [], BUYER);
+  eq(own[0].held, true, 'the deal owner lost visibility of their legal hold');
+  const hidden = await queryAs('requester',
+    `select cw.agreement_under_hold('AG-001') as held`, [],
+    'somebody.else@clausewerk');
+  eq(hidden[0].held, false,
+    'the definer disclosed litigation status across deals');
+});
+
 await test('a record under legal hold cannot be destroyed by the retention path', async () => {
   // The guarantee. Past its retention date, otherwise destructible, and the
   // destruction is refused with the matter named.

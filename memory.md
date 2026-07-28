@@ -2599,3 +2599,8 @@ Security-definer approval helpers may see complete governance configuration for
 fail-closed settlement checks. A requester calling them directly sees results
 only for a deal they own; unrelated concession and SOW identifiers disclose no
 approver identities.
+
+## S41 — Legal-hold existence preserves deal scope — SETTLED 2026-07-28
+The retention path sees every active legal hold. A requester calling the
+hold-existence helper sees `true` only for an agreement they own; another deal’s
+litigation status is not an existence oracle.

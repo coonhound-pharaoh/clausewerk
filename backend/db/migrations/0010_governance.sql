@@ -701,9 +701,17 @@ language sql stable
 -- the destruction path and legal_admin can read every hold, so this changes no
 -- current answer — it is here so that a narrower grant later cannot turn
 -- "I cannot see a hold" into "there is no hold".
+-- The requester EXECUTE grant is a reporting path, not a litigation oracle:
+-- for that role the query restores the same owned-deal scope as legal_hold.
 security definer set search_path = cw, pg_temp as $$
   select exists (select 1 from cw.legal_hold h
-                 where h.agreement_id = p_agreement_id and h.released_on is null)
+                 where h.agreement_id = p_agreement_id
+                   and h.released_on is null
+                   and (
+                     coalesce(nullif(current_setting('role', true), 'none'),
+                              session_user) <> 'cw_requester'
+                     or cw.owns_agreement(h.agreement_id)
+                   ))
 $$;
 
 -- ── The retention path ──────────────────────────────────────────────────────

@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 27 — legal-hold status was probeable across deals
+
+**Observed defect.** `cw.agreement_under_hold` uses definer rights so retention
+decisions cannot miss a hidden hold. The function was also callable by
+requesters without restoring the legal-hold table’s ownership scope, allowing
+an unrelated requester to test whether an arbitrary agreement ID was involved
+in active litigation.
+
+**Fix.** Retain the complete result for Legal, Audit, and the records
+custodian, but require requester calls to pass `cw.owns_agreement`.
+
+**Regression proof.** With a live hold in place, the deal owner still receives
+`true`; another requester querying the same agreement receives `false`. The
+retention path remains blocked by the hold.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs`
+- Result: 43 passed, 0 failed.
+
 ## Cycle 26 — approval helpers disclosed unrelated deal governance
 
 **Observed defect.** The concession and SOW “missing approvers” helpers run as
