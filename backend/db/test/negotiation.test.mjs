@@ -46,6 +46,15 @@ const rows = async (s, p) => (await db.query(s, p)).rows;
 const one  = async (s, p) => (await rows(s, p))[0];
 const { queryAs, mustWrite } = roleHelpers(db);
 
+// The five summary views scope themselves since 0027, and cw.app_role() is
+// null on the owner's connection (settled decision U3), so a view read as the
+// owner now correctly returns nothing. Every read of one of them therefore
+// goes through a role that holds it. Legal is the neutral choice: it sees
+// every deal, so these helpers assert about the record rather than about who
+// is asking — the scoping itself is tested on its own further down.
+const viewRows = (s, p) => queryAs('legal_reviewer', s, p);
+const viewOne  = async (s, p) => (await viewRows(s, p))[0];
+
 const BUYER = 'buyer@clausewerk';
 const SNAP = 'a'.repeat(64), RULES = 'c'.repeat(64);
 // A result hash is a SHA-256. cw.run carries the shape check from WP-23, so a
@@ -167,7 +176,7 @@ await test('a position is a thread across rounds, and its state is its history',
      values (${NEG},'data','DP-H-014',2,2,'library_standard') returning position_id`,
     [], BUYER);
   POS = p[0].position_id;
-  const c = await one(`select state, round_last_moved from cw.position_current
+  const c = await viewOne(`select state, round_last_moved from cw.position_current
                        where position_id=$1`, [POS]);
   eq(c.state, 'open', 'every position starts open, and says so in its own history');
   eq(c.round_last_moved, 2);
@@ -181,7 +190,7 @@ await test('a position moves by appending, never by editing', async () => {
     `insert into cw.position_movement (position_id,round_no,to_state,actor,note)
      values (${POS},2,'held','${BUYER}','not moving on 24 hours') returning movement_id`,
     [], BUYER);
-  const c = await one(`select state from cw.position_current where position_id=$1`, [POS]);
+  const c = await viewOne(`select state from cw.position_current where position_id=$1`, [POS]);
   eq(c.state, 'held');
   const h = await rows(`select to_state from cw.position_movement
                         where position_id=$1 order by movement_id`, [POS]);
@@ -201,7 +210,7 @@ await test('the third-round revival is visible', async () => {
   // A point held in round 2 that moves again in round 5 is the SAME argument
   // reopening. Without this record the buyer negotiates it twice and nobody
   // notices — which is the single thing the position thread exists to buy.
-  let empty = await rows(`select * from cw.position_revival where position_id=$1`, [POS]);
+  let empty = await viewRows(`select * from cw.position_revival where position_id=$1`, [POS]);
   eq(empty.length, 0, 'held once and left alone is not a revival');
   for (const rn of [3, 4, 5])
     await mustWrite('requester',
@@ -213,11 +222,11 @@ await test('the third-round revival is visible', async () => {
     `insert into cw.position_movement (position_id,round_no,to_state,current_rung,actor,note)
      values (${POS},5,'conceded',1,'${BUYER}','they raised it again in round 5')
      returning movement_id`, [], BUYER);
-  const rev = await one(`select times_held, first_held_round, last_round
+  const rev = await viewOne(`select times_held, first_held_round, last_round
                          from cw.position_revival where position_id=$1`, [POS]);
   assert(rev, 'the same point coming back must be visible as the same point');
   eq(rev.first_held_round, 2); eq(rev.last_round, 5);
-  const c = await one(`select state, current_rung from cw.position_current
+  const c = await viewOne(`select state, current_rung from cw.position_current
                        where position_id=$1`, [POS]);
   eq(c.state, 'conceded'); eq(c.current_rung, 1);
 });
@@ -364,6 +373,245 @@ await test('an auditor can read it and cannot write to it', async () => {
   await throws(() => queryAs('auditor',
     `insert into cw.negotiation (agreement_id,paper,opened_by,baseline_chosen_by)
      values ('AG-021','ours','a','a')`), 'permission denied');
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// 0027 · the database decides whose deal a person may write against, and the
+//        five summary views consult who is asking
+// ════════════════════════════════════════════════════════════════════════════
+// Before 0027 all four INSERT policies checked the ROLE ONLY, so any requester
+// could open a negotiation against any deal in the system and append rounds,
+// positions and movements to any negotiation — permanently, into tables whose
+// triggers make an UPDATE and a DELETE raise. And all five summary views
+// carried no scoping of their own: a view runs with its owner's rights and
+// row-level security here is ENABLED rather than FORCED, so the base tables'
+// read policies were never consulted through any of them.
+console.log('\nwriting a negotiation record is scoped to the deal (0027)');
+
+const OTHER = 'other@clausewerk';
+
+// Refused BY THE ROW POLICY, and the reason is checked rather than assumed. A
+// bare "it raised" would also be satisfied by a sequence trigger, a foreign key
+// or a unique constraint firing first, and a refusal for the wrong reason is a
+// test that keeps passing after the policy is removed. PostgreSQL's own words
+// for a policy refusal, not ours.
+const refused = (sql) =>
+  throws(() => queryAs('requester', sql), 'row-level security',
+    'the write must be refused by the row policy, not by something else');
+
+// Two deals with two different owners, and a full negotiation record on each,
+// so every read below has something to hide as well as something to show. The
+// seeding runs as the owner, who is exempt from row-level security — which is
+// the point: the rows exist regardless of who may later see them.
+await db.exec(`
+  reset role;
+  select set_config('cw.actor','legal@clausewerk',false);
+  insert into cw.agreement (agreement_id,counterparty,requester) values
+    ('AG-300','Northwind','${BUYER}'),
+    ('AG-301','Contoso','${OTHER}'),
+    ('AG-302','Contoso','${OTHER}'),
+    ('AG-303','Contoso','${OTHER}');
+  insert into cw.negotiation (agreement_id,paper,opened_by,baseline,
+                              renews_agreement_id,baseline_chosen_by)
+    values ('AG-302','ours','${OTHER}','executed_agreement','AG-001','${OTHER}');
+  insert into cw.negotiation (agreement_id,paper,opened_by,baseline_chosen_by)
+    values ('AG-301','ours','${OTHER}','${OTHER}');
+  insert into cw.negotiation_position
+    (negotiation_id,category_key,our_clause_id,our_version,round_raised,opened_from)
+    select negotiation_id,'data','DP-H-014',2,0,'library_standard'
+    from cw.negotiation where agreement_id='AG-301';
+  insert into cw.position_movement (position_id,round_no,to_state,actor)
+    select p.position_id,0,'held','${OTHER}'
+    from cw.negotiation_position p join cw.negotiation n using (negotiation_id)
+    where n.agreement_id='AG-301';
+  insert into cw.position_movement (position_id,round_no,to_state,actor)
+    select p.position_id,2,'conceded','${OTHER}'
+    from cw.negotiation_position p join cw.negotiation n using (negotiation_id)
+    where n.agreement_id='AG-301';
+  insert into cw.concession
+    (agreement_id,category_key,standard_clause_id,standard_version,conceded_rung,
+     reason,approved_by) values
+    ('AG-300','data','DP-H-014',2,1,'buyer deal','${BUYER}'),
+    ('AG-301','data','DP-H-014',2,1,'other deal','${OTHER}');
+  -- A concession comes into force only with its deal's named approvers, so
+  -- cw.concession_in_force has anything in it at all.
+  insert into cw.agreement_attorney (agreement_id,attorney,assigned_by) values
+    ('AG-300','atty@clausewerk','legal@clausewerk'),
+    ('AG-301','atty@clausewerk','legal@clausewerk');
+  insert into cw.concession_approval (concession_id,approver_kind,approver)
+    select c.concession_id,'requester',a.requester
+    from cw.concession c join cw.agreement a using (agreement_id)
+    where c.agreement_id in ('AG-300','AG-301');
+  insert into cw.concession_approval (concession_id,approver_kind,approver)
+    select concession_id,'attorney','atty@clausewerk' from cw.concession
+    where agreement_id in ('AG-300','AG-301');
+  insert into cw.concession_settlement (concession_id,settled_by,approvals_at_settlement)
+    select concession_id,'legal@clausewerk',0 from cw.concession
+    where agreement_id in ('AG-300','AG-301');`);
+
+let NEG_OWNED, POS_OWNED;
+await test('the requester who owns the deal can still record all four rows', async () => {
+  // The two-branch shape must not cost the owner anything. This is the control
+  // for the four refusals below: without it, a policy that refuses everybody
+  // would look like a pass.
+  const n = await mustWrite('requester',
+    `insert into cw.negotiation (agreement_id,paper,opened_by,baseline_chosen_by)
+     values ('AG-300','ours','${BUYER}','${BUYER}') returning negotiation_id`, [], BUYER);
+  NEG_OWNED = n[0].negotiation_id;
+  await mustWrite('requester',
+    `insert into cw.negotiation_round
+       (negotiation_id,round_no,direction,document_sha256,storage_uri,sent_on,actor)
+     values (${NEG_OWNED},1,'issued','${D3}','s3://cw/neg/300-1.docx','2026-07-01','${BUYER}')
+     returning round_no`, [], BUYER);
+  const p = await mustWrite('requester',
+    `insert into cw.negotiation_position
+       (negotiation_id,category_key,our_clause_id,our_version,round_raised,opened_from)
+     values (${NEG_OWNED},'data','DP-H-014',2,1,'library_standard') returning position_id`,
+    [], BUYER);
+  POS_OWNED = p[0].position_id;
+  await mustWrite('requester',
+    `insert into cw.position_movement (position_id,round_no,to_state,actor)
+     values (${POS_OWNED},1,'held','${BUYER}') returning movement_id`, [], BUYER);
+});
+
+// Each of the four is attempted separately and on purpose: closing one without
+// the others achieves nothing, because a requester refused a negotiation on
+// somebody else's deal can still append to the negotiation already there.
+await test('a requester cannot open a negotiation on a deal they do not own', async () => {
+  await refused(
+    `insert into cw.negotiation (agreement_id,paper,opened_by,baseline_chosen_by)
+     values ('AG-303','ours','${OTHER}','${OTHER}')`);
+});
+
+await test('a requester cannot append a round to a negotiation they do not own', async () => {
+  // Round ONE, deliberately, even though this negotiation is already at round
+  // one. The sequence trigger runs before the row policy and counts only the
+  // rounds THIS caller can see — which for a non-owner is none — so asking for
+  // round two here is refused by the trigger and the policy is never reached.
+  // Round one is the number that gets past the trigger, so the refusal below is
+  // the policy's.
+  await refused(
+    `insert into cw.negotiation_round
+       (negotiation_id,round_no,direction,document_sha256,storage_uri,sent_on,actor)
+     values (${NEG_OWNED},1,'received','${D2}','s3://x','2026-07-05','${OTHER}')`);
+});
+
+await test('a requester cannot raise a position on a negotiation they do not own', async () => {
+  await refused(
+    `insert into cw.negotiation_position
+       (negotiation_id,category_key,our_clause_id,our_version,round_raised,opened_from)
+     values (${NEG_OWNED},'liab','LC-S-009',1,1,'library_standard')`);
+});
+
+await test('a requester cannot move a position on a negotiation they do not own', async () => {
+  await refused(
+    `insert into cw.position_movement (position_id,round_no,to_state,actor)
+     values (${POS_OWNED},1,'conceded','${OTHER}')`);
+});
+
+for (const role of ['legal_reviewer', 'legal_admin']) {
+  await test(`${role} records all four against a deal they do not own`, async () => {
+    // cw.owns_agreement resolves to `a.requester = cw.app_actor()`, and Legal
+    // never appears in cw.agreement.requester. A single-condition policy would
+    // have locked out precisely the people who negotiate other people's deals.
+    const ag = role === 'legal_reviewer' ? 'AG-021' : 'AG-022';
+    const n = await mustWrite(role,
+      `insert into cw.negotiation (agreement_id,paper,opened_by,baseline_chosen_by)
+       values ('${ag}','ours','${role}@clausewerk','${role}@clausewerk')
+       returning negotiation_id`);
+    const nid = n[0].negotiation_id;
+    await mustWrite(role,
+      `insert into cw.negotiation_round
+         (negotiation_id,round_no,direction,document_sha256,storage_uri,sent_on,actor)
+       values (${nid},1,'issued','${D1}','s3://x','2026-07-01','${role}@clausewerk')
+       returning round_no`);
+    const p = await mustWrite(role,
+      `insert into cw.negotiation_position
+         (negotiation_id,category_key,our_clause_id,our_version,round_raised,opened_from)
+       values (${nid},'data','DP-H-014',2,1,'library_standard') returning position_id`);
+    await mustWrite(role,
+      `insert into cw.position_movement (position_id,round_no,to_state,actor)
+       values (${p[0].position_id},1,'held','${role}@clausewerk') returning movement_id`);
+  });
+}
+
+console.log('\nthe five summary views consult who is asking (0027)');
+
+// One probe per view, reducing it to the keys it answered about. Rows from two
+// different owners are present in every one of them.
+//
+// THE PROBE JOINS NOTHING. An earlier version of this asked the two position
+// views for their agreement by joining cw.negotiation, and it passed against
+// the UNSCOPED views — because the join carried cw.negotiation's own read
+// policy and hid the leak. Whose deal each key belongs to is resolved
+// afterwards, as the owner, outside the role's session.
+const VIEW_PROBES = {
+  position_current:    { sql: `select distinct negotiation_id as k from cw.position_current`,
+                         owner: `select a.requester from cw.negotiation n
+                                 join cw.agreement a using (agreement_id)
+                                 where n.negotiation_id = $1` },
+  position_revival:    { sql: `select distinct negotiation_id as k from cw.position_revival`,
+                         owner: `select a.requester from cw.negotiation n
+                                 join cw.agreement a using (agreement_id)
+                                 where n.negotiation_id = $1` },
+  renewal_drift:       { sql: `select distinct agreement_id as k from cw.renewal_drift`,
+                         owner: `select requester from cw.agreement where agreement_id = $1` },
+  concession_state:    { sql: `select distinct agreement_id as k from cw.concession_state`,
+                         owner: `select requester from cw.agreement where agreement_id = $1` },
+  concession_in_force: { sql: `select distinct agreement_id as k from cw.concession_in_force`,
+                         owner: `select requester from cw.agreement where agreement_id = $1` },
+};
+
+const ownersOf = async (probe, keys) => {
+  const out = new Set();
+  for (const k of keys) out.add((await rows(probe.owner, [k]))[0].requester);
+  return out;
+};
+
+for (const [view, probe] of Object.entries(VIEW_PROBES)) {
+  await test(`cw.${view} shows a requester only their own deals`, async () => {
+    const mine = (await queryAs('requester', probe.sql, [], BUYER)).map(r => r.k);
+    // Not an empty view: a WHERE clause that refuses everybody would pass every
+    // "cannot see somebody else's rows" test there is.
+    assert(mine.length > 0, `cw.${view} returned nothing at all to the deal's own requester`);
+    eq([...await ownersOf(probe, mine)], [BUYER],
+      `cw.${view} returned a row from a deal this requester does not own`);
+  });
+
+  for (const role of ['legal_reviewer', 'legal_admin', 'auditor']) {
+    await test(`cw.${view} shows ${role} deals belonging to more than one requester`, async () => {
+      const seen = (await queryAs(role, probe.sql)).map(r => r.k);
+      const mine = (await queryAs('requester', probe.sql, [], BUYER)).map(r => r.k);
+      for (const k of mine)
+        assert(seen.includes(k), `cw.${view} shows ${role} less than the requester sees`);
+      const owners = await ownersOf(probe, seen);
+      assert(owners.size > 1,
+        `cw.${view} narrowed for ${role}, who is meant to see every deal — only ` +
+        `${[...owners].join(', ')} came back`);
+    });
+  }
+}
+
+await test('every one of the five views keeps its column list and order', async () => {
+  // Compared against information_schema on a database migrated WITHOUT this
+  // migration, rather than against a list written by hand here: a hand-written
+  // list is a second copy of the answer and can be wrong in the same direction
+  // as the change it is checking.
+  const before = await PGlite.create();
+  for (const f of readdirSync(MIGRATIONS).filter(f => f.endsWith('.sql')).sort()) {
+    if (/^0027_/.test(f)) continue;
+    await before.exec(readFileSync(join(MIGRATIONS, f), 'utf8'));
+  }
+  const COLS = `select table_name, column_name, ordinal_position, data_type
+                from information_schema.columns
+                where table_schema='cw' and table_name = any($1)
+                order by table_name, ordinal_position`;
+  const names = Object.keys(VIEW_PROBES);
+  const was = (await before.query(COLS, [names])).rows;
+  const now = (await db.query(COLS, [names])).rows;
+  await before.close();
+  assert(was.length > 0, 'the comparison database produced no columns to compare');
+  eq(now, was, 'a column moved, was renamed or changed type in one of the five views');
 });
 
 await db.exec(`reset role;`);

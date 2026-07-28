@@ -2408,3 +2408,48 @@ recent change made the two new screens *obey* that rule rather than bypass it �
 it did not invent it. If openness-with-an-opt-out is the house rule, that rule is
 a candidate to go too, and widening who sees every assembled contract in the
 company is a decision rather than a tidy-up.
+
+## U14 — D-4 draft-record fields — SETTLED (except one) 2026-07-27
+Mike answered the D-4 session sheet (docs/D4-DRAFT-RECORD-SESSION-PREP-2026-07-27.md §7):
+F1 edit-quality figure on the TICKET, never empty; F2 intended purpose, F3 known limitations,
+F4 model performance all on the DRAFT, never empty, fixed/frozen at creation or use. "Never empty"
+overrides the empty-for-old-records recommendation because development data is synthetic and
+rebuilt — old records do not survive into production. 1.3 (database-computed vs caller-supplied
+for F1) DEFERRED pending plain explanation, provided same day. Scope confirmed: four fields only.
+
+## U14a — Risk-exposure score — NEW, recorded 2026-07-27
+Mike wants an AI-calculated "risk exposure" score: baselined on the original clause, estimating
+the % of risk transferred from supplier to customer by accepting a concession. Recorded as a
+separate question per the D-4 scope rule — belongs to round analysis (plan WP-3 / package NC-17)
+as an advisory estimate, never a decision, never caller-supplied. Not a draft-record field.
+
+## U14 addendum — D-4 CLOSED 2026-07-27
+1.3 settled by Mike: DATABASE-COMPUTED. The edit-quality figure is calculated by the database at
+the moment of approval; whatever the calling software supplies is ignored and overwritten — the
+same rule as edited_before_approval. All twelve D-4 questions now answered; NC-11 unblocked.
+
+## U14b — F1 kept, with its meaning stated 2026-07-27
+Mike challenged the edit-quality score twice (meaning-blind arithmetic; added words) and then
+ruled: KEEP it. For the record: the figure measures how far apart the AI text and the approved
+text are — additions count as much as deletions — and it claims only "a person worked on this,"
+never "the meaning changed this much." Meaning-level comparison is the AI's job (WP-4/WP-8), and
+review-depth-as-judgment may be added later as a separately-labelled AI advisory, not in place of
+the measurement.
+
+## U14c — Two AI advisory measurements wanted 2026-07-27
+Mike wants BOTH, as features (not maybes): (1) an AI semantic content-difference measurement —
+how much the MEANING changed between the AI draft and the approved text (and between our clause
+and a supplier's version) — living alongside the arithmetic F1 score as a separately-labelled AI
+advisory, never replacing the measurement (U14b); (2) the risk-exposure score (U14a) — AI-estimated
+% of risk transferred supplier→customer by accepting a concession. Both are AI judgments: stored
+with provenance (model, version, inputs), labelled estimates, never caller-alterable, never
+decisions. Semantic-difference attaches to WP-6's metrics surface; risk exposure to WP-3 round
+analysis (NC-17). Neither is a field on the frozen draft/ticket record — an AI judgment arrives
+after the fact and lives in its own advisory record; the D-4 four-field ruling stands unchanged.
+
+## U14d — Risk exposure covers PROPOSED moves too 2026-07-27
+Mike extended U14a: the AI risk-exposure estimate applies not only to an accepted concession
+(retrospective) but to every PROPOSED negotiation move — each alternative shown in round analysis
+carries an AI-estimated % of risk it would transfer from supplier to customer, before the buyer
+chooses. Same judgment rules: advisory, provenance-stamped, labelled estimate, never a decision,
+never caller-supplied. Home: WP-3 round analysis (NC-17 area), shown beside the ladder ranking.

@@ -117,6 +117,22 @@ two more the moment the first one (NC-01) merges.
    disclosure sentence. Where a threshold is stored, it ships empty on purpose and a test enforces
    that it ships empty — because relying on discipline alone has already failed here once.
 
+## Owner additions after Gate 3 (2026-07-27, recorded — packages not yet re-cut)
+
+Two AI advisory features were added by the owner after this set passed Gate 3. Neither changes
+an existing package's contract; each needs a small package authored when its area is picked up:
+
+- **AI semantic-difference measurement** (plan WP-6 area): how much the *meaning* changed between
+  the AI draft and the approved text. An AI judgment stored with provenance, labelled an estimate,
+  shown beside the arithmetic score, never instead of it, never caller-supplied. Not a field on
+  the frozen draft/ticket record — it arrives after the fact and lives in its own advisory record.
+  The D-4 four-field ruling stands unchanged.
+- **Risk-exposure score** (plan WP-3 area, alongside NC-17): AI estimate, baselined on the
+  original clause, of the % of risk transferred from supplier to customer — in both directions:
+  every PROPOSED move in round analysis carries its estimate before the buyer chooses, and an
+  accepted concession carries what the choice actually cost. Same judgment rules. Recorded in
+  `memory.md` (U14a–U14d).
+
 ## Order of work
 
 ```
