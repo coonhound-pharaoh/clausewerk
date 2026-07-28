@@ -76,6 +76,23 @@ errors must each return 409 and no ZIP bytes.
 - `python -m pytest doorway/test_documents.py -q -k "other_rebuild_inconsistencies"`
 - `python -m py_compile doorway/documents.py doorway/test_documents.py`
 
+## Cycle 23 — known unprintable wording became a generic failure
+
+**Observed defect.** The document engine deliberately raises
+`UnprintableText` when approved wording contains a character XML 1.0 cannot
+represent. The endpoint let that known refusal escape as a generic 500.
+
+**Fix.** Preserve the engine's actionable explanation in a refused-on-merits
+409 before hashing, auditing, or returning any document bytes.
+
+**Regression proof.** Forced unprintable approved text must return 409 with the
+engine explanation and no ZIP bytes.
+
+**Validation.**
+
+- `python -m pytest doorway/test_documents.py -q -k "unprintable_approved_text"`
+- `python -m py_compile doorway/documents.py doorway/test_documents.py`
+
 ## Cycle 22 — malformed stored manifests became 500s
 
 **Observed defect.** Stored run manifests are JSONB without a database shape

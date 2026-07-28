@@ -197,8 +197,14 @@ def contract(db: Database, caller: Caller, query: dict) -> "Response | Download"
             # fingerprint on two different days — and two document_produced
             # records for one run would legitimately disagree, forever, in a
             # chain that cannot be corrected.
-            data = docx.build_docx(manifest, resolution,
-                                   today=run["created_at"].date())
+            try:
+                data = docx.build_docx(
+                    manifest, resolution, today=run["created_at"].date())
+            except docx.UnprintableText as unprintable:
+                return Response(409, {
+                    "error": "refused",
+                    "reason": str(unprintable),
+                    "kind": "refused_on_merits"})
             digest = docx.sha256_of(data)
 
             # Recorded BEFORE the bytes leave, inside the same transaction. If

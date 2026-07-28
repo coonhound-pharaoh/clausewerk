@@ -2577,3 +2577,8 @@ are built. None may escape as an internal error or produce partial paper.
 A run whose stored JSON manifest no longer satisfies the manifest boundary is
 non-reproducible. Document generation returns a 409 refusal before resolution
 and never emits partial Word bytes.
+
+## S37 — Unprintable approved wording is a document refusal — SETTLED 2026-07-28
+XML-forbidden characters in approved clause text return the engine's actionable
+UnprintableText explanation as a 409. No document hash, audit entry, or Word
+bytes are produced.

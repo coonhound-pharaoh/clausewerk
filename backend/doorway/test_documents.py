@@ -284,6 +284,25 @@ def test_a_malformed_stored_manifest_is_a_409_with_no_document(
     assert not data.startswith(b"PK")
 
 
+def test_unprintable_approved_text_is_a_409_with_no_document(
+    library, monkeypatch
+):
+    client, run = record_a_run(library)
+    from doorway import documents as documents_module
+
+    def refuse(*_args, **_kwargs):
+        raise documents_module.docx.UnprintableText(
+            "approved text contains an XML-forbidden control character")
+
+    monkeypatch.setattr(documents_module.docx, "build_docx", refuse)
+
+    status, _headers, data = download(library, client.token, run["run_id"])
+
+    assert status == 409
+    assert "control character" in refusal(data)["reason"]
+    assert not data.startswith(b"PK")
+
+
 def test_a_caller_naming_a_run_that_is_not_theirs_is_refused_with_no_bytes(
     library, schema
 ):
