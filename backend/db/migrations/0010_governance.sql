@@ -370,6 +370,26 @@ create table cw.concession_withdrawal (
   withdrawn_on  date not null default current_date
 );
 
+create or replace function cw.bind_concession_action_actor() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    if tg_table_name = 'concession_settlement' then
+      new.settled_by := cw.app_actor();
+    else
+      new.withdrawn_by := cw.app_actor();
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger concession_settlement_bind_actor
+  before insert on cw.concession_settlement
+  for each row execute function cw.bind_concession_action_actor();
+create trigger concession_withdrawal_bind_actor
+  before insert on cw.concession_withdrawal
+  for each row execute function cw.bind_concession_action_actor();
+
 create or replace function cw.concession_settlement_gate() returns trigger
 language plpgsql
 -- SECURITY DEFINER so the gate sees the whole configuration regardless of who

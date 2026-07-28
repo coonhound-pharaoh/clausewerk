@@ -173,10 +173,13 @@ await test('the Requester and the attorney approve, each by name', async () => {
 await test('with everyone in, the concession comes into force', async () => {
   await mustWrite('legal_reviewer',
     `insert into cw.concession_settlement (concession_id,settled_by)
-     values (${C1},'legal@clausewerk') returning concession_id`);
+     values (${C1},'impostor@clausewerk') returning concession_id`,
+    [], 'legal@clausewerk');
   const s = await oneAs('legal_reviewer', `select state, settled_by from cw.concession_state
                        where concession_id=$1`, [C1]);
   eq(s.state, 'approved');
+  eq(s.settled_by, 'legal@clausewerk',
+    'the caller-supplied settler entered the permanent settlement record');
   const f = await oneAs('legal_reviewer', `select count(*)::int n from cw.concession_in_force
                        where concession_id=$1`, [C1]);
   eq(f.n, 1, 'and only now does anything read it as agreed');
@@ -343,10 +346,12 @@ await test('a concession in force cannot be withdrawn', async () => {
 
 await test('a proposal that never settled can be withdrawn, and then cannot settle', async () => {
   const C = await concede('AG-001', 1);
-  await mustWrite('requester',
+  const withdrawn = await mustWrite('requester',
     `insert into cw.concession_withdrawal (concession_id,withdrawn_by,reason)
-     values (${C},'${BUYER}','vendor accepted our position after all')
-     returning concession_id`, [], BUYER);
+     values (${C},'impostor@clausewerk','vendor accepted our position after all')
+     returning concession_id, withdrawn_by`, [], BUYER);
+  eq(withdrawn[0].withdrawn_by, BUYER,
+    'the caller-supplied withdrawer entered the permanent withdrawal record');
   const s = await oneAs('legal_reviewer', `select state from cw.concession_state where concession_id=$1`, [C]);
   eq(s.state, 'withdrawn');
   await throws(() => queryAs('legal_reviewer',
@@ -361,6 +366,12 @@ await test('every approval and every settlement is in the audit trail', async ()
   const s = await one(`select payload from cw.audit_event
                        where event_type='concession_settled' and subject=$1`, [String(C1)]);
   eq(s.payload.approvals, 2);
+  eq(s.payload.settled_by, 'legal@clausewerk',
+    'the caller-supplied settler entered the audit chain');
+  const w = await one(`select payload from cw.audit_event
+                       where event_type='concession_withdrawn'`);
+  eq(w.payload.withdrawn_by, BUYER,
+    'the caller-supplied withdrawer entered the audit chain');
   const r = await one(`select payload from cw.audit_event
                        where event_type='required_approver_added'`);
   eq(r.payload.approver, 'dpo@clausewerk');

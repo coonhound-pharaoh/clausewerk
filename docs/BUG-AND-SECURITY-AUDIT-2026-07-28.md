@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 40 — concession actions accepted false actors
+
+**Observed defect.** A permitted caller could settle or withdraw a concession
+while placing an arbitrary identity in immutable `settled_by` or
+`withdrawn_by`. The false actor was also copied into the audit chain.
+
+**Fix.** Before-insert triggers bind settlement and withdrawal attribution to
+`cw.app_actor()` for application-role sessions. Named approval subjects remain
+unchanged, and owner writes remain available for historical imports.
+
+**Regression proof.** The governance suite supplies `impostor@clausewerk` for
+both successful actions and verifies the permanent rows and audit payloads name
+the authenticated Legal reviewer and requester.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs`
+- Result: 44 passed, 0 failed.
+
 ## Cycle 39 — governance configuration accepted false actors
 
 **Observed defect.** A Legal Admin could assign an attorney or add a required

@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S54 — Concession actions bind actors to session — SETTLED 2026-07-28
+Application-role inserts bind concession `settled_by` and `withdrawn_by` to
+`cw.app_actor()` before immutable state and audit events are written. Named
+approval subjects remain distinct from the actor performing the action.
+
 ## S53 — Governance configuration binds actors to session — SETTLED 2026-07-28
 Application-role inserts bind attorney `assigned_by` and required-approver
 `added_by` to `cw.app_actor()`, without changing the configured attorney or
