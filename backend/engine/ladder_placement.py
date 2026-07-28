@@ -38,6 +38,7 @@ FLOOR_MISSING = "floor_missing"
 FLOOR_DUPLICATED = "floor_duplicated"
 RUNGS_NOT_CONTIGUOUS = "rungs_not_contiguous"
 RUNG_DUPLICATED = "rung_duplicated"
+POSITION_DUPLICATED = "position_duplicated"
 NOT_A_RUNG = "not_a_rung"
 BELOW_FLOOR = "below_floor"
 
@@ -178,6 +179,12 @@ def read_ladder(
         return Refusal(
             RUNG_DUPLICATED,
             f"Ladder for {category}/{severity} has a repeated rung number — escalate",
+        )
+    refs = [r.ref for r in rungs]
+    if len(set(refs)) != len(refs):
+        return Refusal(
+            POSITION_DUPLICATED,
+            f"Ladder for {category}/{severity} repeats a clause version — escalate",
         )
     if numbers != list(range(len(numbers))):
         # "Descend one rung" is meaningless over a gap, and closing the gap

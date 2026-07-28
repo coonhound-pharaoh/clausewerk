@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 115 — duplicate ladder positions produced ambiguous rankings
+
+**Observed defect.** The pure ladder reader promises to recheck database
+constraints because its rows may also arrive through fixtures or caches, but it
+did not enforce the schema's unique clause-version rule. If one clause version
+appeared on two rungs, placement silently chose the first while ranking still
+offered the duplicate later in the retreat path.
+
+**Fix.** Ladder validation now detects repeated clause references and fails
+closed with the stable `position_duplicated` refusal code before placement or
+ranking can answer an ambiguous question.
+
+**Regression proof.** A contiguous two-rung ladder with one floor but the same
+clause version on both rungs is refused specifically as a duplicated position.
+
+**Validation.**
+
+- `python -m pytest backend/engine/test_ladder_placement.py -q` — 24 passed
+- `python -m pytest backend/engine -q` — 203 passed
+
 ## Cycle 114 — advisory evidence crossed its explicit administrator boundary
 
 **Observed defect.** The advisory-record migration explicitly reserved

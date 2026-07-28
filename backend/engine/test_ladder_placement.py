@@ -18,6 +18,7 @@ from engine.ladder_placement import (
     FLOOR_MISSING,
     NOT_A_RUNG,
     NO_RUNGS,
+    POSITION_DUPLICATED,
     RUNGS_NOT_CONTIGUOUS,
     RUNG_DUPLICATED,
     Refusal,
@@ -88,6 +89,11 @@ def test_refuses_rungs_that_do_not_start_at_zero():
 def test_refuses_a_repeated_rung_number():
     bad = [row(0, "AA-001"), row(0, "AA-009"), row(1, "AA-002", floor=True)]
     assert read_ladder("Cat", "High", bad).code == RUNG_DUPLICATED
+
+
+def test_refuses_the_same_clause_version_on_two_rungs():
+    bad = [row(0, "AA-001"), row(1, "AA-001", floor=True)]
+    assert read_ladder("Cat", "High", bad).code == POSITION_DUPLICATED
 
 
 # ── Placement ──────────────────────────────────────────────────────────────
