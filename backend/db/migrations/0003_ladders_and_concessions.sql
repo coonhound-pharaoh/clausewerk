@@ -25,6 +25,23 @@ create table cw.agreement (
 -- ── Ladders (CLA §3) ────────────────────────────────────────────────────────
 -- A pre-approved retreat path per category. Every rung is ordinary approved
 -- clause text — a ladder is metadata over clauses, not a new kind of content.
+-- A requester opening a deal owns that deal. Legal admin may legitimately
+-- create and assign a deal for somebody else, and owner-mode imports retain
+-- historical ownership, but a requester cannot inject rows into another
+-- person's RLS scope.
+create or replace function cw.bind_agreement_requester() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() = 'requester' then
+    new.requester := cw.app_actor();
+  end if;
+  return new;
+end $$;
+
+create trigger agreement_bind_requester
+  before insert on cw.agreement
+  for each row execute function cw.bind_agreement_requester();
+
 create table cw.ladder (
   ladder_id    bigserial primary key,
   category_key text not null references cw.category(key),

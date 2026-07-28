@@ -4,6 +4,28 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 54 — requesters could forge deal ownership
+
+**Observed defect.** A requester creating an agreement could name another
+person in `agreement.requester`. That column is the ownership root used by RLS
+and helper functions across deals, runs, concessions, negotiations, overrides,
+and views, so the caller could inject a deal into somebody else’s scope and
+lose visibility of the row they created.
+
+**Fix.** A before-insert trigger binds `requester` to `cw.app_actor()` when the
+session role is requester. Legal admins retain legitimate ability to create and
+assign deals for another person, and owner-mode imports retain historical
+ownership.
+
+**Regression proof.** A real requester opens a deal while explicitly naming a
+rival buyer; the returned row and subsequent scope name the authenticated
+requester.
+
+**Validation.**
+
+- `node backend/db/test/roles.test.mjs` — 20 passed
+- `node backend/db/test/ladder.test.mjs` — 56 passed
+
 ## Cycle 53 — required-approver replacement bypassed audit
 
 **Observed defect.** A Legal admin could update a `required_approver` row in

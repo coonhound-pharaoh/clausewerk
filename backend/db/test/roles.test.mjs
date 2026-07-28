@@ -229,9 +229,12 @@ await test('a viewer can still read clause text', async () => {
 });
 
 await test('a requester can still open a deal of their own', async () => {
-  await mustWrite('requester',
+  const opened = await queryAs('requester',
     `insert into cw.agreement (agreement_id,counterparty,requester)
-     values ('AG-NEW','Fabrikam','buyer@clausewerk')`, [], 'buyer@clausewerk');
+     values ('AG-NEW','Fabrikam','rival@clausewerk')
+     returning requester`, [], 'buyer@clausewerk');
+  assert(opened[0].requester === 'buyer@clausewerk',
+    `a requester injected a deal into ${opened[0].requester}'s ownership scope`);
 });
 
 await test('a legal reviewer can still record their own act', async () => {

@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S68 — Requester-created deals bind ownership to session — SETTLED 2026-07-28
+A requester opening an agreement becomes its requester; they cannot inject a
+deal into another person’s RLS scope. Legal admins may still create and assign
+deals for another person, and owner-mode imports retain historical ownership.
+
 ## S67 — Required-approver replacement is remove-plus-add — SETTLED 2026-07-28
 Required-approver configuration cannot be updated in place. Replacement is an
 audited removal followed by an actor-bound addition, preserving attribution for
