@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 96 — override-request opening time was caller-controlled
+
+**Observed defect.** Governed override requests bound the authenticated
+requester but accepted caller-supplied `requested_at`. Since the timestamp is
+immutable evidence and anchors the socialisation workflow, a requester could
+permanently backdate or future-date the request.
+
+**Fix.** The override requester-binding trigger now derives `requested_at` from
+the database clock for governed writes. Owner historical imports remain
+explicit.
+
+**Regression proof.** A requester directly inserts an override with a forged
+requester and year-2099 timestamp. The stored requester is authenticated and
+the timestamp falls inside the current statement window.
+
+**Validation.**
+
+- `node backend/db/test/override.test.mjs` — 37 passed
+- `node backend/db/test/redaction.test.mjs` — 22 passed
+
 ## Cycle 95 — clause-identity creation time was caller-controlled
 
 **Observed defect.** A governed legal admin could supply `created_at` when

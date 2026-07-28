@@ -132,11 +132,17 @@ await test('a requester opens a request, and it is recorded with its justificati
 await test('a direct insert cannot forge the override requester', async () => {
   const r = await queryAs('requester', `
     insert into cw.override_request
-      (run_id,agreement_id,requested_by,justification,commercial_pressure)
-    values ('RUN-1','AG-1','${PAT}','${JUST}','forged attribution check')
-    returning request_id, requested_by`, [], DANA);
+      (run_id,agreement_id,requested_by,requested_at,justification,commercial_pressure)
+    values ('RUN-1','AG-1','${PAT}','2099-01-01 00:00:00+00',
+            '${JUST}','forged attribution check')
+    returning request_id, requested_by,
+              requested_at between statement_timestamp() - interval '5 seconds'
+                               and statement_timestamp() as requested_now`,
+    [], DANA);
   eq(r[0].requested_by, DANA,
      'the opener used for scope and self-decision checks must come from the session');
+  eq(r[0].requested_now, true,
+     'the immutable request time must come from the database clock');
 });
 
 await test('a requester cannot append a finding to another requester’s request',
