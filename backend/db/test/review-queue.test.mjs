@@ -361,6 +361,24 @@ await test('an unused draft is still ordinary work in progress', async () => {
      'draft expiry is bound to the thirty-day policy');
 });
 
+await test('an unused draft cannot rewrite its creation provenance', async () => {
+  await throws(() => queryAs('legal_reviewer', `
+    update cw.clause_draft
+       set created_by='somebody.else@clausewerk',
+           created_at='2099-01-01 00:00:00+00',
+           expires_on='2099-01-01'
+     where draft_id=9`, [], 'legal@clausewerk'),
+    'creation provenance');
+  const d = await one(`select created_by,
+                              created_at between now() - interval '1 minute'
+                                             and now() as created_now,
+                              expires_on=current_date + 30 as expires_on_policy
+                       from cw.clause_draft where draft_id=9`);
+  eq(d.created_by, 'legal@clausewerk');
+  eq(d.created_now, true);
+  eq(d.expires_on_policy, true);
+});
+
 await test('the ticket text cannot be moved under a pending decision', async () => {
   const r = await queryAs('requester', `
     insert into cw.review_ticket

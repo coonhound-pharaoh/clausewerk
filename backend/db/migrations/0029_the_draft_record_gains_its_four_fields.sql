@@ -296,13 +296,16 @@ comment on column cw.clause_draft.model_performance is
 create or replace function cw.clause_draft_frozen_when_used() returns trigger
 language plpgsql as $$
 begin
-  if new.intended_purpose  is distinct from old.intended_purpose
+  if new.draft_id is distinct from old.draft_id
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at
+     or new.expires_on is distinct from old.expires_on
+     or new.intended_purpose  is distinct from old.intended_purpose
      or new.known_limitations is distinct from old.known_limitations
      or new.model_performance is distinct from old.model_performance then
     raise exception
-      'draft % records what was intended and what was known at the time it was '
-      'made; that is fixed when the draft is created and cannot be brought up '
-      'to date', old.draft_id
+      'draft % creation provenance, expiry, purpose and known context are fixed '
+      'when the draft is created and cannot be brought up to date', old.draft_id
       using errcode = 'restrict_violation';
   end if;
   if exists (select 1 from cw.review_ticket t where t.draft_id = old.draft_id) then

@@ -400,6 +400,14 @@ create trigger review_candidate_no_edit
 create or replace function cw.clause_draft_frozen_when_used() returns trigger
 language plpgsql as $$
 begin
+  if new.draft_id is distinct from old.draft_id
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at
+     or new.expires_on is distinct from old.expires_on then
+    raise exception
+      'draft % creation provenance and expiry are fixed when the draft is created',
+      old.draft_id using errcode = 'restrict_violation';
+  end if;
   if exists (select 1 from cw.review_ticket t where t.draft_id = old.draft_id) then
     raise exception
       'draft % is under review; the draft a ticket was opened against is the '

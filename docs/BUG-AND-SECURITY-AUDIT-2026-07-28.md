@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 105 — unused drafts could rewrite creation provenance and expiry
+
+**Observed defect.** Governed draft inserts derived creator, creation time, and
+the thirty-day expiry, but an unused draft's broad UPDATE grant could rewrite
+all three before attaching it to a ticket. The eventual provenance chain could
+therefore carry fabricated authorship and chronology.
+
+**Fix.** Both draft-freeze definitions now treat draft identity, creator,
+creation time, and expiry as fixed from creation. Draft text remains editable
+until use, as intentionally designed.
+
+**Regression proof.** Legal attempts to replace all three provenance fields on
+an unused, still-editable draft. The update is refused and authenticated
+creator, current creation time, and policy expiry remain intact.
+
+**Validation.**
+
+- `node backend/db/test/review-queue.test.mjs` — 48 passed
+- `node backend/db/test/draft-record.test.mjs` — 19 passed
+
 ## Cycle 104 — review-ticket expiry could be rewritten during decision
 
 **Observed defect.** Review tickets could carry an explicit stale date, but
