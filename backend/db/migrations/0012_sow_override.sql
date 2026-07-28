@@ -70,11 +70,22 @@ create table cw.sow_override_approval (
 -- Who has not signed yet. Same shape, and the same SECURITY DEFINER reasoning,
 -- as cw.concession_missing_approvers: a check whose strictness depends on what
 -- the asker happens to be allowed to see is not a check.
+-- Its requester-callable reporting path is still deal-scoped: definer rights
+-- provide a complete answer for an owned SOW, not approver identities from
+-- somebody else's.
 create or replace function cw.sow_override_missing_approvers(p_override_id bigint)
 returns table (approver_kind text, approver text)
 language sql stable
 security definer set search_path = cw, pg_temp as $$
-  with o as (select * from cw.sow_override where override_id = p_override_id),
+  with o as (
+    select * from cw.sow_override
+    where override_id = p_override_id
+      and (
+        coalesce(nullif(current_setting('role', true), 'none'), session_user)
+          <> 'cw_requester'
+        or cw.owns_agreement(sow_id)
+      )
+  ),
   needed as (
     select 'requester'::text as approver_kind, a.requester as approver
       from o join cw.agreement a on a.agreement_id = o.sow_id

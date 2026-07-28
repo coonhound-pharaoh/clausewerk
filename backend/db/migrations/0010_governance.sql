@@ -298,8 +298,20 @@ language sql stable
 -- missing, and the gate would swing open — quietly, and wider the LESS the
 -- caller is allowed to see. A check whose strictness depends on the asker is
 -- not a check.
+--
+-- That does not make the helper a cross-deal directory. Its requester EXECUTE
+-- grant exists so a deal owner can see whom they are waiting on; the first CTE
+-- therefore restores the ownership scope that SECURITY DEFINER bypasses.
 security definer set search_path = cw, pg_temp as $$
-  with c as (select * from cw.concession where concession_id = p_concession_id),
+  with c as (
+    select * from cw.concession
+    where concession_id = p_concession_id
+      and (
+        coalesce(nullif(current_setting('role', true), 'none'), session_user)
+          <> 'cw_requester'
+        or cw.owns_agreement(agreement_id)
+      )
+  ),
   needed as (
     select 'requester'::text as approver_kind, a.requester as approver
       from c join cw.agreement a using (agreement_id)

@@ -657,6 +657,20 @@ await test('a departure cannot be authorised with an approval missing', async ()
     'the same approval a concession needs, or it is not the same control');
 });
 
+await test('a requester cannot enumerate another SOW’s missing approvers', async () => {
+  const o = await one(`select override_id from cw.sow_override where sow_id='AG-102'`);
+  const own = await queryAs('requester',
+    `select approver_kind, approver
+       from cw.sow_override_missing_approvers($1)`,
+    [o.override_id], 'buyer@cw');
+  eq(own.length, 2, 'the SOW owner lost their missing-approver view');
+  const hidden = await queryAs('requester',
+    `select approver_kind, approver
+       from cw.sow_override_missing_approvers($1)`,
+    [o.override_id], 'somebody.else@cw');
+  eq(hidden, [], 'the definer disclosed SOW governance identities across deals');
+});
+
 await test('with everyone signed, the departure is authorised and the SOW executes', async () => {
   const o = await one(`select override_id from cw.sow_override where sow_id='AG-102'`);
   const req = await one(`select required_approver_id from cw.required_approver

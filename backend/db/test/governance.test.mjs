@@ -123,6 +123,17 @@ await test('with an attorney assigned, the missing approvals are named', async (
   eq(m[1].approver_kind, 'requester'); eq(m[1].approver, BUYER);
 });
 
+await test('a requester cannot enumerate another deal’s missing approvers', async () => {
+  const own = await queryAs('requester',
+    `select approver_kind, approver from cw.concession_missing_approvers($1)`,
+    [C1], BUYER);
+  eq(own.length, 2, 'the deal owner lost their missing-approver view');
+  const hidden = await queryAs('requester',
+    `select approver_kind, approver from cw.concession_missing_approvers($1)`,
+    [C1], 'somebody.else@clausewerk');
+  eq(hidden, [], 'the definer disclosed governance identities across deals');
+});
+
 await test('settling is refused while anybody is still missing', async () => {
   await throws(() => queryAs('legal_reviewer',
     `insert into cw.concession_settlement (concession_id,settled_by)

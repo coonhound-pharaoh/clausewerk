@@ -2593,3 +2593,9 @@ The socialisation definer may bypass row policies only to resolve the complete
 audience. Legal may advance any pending request; a requester may advance only
 the request they opened. An unrelated requester changes no state and creates no
 notification record.
+
+## S40 — Missing-approver helpers preserve deal scope — SETTLED 2026-07-28
+Security-definer approval helpers may see complete governance configuration for
+fail-closed settlement checks. A requester calling them directly sees results
+only for a deal they own; unrelated concession and SOW identifiers disclose no
+approver identities.

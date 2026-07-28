@@ -4,6 +4,28 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 26 — approval helpers disclosed unrelated deal governance
+
+**Observed defect.** The concession and SOW “missing approvers” helpers run as
+security definers so settlement checks always see the complete approval
+configuration. Both were also explicitly callable by requesters, but neither
+restored the deal scope it bypassed. A requester could enumerate the attorney,
+deal owner, and required approvers for an unrelated concession or SOW by ID.
+
+**Fix.** Preserve complete results for Legal and Audit while filtering a
+requester’s helper input through `cw.owns_agreement`. An unrelated identifier
+now returns no governance identities.
+
+**Regression proof.** Both governance workflows compare the deal owner with an
+unrelated requester: the owner still receives the complete missing-approver
+list, while the unrelated requester receives no rows.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs`
+- `node backend/db/test/executed.test.mjs`
+- Results: 42 governance tests and 52 executed-agreement tests passed.
+
 ## Cycle 25 — requesters could socialise other people’s overrides
 
 **Observed defect.** `cw.socialise_override_request` is a security-definer
