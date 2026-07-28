@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 76 — account lifecycle timestamps were caller-controlled
+
+**Observed defect.** Governed account creation and revocation bound the
+Administrator identity but accepted arbitrary `created_at` and `revoked_at`
+values. Those immutable fields feed access history and dormancy reporting, so a
+caller could permanently backdate or future-date account lifecycle acts.
+
+**Fix.** The account actor-binding trigger now derives creation and revocation
+timestamps from the database clock for governed writes. Bootstrap and owner
+historical imports retain explicit timestamps.
+
+**Regression proof.** An Administrator supplies a year-2000 creation timestamp
+and a year-2099 revocation timestamp. Both stored values fall within the current
+transition window while revocation and effective-role behavior remain correct.
+
+**Validation.**
+
+- `node backend/db/test/administrator.test.mjs` — 46 passed
+- `node backend/db/test/role-grant.test.mjs` — 42 passed
+
 ## Cycle 75 — watcher coverage changes accepted forged timestamps
 
 **Observed defect.** Override-watcher additions and removals bound the

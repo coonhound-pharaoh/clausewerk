@@ -335,12 +335,17 @@ await test('destruction is the administrator\'s, and legal admin\'s is revoked',
 
 await test('an administrator creates an account, and it lands on the chain', async () => {
   const created = await mustWrite('administrator',
-    `insert into cw.account (person,display_name,unit,role,created_by)
+    `insert into cw.account
+       (person,display_name,unit,role,created_by,created_at)
      values ('${BUYER}','Dana Buyer','Procurement','requester',
-             'impostor@clausewerk')
-     returning person, created_by`, [], ADMIN);
+             'impostor@clausewerk','2000-01-01T00:00:00Z')
+     returning person, created_by,
+       created_at > now() - interval '1 minute' and created_at <= now()
+         as created_time_is_fresh`, [], ADMIN);
   eq(created[0].created_by, ADMIN,
     'the caller-supplied creator entered the permanent account record');
+  eq(created[0].created_time_is_fresh, true,
+    'the caller-supplied account creation timestamp survived');
   const a = await one(`select actor, actor_role, actor_kind, event_type, subject,
                               payload->>'role' as role
                        from cw.audit_event where event_type='account_created'`);
@@ -407,10 +412,15 @@ await test('moving somebody to a different role is recorded', async () => {
 await test('revoking an account is recorded, and it cannot be un-revoked', async () => {
   const revoked = await mustWrite('administrator',
     `update cw.account
-        set state='revoked', revoked_by='impostor@clausewerk', revoked_at=now()
-      where person='${BUYER}' returning person, revoked_by`, [], ADMIN);
+        set state='revoked', revoked_by='impostor@clausewerk',
+            revoked_at='2099-01-01T00:00:00Z'
+      where person='${BUYER}' returning person, revoked_by,
+        revoked_at > now() - interval '1 minute' and revoked_at <= now()
+          as revoked_time_is_fresh`, [], ADMIN);
   eq(revoked[0].revoked_by, ADMIN,
     'the caller-supplied revoker entered the permanent account record');
+  eq(revoked[0].revoked_time_is_fresh, true,
+    'the caller-supplied account revocation timestamp survived');
   const a = await one(`select subject, payload->>'revoked_by' as revoked_by
                        from cw.audit_event where event_type='account_revoked'`);
   eq(a.subject, BUYER);

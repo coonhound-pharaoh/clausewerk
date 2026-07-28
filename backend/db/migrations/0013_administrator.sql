@@ -155,8 +155,10 @@ begin
   if cw.app_role() is not null then
     if tg_op = 'INSERT' then
       new.created_by := cw.app_actor();
+      new.created_at := now();
     elsif old.state = 'active' and new.state = 'revoked' then
       new.revoked_by := cw.app_actor();
+      new.revoked_at := now();
     end if;
   end if;
   return new;
