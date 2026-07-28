@@ -4,6 +4,24 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 69 — concession actions accepted forged effective dates
+
+**Observed defect.** Settlement and withdrawal rows correctly bound the
+authenticated actor but accepted caller-supplied `settled_on` and
+`withdrawn_on`. Because those rows are append-only, a false historical or future
+effective date became permanent governance evidence.
+
+**Fix.** Governed application inserts now bind the applicable action date to the
+database's current date alongside the authenticated actor. Owner-level
+historical imports remain unaffected.
+
+**Regression proof.** A settlement supplies a year-2000 date and a withdrawal
+supplies a year-2099 date. Both rows store the database's current date.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs` — 47 passed
+
 ## Cycle 68 — forged legal-hold dates could misstate retention state
 
 **Observed defect.** Application Legal users were attributed by the database,

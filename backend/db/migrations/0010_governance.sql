@@ -396,8 +396,10 @@ begin
   if cw.app_role() is not null then
     if tg_table_name = 'concession_settlement' then
       new.settled_by := cw.app_actor();
+      new.settled_on := current_date;
     else
       new.withdrawn_by := cw.app_actor();
+      new.withdrawn_on := current_date;
     end if;
   end if;
   return new;

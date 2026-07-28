@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S83 — Governed concession action dates are database-derived — SETTLED 2026-07-28
+Application settlements and withdrawals bind their effective date to the
+database clock alongside the authenticated actor. Historical owner imports
+remain possible.
+
 ## S82 — Governed legal-hold dates are database-derived — SETTLED 2026-07-28
 Application opening and release actions bind both the authenticated actor and
 the database's current date. Owner writes retain historical-import flexibility.

@@ -209,14 +209,17 @@ await test('the Requester and the attorney approve, each by name', async () => {
 
 await test('with everyone in, the concession comes into force', async () => {
   await mustWrite('legal_reviewer',
-    `insert into cw.concession_settlement (concession_id,settled_by)
-     values (${C1},'impostor@clausewerk') returning concession_id`,
+    `insert into cw.concession_settlement (concession_id,settled_by,settled_on)
+     values (${C1},'impostor@clausewerk','2000-01-01') returning concession_id`,
     [], 'legal@clausewerk');
-  const s = await oneAs('legal_reviewer', `select state, settled_by from cw.concession_state
+  const s = await oneAs('legal_reviewer', `select state, settled_by,
+                         settled_on=current_date as settled_today
+                       from cw.concession_state
                        where concession_id=$1`, [C1]);
   eq(s.state, 'approved');
   eq(s.settled_by, 'legal@clausewerk',
     'the caller-supplied settler entered the permanent settlement record');
+  eq(s.settled_today, true, 'the caller-supplied settlement date survived');
   const f = await oneAs('legal_reviewer', `select count(*)::int n from cw.concession_in_force
                        where concession_id=$1`, [C1]);
   eq(f.n, 1, 'and only now does anything read it as agreed');
@@ -413,11 +416,16 @@ await test('a concession in force cannot be withdrawn', async () => {
 await test('a proposal that never settled can be withdrawn, and then cannot settle', async () => {
   const C = await concede('AG-001', 1);
   const withdrawn = await mustWrite('requester',
-    `insert into cw.concession_withdrawal (concession_id,withdrawn_by,reason)
-     values (${C},'impostor@clausewerk','vendor accepted our position after all')
-     returning concession_id, withdrawn_by`, [], BUYER);
+    `insert into cw.concession_withdrawal
+       (concession_id,withdrawn_by,reason,withdrawn_on)
+     values (${C},'impostor@clausewerk','vendor accepted our position after all',
+             '2099-01-01')
+     returning concession_id, withdrawn_by, withdrawn_on=current_date as withdrawn_today`,
+    [], BUYER);
   eq(withdrawn[0].withdrawn_by, BUYER,
     'the caller-supplied withdrawer entered the permanent withdrawal record');
+  eq(withdrawn[0].withdrawn_today, true,
+    'the caller-supplied withdrawal date survived');
   const s = await oneAs('legal_reviewer', `select state from cw.concession_state where concession_id=$1`, [C]);
   eq(s.state, 'withdrawn');
   await throws(() => queryAs('legal_reviewer',
