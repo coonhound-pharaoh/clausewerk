@@ -358,6 +358,20 @@ MUTATIONS = [
         "test_manifests.py::test_the_refusal_is_the_engine_s_own_words",
     ),
 
+    # ── The model seam invents a number when it cannot get one ───────────────
+    # The one guarantee NC-25 rests on. Every path that fails to obtain a
+    # judgment goes through `_absent`, and a substitute figure written there is
+    # indistinguishable from a real judgment the moment it reaches a screen —
+    # the precise failure ADR-0005 exists to prevent, in the one place the ADR's
+    # usual remedy (a deterministic substitute) would itself be the lie.
+    (
+        "a judgment nobody obtained is recorded as a number anyway",
+        "doorway/advisory.py",
+        "    return Judgment(score=None, basis=None, absent_reason=reason,",
+        "    return Judgment(score=0.5, basis=None, absent_reason=reason,",
+        "test_advisory.py::test_the_adapter_records_an_absence_rather_than_a_number",
+    ),
+
     # ── The one nobody may ever add ──────────────────────────────────────────
     (
         'a refused write is retried "to make the demo work"',

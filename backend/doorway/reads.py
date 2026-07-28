@@ -214,6 +214,17 @@ READS: dict[str, Read] = {
         rule="cw.review_quality — the unedited-approval rate, measured and shown",
     ),
 
+    # The measurement and the estimate, side by side and labelled as what each
+    # one is (NC-25). The two label columns come from the view rather than from
+    # an interface that has to remember them: the one way this feature does harm
+    # is a screen showing two numbers and letting a reader take them for the
+    # same kind of thing.
+    "GET /metrics": Read(
+        sql="""select * from cw.ticket_metrics order by ticket_id""",
+        rule="cw.ticket_metrics — carries cw.review_ticket's own read_scoped "
+             "rule in its WHERE clause, because a view runs as its owner",
+    ),
+
     "GET /origin-mix": Read(
         sql="""select * from cw.library_origin_mix""",
         rule="cw.library_origin_mix — where the library actually came from",

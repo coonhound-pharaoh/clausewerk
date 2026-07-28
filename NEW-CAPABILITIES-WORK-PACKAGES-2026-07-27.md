@@ -1692,12 +1692,11 @@ from the frozen draft and ticket rows — and deliver the first judgment into it
 *meaning* changed between the AI's draft and what Legal approved, shown beside the arithmetic
 score, never instead of it (owner ruling, memory.md U14b/U14c).
 
-**Gate — D-8, narrowed by the owner (2026-07-27, memory.md U14e).** That Clausewerk itself calls
-AI judgment is settled intent, not an open question — the owner confirmed the negotiation module
-was always meant to analyze risk and draft recommended language for attorney approval (WP-3,
-WP-5). What remains of D-8 is procurement only: **the owner names the model provider** (whose
-key, one bill) before the first call is wired. The recommendation, when asked: the same provider
-family the interview pipeline uses, so there is one bill and one integration to watch.
+**Gate — D-8, SETTLED (2026-07-27, memory.md).** In-product AI judgment was settled intent
+(U14e); the provider question is now answered: **OpenAI**, chosen by the owner for token
+efficiency. The adapter stays provider-thin — one module owns the integration, so a later change
+of provider is one file, not a hunt. The API key is supplied by the owner through environment
+configuration and never lands in the repository. This package is unblocked.
 
 **Prerequisites**
 

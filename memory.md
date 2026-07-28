@@ -2461,3 +2461,9 @@ approval (the review queue's proposal→named-lawyer flow is the built home for 
 "may the product call a model" — that is settled by the plan (WP-3, WP-5). D-8 reduces to
 provider selection: which model provider, whose key, one bill. Still owner-named before the
 first call is wired, but it is procurement, not scope.
+
+## D-8 — Model provider — SETTLED 2026-07-27
+Mike: OpenAI is the model provider for this project's in-product AI judgments, chosen for token
+efficiency. D-8 was procurement only (in-product AI judgment itself was settled intent, U14e).
+The adapter seam (NC-25) is built provider-thin so this remains one integration point; the key is
+Mike's to supply and never lands in the repository.

@@ -37,7 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from doorway import documents, executions, manifests, reads, runs, writes
+from doorway import advisory, documents, executions, manifests, reads, runs, writes
 from doorway.db import Database
 from doorway.identity import (
     Caller, NoEffectiveRole, NoSession, caller_for, identity_of, session_length,
@@ -179,6 +179,14 @@ class App:
         # Response can hold. See the Download type above.
         if key == "GET /runs/contract":
             return documents.contract(self._db, caller, selector)
+
+        # The first endpoint that asks a model for an opinion. Not a Write for
+        # the same reason POST /runs is not: it reads two frozen texts, calls
+        # out to a model, and records what came back — or records that nothing
+        # did. A Write holds one statement, and this is three acts.
+        if key == "POST /advisory/semantic-difference":
+            answered = advisory.semantic_difference(self._db, caller, body)
+            return Response(answered.status, answered.body)
 
         if key == "POST /agreements/execute":
             answered = executions.execute(self._db, caller, body or {})

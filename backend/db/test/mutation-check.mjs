@@ -461,15 +461,25 @@ grant usage, select on sequence cw.supersession_id_seq to cw_legal_reviewer;`,
 
   // The other half of refutation 3: the flag becomes self-reported rather than
   // derived, so a caller can simply declare a clean score.
+  // 0029 replaced the deciding function wholesale (the figure joined the flag),
+  // so this row keys on 0029's block — the definition that is LIVE after all
+  // migrations run, per the rule at the top of this list. NC-25's implementer
+  // found the old find string silently unguarded; repointed 2026-07-27.
   { suite: 'review-queue.test.mjs',
     name: 'the caller may supply their own edited_before_approval',
     find: `  if new.state = 'verified' then
     new.edited_before_approval := (new.approved_text is distinct from new.proposed_text);
+    sim := cw.text_overlap(new.proposed_text, new.approved_text);
+    -- Held below identity when the texts differ: see the note at the top.
+    if new.edited_before_approval and sim >= 1 then sim := 0.9999; end if;
+    new.edit_similarity := sim;
   else
     new.edited_before_approval := null;
+    new.edit_similarity := null;
   end if;`,
     repl: `  if new.state <> 'verified' then
     new.edited_before_approval := null;
+    new.edit_similarity := null;
   end if;`,
     expect: 'a caller cannot self-report a clean score' },
 
