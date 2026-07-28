@@ -148,12 +148,17 @@ await test('only the administrator may delegate, and it lands on the chain', asy
     `insert into cw.records_delegate (person,reason)
      values ('${PAT}','helping with the backlog')`);
   const d = await mustWrite('administrator',
-    `insert into cw.records_delegate (person,granted_by,reason)
+    `insert into cw.records_delegate (person,granted_by,granted_at,reason)
      values ('${PAT}','impostor@clausewerk',
+             '2000-01-01T00:00:00Z',
              'records clean-up for the 2020 cohort')
-     returning delegate_id, granted_by`, [], ADMIN);
+     returning delegate_id, granted_by,
+       granted_at > now() - interval '1 minute' and granted_at <= now()
+         as granted_time_is_fresh`, [], ADMIN);
   eq(d[0].granted_by, ADMIN,
     'the caller-supplied grantor entered the permanent delegation record');
+  eq(d[0].granted_time_is_fresh, true,
+    'the caller-supplied delegation timestamp survived');
   const e = await one(`select actor, subject, payload->>'reason' as why
                        from cw.audit_event where event_type='records_delegate_granted'`);
   eq([e.actor, e.subject], [ADMIN, PAT]);
@@ -182,11 +187,16 @@ await test('the delegate may now redact, and it is marked as delegated', async (
 await test('and STILL cannot purge — the delegation does not carry that', async () => {
   const d = await mustWrite('administrator',
     `update cw.records_delegate
-        set revoked_by='impostor@clausewerk', revoked_at=now()
+        set revoked_by='impostor@clausewerk',
+            revoked_at='2099-01-01T00:00:00Z'
       where person='${PAT}' and revoked_at is null
-      returning revoked_by`, [], ADMIN);
+      returning revoked_by,
+        revoked_at > now() - interval '1 minute' and revoked_at <= now()
+          as revoked_time_is_fresh`, [], ADMIN);
   eq(d[0].revoked_by, ADMIN,
     'the caller-supplied revoker entered the permanent delegation record');
+  eq(d[0].revoked_time_is_fresh, true,
+    'the caller-supplied revocation timestamp survived');
   const e = await one(`select actor, payload->>'by' as revoked_by
                        from cw.audit_event
                        where event_type='records_delegate_revoked'`);

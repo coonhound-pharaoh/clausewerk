@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 73 — delegation authority timestamps were caller-controlled
+
+**Observed defect.** Records-delegation writes bound the Administrator actor but
+accepted arbitrary `granted_at` and `revoked_at` values. Since a null revocation
+timestamp determines live redaction authority, the permanent authority history
+could disagree with when access actually changed.
+
+**Fix.** Governed delegation grants and revocations now derive their timestamps
+from the database clock alongside the authenticated Administrator. Owner
+historical imports retain explicit timestamps.
+
+**Regression proof.** An Administrator supplies a year-2000 grant time and a
+year-2099 revocation time. Both stored timestamps fall within the current
+transition window, and the delegate's redaction/purge boundaries remain intact.
+
+**Validation.**
+
+- `node backend/db/test/redaction.test.mjs` — 22 passed
+- `node backend/db/test/administrator.test.mjs` — 46 passed
+
 ## Cycle 72 — share lifecycle timestamps were caller-controlled
 
 **Observed defect.** Governed share and revocation transitions bound the

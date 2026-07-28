@@ -110,8 +110,10 @@ begin
   if cw.app_role() is not null then
     if tg_op = 'INSERT' then
       new.granted_by := cw.app_actor();
+      new.granted_at := now();
     elsif old.revoked_at is null and new.revoked_at is not null then
       new.revoked_by := cw.app_actor();
+      new.revoked_at := now();
     end if;
   end if;
 
