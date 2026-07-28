@@ -402,9 +402,14 @@ await db.exec(`update cw.override_socialisation
 // ── Per finding, and only per finding ────────────────────────────────────
 console.log('\napproval is per finding, and there is no approve-all by any path');
 
-await test('a reviewer approves one finding and rejects the other, with a note', async () => {
-  await queryAs('legal_reviewer',
-    `select cw.decide_override_finding($1,'data:F1','approved','governing law is acceptable here')`,
+await test('direct and function decisions leave the same complete record', async () => {
+  await queryAs('legal_reviewer', `
+    update cw.override_finding
+       set decision='approved',
+           decided_by='forged-reviewer@clausewerk',
+           decided_at='2000-01-01',
+           note='governing law is acceptable here'
+     where request_id=$1 and finding_ref='data:F1'`,
     [REQ], PAT);
   await queryAs('legal_reviewer',
     `select cw.decide_override_finding($1,'liab:F2','rejected','uncapped indemnity is a floor')`,
@@ -414,6 +419,19 @@ await test('a reviewer approves one finding and rejects the other, with a note',
   eq(f.map(x => [x.finding_ref, x.decision]),
      [['data:F1','approved'], ['liab:F2','rejected']]);
   for (const x of f) eq(x.decided_by, PAT);
+  const r = await one(`
+    select state, closed_at is not null as closed
+      from cw.override_request where request_id=$1`, [REQ]);
+  eq([r.state, r.closed], ['approved', true],
+     'the last decision must derive and close the parent request');
+  const events = await rows(`
+    select event_type from cw.audit_event
+     where subject=$1::text
+       and event_type in ('human_override_approve','human_override_reject')
+     order by seq`, [REQ]);
+  eq(events.map(e => e.event_type),
+     ['human_override_approve','human_override_reject'],
+     'both direct and helper decisions must enter the audit chain once');
 });
 
 await test('the gate opens for the approved finding ONLY', async () => {

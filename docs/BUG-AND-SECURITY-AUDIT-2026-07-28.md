@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 64 — direct decisions skipped audit and parent closure
+
+**Observed defect.** Once a socialisation window elapsed, a direct Legal update
+could validly decide a finding but bypass the helper’s audit event and its
+derived parent-request closure. Identical decisions therefore produced
+different records depending on the SQL entry point.
+
+**Fix.** Decision auditing and final parent-state derivation now run in an
+after-update trigger. The helper performs only the row decision, so helper and
+direct updates share one consequence path without duplicate events.
+
+**Regression proof.** One finding is approved by direct SQL with forged
+provenance and one is rejected through the helper. Both bind the authenticated
+reviewer, emit exactly one corresponding audit event, and the last decision
+derives and closes the parent as approved.
+
+**Validation.**
+
+- `node backend/db/test/override.test.mjs` — 37 passed
+
 ## Cycle 63 — direct finding decisions bypassed socialisation
 
 **Observed defect.** Legal holds direct update privilege on override findings

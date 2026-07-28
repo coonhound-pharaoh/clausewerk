@@ -366,25 +366,6 @@ begin
      set decision = p_decision, decided_by = cw.app_actor(),
          decided_at = now(), note = p_note
    where request_id = p_request_id and finding_ref = p_finding_ref;
-
-  perform cw.audit(
-    case p_decision when 'approved' then 'human_override_approve'
-                    else 'human_override_reject' end,
-    p_request_id::text,
-    jsonb_build_object('finding_ref', p_finding_ref, 'note', p_note));
-
-  -- The request closes when every finding has been decided, and its state is
-  -- derived from them rather than set by whoever happened to decide last.
-  if not exists (select 1 from cw.override_finding
-                  where request_id = p_request_id and decision is null) then
-    update cw.override_request
-       set state = case when exists (select 1 from cw.override_finding
-                                      where request_id = p_request_id
-                                        and decision = 'approved')
-                        then 'approved' else 'rejected' end,
-           closed_at = now()
-     where request_id = p_request_id;
-  end if;
 end $$;
 
 -- ── What the gate actually sees ───────────────────────────────────────────
@@ -482,6 +463,39 @@ end $$;
 create trigger override_finding_decided_once
   before update on cw.override_finding
   for each row execute function cw.override_finding_decided_once();
+
+-- The consequences of a decision belong to the row transition, not only to
+-- one helper function: Legal has UPDATE privilege because the helper is an
+-- invoker, and direct SQL must leave the same audit and parent-state record.
+create or replace function cw.override_finding_decision_recorded() returns trigger
+language plpgsql as $$
+begin
+  if old.decision is null and new.decision is not null then
+    perform cw.audit(
+      case new.decision when 'approved' then 'human_override_approve'
+                        else 'human_override_reject' end,
+      new.request_id::text,
+      jsonb_build_object('finding_ref', new.finding_ref, 'note', new.note));
+
+    if not exists (
+         select 1 from cw.override_finding f
+          where f.request_id = new.request_id and f.decision is null) then
+      update cw.override_request
+         set state = case when exists (
+                    select 1 from cw.override_finding f
+                     where f.request_id = new.request_id
+                       and f.decision = 'approved')
+                    then 'approved' else 'rejected' end,
+             closed_at = now()
+       where request_id = new.request_id;
+    end if;
+  end if;
+  return null;
+end $$;
+
+create trigger override_finding_record_decision
+  after update on cw.override_finding
+  for each row execute function cw.override_finding_decision_recorded();
 
 -- Workflow functions move state and closed_at. Everything else is the request
 -- as it was made and must not be rewritten through the UPDATE privilege those
