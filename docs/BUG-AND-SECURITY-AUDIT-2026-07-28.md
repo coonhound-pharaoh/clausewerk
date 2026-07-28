@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 84 — concession proposal chronology was caller-controlled
+
+**Observed defect.** Governed concession proposals bound the authenticated
+proposer but accepted caller-supplied `conceded_on` and `created_at` values.
+The immutable commercial record could therefore misstate both its effective
+date and when the system received it.
+
+**Fix.** The concession authority trigger now derives both chronology fields
+from the database clock for governed writes. Owner historical imports retain
+their explicit dates.
+
+**Regression proof.** A requester submits a year-2000 concession date and a
+year-2099 creation timestamp. The stored date is today, the timestamp falls
+within the current database-clock window, and attribution remains the signed-in
+requester.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs` — 47 passed
+- `node backend/db/test/ladder.test.mjs` — 56 passed
+
 ## Cycle 83 — concession settlement recording time was caller-controlled
 
 **Observed defect.** Governed concession settlements derived the authenticated

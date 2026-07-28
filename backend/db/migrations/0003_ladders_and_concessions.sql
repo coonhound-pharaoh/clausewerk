@@ -283,6 +283,8 @@ begin
   -- imports retain explicit attribution.
   if cw.app_role() is not null then
     new.approved_by := cw.app_actor();
+    new.conceded_on := current_date;
+    new.created_at := now();
   end if;
 
   if cw.app_role() = 'requester'
