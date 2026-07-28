@@ -346,13 +346,22 @@ console.log('\nconflict rule history is fixed (WP-05, finding D4)');
 
 await test('a rule publishes', async () => {
   const published = await queryAs('legal_admin', `insert into cw.conflict_rule
-    (rule_id,version,name,severity,title,detail,predicate,approved_by,effective_on)
+    (rule_id,version,name,severity,title,detail,predicate,approved_by,approved_on,
+     effective_on,created_at)
     values ('JUR-001',1,'jurisdiction_split','High','Two governing laws',
             'The decision set names more than one governing law.',
-            '{"conflicting_values":"jurisdiction"}','R. Vance','2026-01-01')
-    returning approved_by`, [], 'test@clausewerk');
+            '{"conflicting_values":"jurisdiction"}','R. Vance','2000-01-01',
+            '2026-01-01','2099-01-01 00:00:00+00')
+    returning approved_by, approved_on=current_date as approved_today,
+              created_at between statement_timestamp() - interval '5 seconds'
+                             and statement_timestamp() as created_now`,
+    [], 'test@clausewerk');
   eq(published[0].approved_by, 'test@clausewerk',
      'immutable publication provenance must name the authenticated Legal admin');
+  eq(published[0].approved_today, true,
+     'immutable publication approval date must come from the database');
+  eq(published[0].created_now, true,
+     'immutable publication recording time must come from the database');
   const r = await one(
     `select effective_on, approved_by from cw.conflict_rule where rule_id='JUR-001'`);
   assert(r, 'the rule exists');

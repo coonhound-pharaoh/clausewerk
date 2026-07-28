@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 92 — conflict-rule approval chronology was caller-controlled
+
+**Observed defect.** Governed conflict-rule publication bound the authenticated
+Legal approver but accepted caller-supplied `approved_on` and `created_at`.
+Immutable policy history could therefore misstate when a rule was approved and
+recorded. The separately meaningful `effective_on` remains schedulable.
+
+**Fix.** The conflict-rule attribution trigger now derives approval date and
+recording time from the database clock for governed writes. Owner historical
+imports remain explicit.
+
+**Regression proof.** A legal admin publishes a rule with a year-2000 approval
+date, year-2099 creation time, and forged approver. The stored approver is
+authenticated and both chronology fields are current.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 81 passed
+- `python -m pytest backend/engine/test_validation.py -q` — 26 passed
+
 ## Cycle 91 — supersession decision date was caller-controlled
 
 **Observed defect.** Governed supersession inserts bound the authenticated
