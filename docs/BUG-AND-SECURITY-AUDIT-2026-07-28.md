@@ -96,6 +96,23 @@ elements and must raise `NotADocx` at the element budget.
 - `python -m py_compile engine/docx.py engine/test_docx.py`
 - `python -m pytest engine -q`
 
+## Cycle 14 — non-numeric model scores were coerced
+
+**Observed defect.** Python converted JSON booleans and numeric strings through
+`float()`. A malformed provider response such as `{"score": true}` therefore
+became a recorded score of `1.0`.
+
+**Fix.** Require the score to be an actual finite JSON integer or float,
+explicitly excluding booleans, before applying the zero-to-one range check.
+
+**Regression proof.** Boolean, string, and null scores must all produce absent
+judgments rather than numbers.
+
+**Validation.**
+
+- `python -m pytest doorway/test_advisory.py -q -k "non_numeric_scores"`
+- `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
+
 ## Cycle 13 — Word tabs vanished from parsed text
 
 **Observed defect.** `w:tab` elements were ignored by both ordinary document

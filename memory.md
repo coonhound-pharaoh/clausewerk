@@ -2532,3 +2532,8 @@ lines the vendor kept separate.
 The document and redline readers preserve w:tab as a tab character across
 visible, kept, inserted, and deleted text. Displayed separation cannot vanish
 from the text Legal reviews.
+
+## S28 — Model scores require finite JSON numbers — SETTLED 2026-07-28
+The advisory adapter does not coerce booleans, strings, nulls, NaN, or infinity
+into scores. Only a finite JSON integer or float inside the zero-to-one range
+can become a recorded judgment.

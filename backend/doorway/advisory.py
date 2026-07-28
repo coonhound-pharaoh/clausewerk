@@ -51,6 +51,7 @@ no new package: adding a dependency is a decision, and nobody made it.
 from __future__ import annotations
 
 import json
+import math
 import os
 import urllib.error
 import urllib.request
@@ -188,14 +189,17 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
     try:
         content = payload["choices"][0]["message"]["content"]
         answered = json.loads(content)
-        score = float(answered["score"])
+        raw_score = answered["score"]
+        if isinstance(raw_score, bool) or not isinstance(raw_score, (int, float)):
+            raise TypeError("score is not a JSON number")
+        score = float(raw_score)
     except (KeyError, IndexError, TypeError, ValueError, RecursionError):
         return _absent("the model answered, but not with a judgment in the "
                        "shape that was asked for",
                        model=model, model_version=version,
                        prompt=prompt, inputs=inputs)
 
-    if not 0.0 <= score <= 1.0:
+    if not math.isfinite(score) or not 0.0 <= score <= 1.0:
         # Out of range is not a judgment to be clamped into one. Clamping would
         # turn a model that misunderstood the question into a confident number.
         return _absent("the model answered outside the range it was asked for",

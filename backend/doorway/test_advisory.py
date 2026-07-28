@@ -26,6 +26,7 @@ it fails on correct work.
 
 from __future__ import annotations
 
+import json
 from io import BytesIO
 
 import psycopg
@@ -203,6 +204,27 @@ def test_the_adapter_refuses_excessively_nested_provider_json(monkeypatch):
 
     assert judgment.outcome == "absent"
     assert "not readable" in judgment.absent_reason
+
+
+@pytest.mark.parametrize("score", [True, False, "0.5", None])
+def test_the_adapter_does_not_coerce_non_numeric_scores(monkeypatch, score):
+    class Reply(BytesIO):
+        def close(self):
+            pass
+
+    monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
+    response = json.dumps({
+        "model": "test-model",
+        "choices": [{"message": {"content": json.dumps(
+            {"score": score, "basis": "test"})}}],
+    }).encode()
+    monkeypatch.setattr(advisory.urllib.request, "urlopen",
+                        lambda request, timeout: Reply(response))
+
+    judgment = advisory.judge_semantic_difference(AI_TEXT, APPROVED)
+
+    assert judgment.outcome == "absent"
+    assert judgment.score is None
 
 
 def test_a_judgment_asked_for_without_a_model_is_answered_not_refused(people, db):
