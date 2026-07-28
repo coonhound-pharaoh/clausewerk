@@ -123,6 +123,22 @@ comment on column cw.conflict_rule.predicate is
 --   · Un-retiring was unguarded, exactly as on clause versions. Bringing a
 --     withdrawn rule back into force is a publication decision, not an edit,
 --     and it goes through the same gate as any other: a new version.
+-- Publication attribution is observed from the governed session. The database
+-- owner retains explicit values for migrations and historical imports, but a
+-- Legal admin cannot place somebody else's name on a newly published rule.
+create or replace function cw.bind_conflict_rule_approver() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    new.approved_by := cw.app_actor();
+  end if;
+  return new;
+end $$;
+
+create trigger conflict_rule_bind_approver
+  before insert on cw.conflict_rule
+  for each row execute function cw.bind_conflict_rule_approver();
+
 create or replace function cw.conflict_rule_immutable() returns trigger
 language plpgsql as $$
 begin

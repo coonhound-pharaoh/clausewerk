@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 47 — conflict rules accepted false approvers
+
+**Observed defect.** A Legal admin publishing a conflict rule could supply any
+person as `approved_by`. That identity is immutable, appears in the active rule
+surface and audit chain, and purports to identify who approved a rule capable
+of blocking contracts.
+
+**Fix.** A before-insert trigger binds `approved_by` to `cw.app_actor()` for
+governed sessions. Database-owner migrations and historical imports preserve
+their explicit attribution.
+
+**Regression proof.** A real `cw_legal_admin` publishes a rule while naming a
+different approver, and the returned immutable row must name the authenticated
+actor.
+
+**Validation.**
+
+- `node backend/db/test/registry.test.mjs` — 77 passed
+- `node backend/db/test/loader-sql.test.mjs` — 19 passed
+
 ## Cycle 46 — concession records accepted false approvers
 
 **Observed defect.** Any role permitted to record a concession could supply an
