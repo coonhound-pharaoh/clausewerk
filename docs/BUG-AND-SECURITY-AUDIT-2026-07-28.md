@@ -96,6 +96,23 @@ elements and must raise `NotADocx` at the element budget.
 - `python -m py_compile engine/docx.py engine/test_docx.py`
 - `python -m pytest engine -q`
 
+## Cycle 11 — unsupported ZIP features escaped DOCX parsing
+
+**Observed defect.** An uploaded DOCX using an unsupported compression method
+caused `zipfile` to raise `NotImplementedError` outside the parser's
+`NotADocx` contract. Encrypted members similarly raise `RuntimeError`.
+
+**Fix.** Translate unsupported or encrypted ZIP mechanics into a clear
+malformed-document refusal at the archive boundary.
+
+**Regression proof.** A valid minimal DOCX has both ZIP compression-method
+fields patched to unsupported method 99 and must raise `NotADocx`.
+
+**Validation.**
+
+- `python -m pytest engine/test_docx.py -q -k "unsupported_zip_compression"`
+- `python -m py_compile engine/docx.py engine/test_docx.py`
+
 ## Cycle 8 — recursive model-provider JSON escaped the adapter
 
 **Observed defect.** A deeply nested but size-bounded provider reply caused

@@ -605,6 +605,21 @@ def test_duplicate_document_parts_are_refused_as_ambiguous():
         parse_redlines(buf.getvalue())
 
 
+def test_unsupported_zip_compression_is_a_document_refusal():
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+        z.writestr("word/document.xml",
+                   f'<w:document xmlns:w="{W}"><w:body/></w:document>')
+    hostile = bytearray(buf.getvalue())
+    local = hostile.index(b"PK\x03\x04")
+    central = hostile.index(b"PK\x01\x02")
+    hostile[local + 8:local + 10] = (99).to_bytes(2, "little")
+    hostile[central + 10:central + 12] = (99).to_bytes(2, "little")
+
+    with pytest.raises(NotADocx, match="unsupported or encrypted"):
+        parse_redlines(bytes(hostile))
+
+
 def _padded_zip(members) -> bytes:
     """A small archive whose members expand to a great deal more.
 

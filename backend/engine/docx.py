@@ -277,6 +277,9 @@ def _document_xml(data: bytes) -> ET.Element:
         raise NotADocx("not a .docx file — a Word document is a zip archive") from exc
     except KeyError as exc:
         raise NotADocx("missing word/document.xml — the file is not a Word document") from exc
+    except (NotImplementedError, RuntimeError) as exc:
+        raise NotADocx(
+            "the Word archive uses unsupported or encrypted ZIP features") from exc
 
     # Defence in depth, not the load-bearing defence. expat 2.5.0 already blocks
     # classic entity expansion — billion-laughs measured at 0.26 s and quadratic

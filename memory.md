@@ -2517,3 +2517,8 @@ is selected or parsed.
 The streaming Word XML parser refuses document.xml after 100,000 elements as
 well as after 256 levels of nesting. A shallow element flood cannot force the
 service to finish building an unbounded object tree.
+
+## S25 — Unsupported DOCX ZIP features fail as documents — SETTLED 2026-07-28
+Unsupported compression and encrypted ZIP members are malformed Word uploads,
+not internal service failures. The document parser translates their zipfile
+exceptions into NotADocx at the archive boundary.
