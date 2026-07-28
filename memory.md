@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S70 — Requester review tickets are deal-owner scoped — SETTLED 2026-07-28
+A requester may open an agreement-linked review ticket only on a deal they own.
+Agreement-less tickets and Legal cross-deal review remain available; a foreign
+requester cannot inject review work into another deal.
+
 ## S69 — Requester concessions are deal-owner scoped — SETTLED 2026-07-28
 A requester may record a concession only against an agreement they own. Legal
 reviewer and Legal admin cross-deal authority remains intact; a foreign

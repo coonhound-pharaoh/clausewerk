@@ -99,6 +99,19 @@ await test('a requester can open an ordinary ticket (positive control)', async (
      'and it records the authenticated opener, not caller-supplied attribution');
 });
 
+await test('a requester cannot open a ticket on another buyer’s agreement', async () => {
+  await throws(() => queryAs('requester', `
+    insert into cw.review_ticket
+      (agreement_id,category_key,severity,reason_code,provenance_badge,proposed_text)
+    values ('AG-001','data','High','human-escalated','VENDOR LANGUAGE',
+            'Foreign requester language.')`,
+    [], 'somebody.else@clausewerk'),
+    'does not own agreement AG-001');
+  const n = await one(`select count(*)::int n from cw.review_ticket
+                        where proposed_text='Foreign requester language.'`);
+  eq(n.n, 0, 'the foreign requester must leave no review-queue record');
+});
+
 await test('a requester cannot open a ticket that is already rejected', async () => {
   // The whole attack in one statement: born terminal, with an empty note that
   // the CHECK as originally specified would have accepted.

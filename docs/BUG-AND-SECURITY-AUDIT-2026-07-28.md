@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 56 — requesters could open review tickets on foreign deals
+
+**Observed defect.** The review-ticket insert policy checked only the role. A
+requester could open a ticket against another buyer’s agreement and retain
+visibility through `opened_by`, injecting review work and provenance into a
+foreign deal.
+
+**Fix.** The review-queue insert trigger now requires requester ownership when
+an agreement is named. Agreement-less tickets and Legal cross-deal work remain
+available.
+
+**Regression proof.** A foreign requester attempts to open a ticket on the
+owned test agreement; the insert raises and no matching review record remains.
+
+**Validation.**
+
+- `node backend/db/test/review-queue.test.mjs` — 44 passed
+- `node backend/db/test/self-approval.test.mjs` — 9 passed
+
 ## Cycle 55 — requesters could write concessions to foreign deals
 
 **Observed defect.** The concession insert policy checked only the caller’s
