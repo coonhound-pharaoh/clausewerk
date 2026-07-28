@@ -232,10 +232,17 @@ await test('the Requester and the attorney approve, each by name', async () => {
 });
 
 await test('with everyone in, the concession comes into force', async () => {
-  await mustWrite('legal_reviewer',
-    `insert into cw.concession_settlement (concession_id,settled_by,settled_on)
-     values (${C1},'impostor@clausewerk','2000-01-01') returning concession_id`,
+  const settlement = await mustWrite('legal_reviewer',
+    `insert into cw.concession_settlement
+       (concession_id,settled_by,settled_on,recorded_at)
+     values (${C1},'impostor@clausewerk','2000-01-01',
+             '2099-01-01 00:00:00+00')
+     returning concession_id,
+               recorded_at between statement_timestamp() - interval '5 seconds'
+                               and statement_timestamp() as recorded_now`,
     [], 'legal@clausewerk');
+  eq(settlement[0].recorded_now, true,
+    'the caller-supplied settlement recording time survived');
   const s = await oneAs('legal_reviewer', `select state, settled_by,
                          settled_on=current_date as settled_today
                        from cw.concession_state

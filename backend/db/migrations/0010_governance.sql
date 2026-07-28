@@ -412,6 +412,7 @@ begin
     if tg_table_name = 'concession_settlement' then
       new.settled_by := cw.app_actor();
       new.settled_on := current_date;
+      new.recorded_at := now();
     else
       new.withdrawn_by := cw.app_actor();
       new.withdrawn_on := current_date;
