@@ -670,8 +670,24 @@ await test('a departure cannot be authorised with an approval missing', async ()
   await db.exec(`insert into cw.required_approver (agreement_id, body, label, approver, added_by)
                  values ('AG-102','privacy','Privacy Office','dpo@cw','legal@cw')`);
   // Only the Requester has signed. The attorney and the Privacy Office have not.
-  await db.exec(`insert into cw.sow_override_approval (override_id, approver_kind, approver)
-                 values (${o.override_id},'requester','buyer@cw')`);
+  await throws(() => queryAs('legal_reviewer',
+    `insert into cw.sow_override_approval
+       (override_id,approver_kind,approver,approved_on,recorded_at)
+     values (${o.override_id},'requester','buyer@cw','2000-01-01',
+             '2000-01-01T00:00:00Z')`, [], 'legal@cw'),
+    'cannot be recorded by signed-in actor',
+    'a Legal session manufactured the requester approval');
+  await queryAs('requester',
+    `insert into cw.sow_override_approval
+       (override_id,approver_kind,approver,approved_on,recorded_at)
+     values (${o.override_id},'requester','buyer@cw','2000-01-01',
+             '2000-01-01T00:00:00Z')
+     returning approved_on=current_date as approved_today,
+       recorded_at > now() - interval '1 minute' and recorded_at <= now()
+         as recorded_time_is_fresh`, [], 'buyer@cw')
+    .then(r => eq([r[0].approved_today, r[0].recorded_time_is_fresh],
+                  [true, true],
+      'caller-supplied approval chronology survived'));
   await throws(() => db.exec(`insert into cw.sow_override_settlement (override_id, settled_by)
                               values (${o.override_id},'legal@cw')`),
     'still waiting on',
@@ -696,11 +712,14 @@ await test('with everyone signed, the departure is authorised and the SOW execut
   const o = await one(`select override_id from cw.sow_override where sow_id='AG-102'`);
   const req = await one(`select required_approver_id from cw.required_approver
                          where agreement_id='AG-102'`);
-  await db.exec(`insert into cw.sow_override_approval (override_id, approver_kind, approver)
-                 values (${o.override_id},'attorney','counsel@cw')`);
-  await db.exec(`insert into cw.sow_override_approval
-                   (override_id, approver_kind, required_approver_id, approver)
-                 values (${o.override_id},'required',${req.required_approver_id},'dpo@cw')`);
+  await queryAs('legal_reviewer',
+    `insert into cw.sow_override_approval (override_id,approver_kind,approver)
+     values (${o.override_id},'attorney','counsel@cw')`, [], 'counsel@cw');
+  await queryAs('legal_reviewer',
+    `insert into cw.sow_override_approval
+       (override_id,approver_kind,required_approver_id,approver)
+     values (${o.override_id},'required',${req.required_approver_id},'dpo@cw')`,
+    [], 'dpo@cw');
   const settled = await queryAs('legal_reviewer',
     `insert into cw.sow_override_settlement (override_id, settled_by)
      values (${o.override_id},'impostor@cw') returning settled_by`,

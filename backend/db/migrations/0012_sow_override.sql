@@ -67,6 +67,63 @@ create table cw.sow_override_approval (
   unique (override_id, approver_kind, approver)
 );
 
+create or replace function cw.sow_approval_names_the_right_person() returns trigger
+language plpgsql
+security definer set search_path = cw, pg_temp as $$
+declare o cw.sow_override%rowtype; expected text;
+        ra cw.required_approver%rowtype;
+begin
+  select * into o from cw.sow_override where override_id = new.override_id;
+
+  if new.approver_kind = 'requester' then
+    select a.requester into expected from cw.agreement a
+     where a.agreement_id = o.sow_id;
+    if new.approver is distinct from expected then
+      raise exception
+        'the Requester on % is %, not %; an approval must name the configured person',
+        o.sow_id, coalesce(expected, '(none)'), new.approver
+        using errcode = 'check_violation';
+    end if;
+  elsif new.approver_kind = 'attorney' then
+    select t.attorney into expected from cw.agreement_attorney t
+     where t.agreement_id = o.sow_id;
+    if expected is null or new.approver is distinct from expected then
+      raise exception
+        'the assigned attorney on % is %, not %',
+        o.sow_id, coalesce(expected, '(none)'), new.approver
+        using errcode = 'check_violation';
+    end if;
+  else
+    select * into ra from cw.required_approver
+     where required_approver_id = new.required_approver_id;
+    if ra.agreement_id is distinct from o.sow_id then
+      raise exception 'required approver % is configured for a different agreement',
+        new.required_approver_id using errcode = 'check_violation';
+    end if;
+    if new.approver is distinct from ra.approver then
+      raise exception 'required approver % is %, not %',
+        ra.label, ra.approver, new.approver using errcode = 'check_violation';
+    end if;
+  end if;
+
+  -- SECURITY DEFINER changes current_user, so use the session's SET ROLE value
+  -- to preserve owner imports while governing every application insert.
+  if nullif(current_setting('role', true), 'none') is not null then
+    if new.approver is distinct from cw.app_actor() then
+      raise exception 'approval by % cannot be recorded by signed-in actor %',
+        new.approver, cw.app_actor()
+        using errcode = 'insufficient_privilege';
+    end if;
+    new.approved_on := current_date;
+    new.recorded_at := now();
+  end if;
+  return new;
+end $$;
+
+create trigger sow_override_approval_names_the_right_person
+  before insert on cw.sow_override_approval
+  for each row execute function cw.sow_approval_names_the_right_person();
+
 -- Who has not signed yet. Same shape, and the same SECURITY DEFINER reasoning,
 -- as cw.concession_missing_approvers: a check whose strictness depends on what
 -- the asker happens to be allowed to see is not a check.

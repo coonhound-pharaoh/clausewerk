@@ -4,6 +4,28 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 78 — one session could manufacture every SOW approval
+
+**Observed defect.** `sow_override_approval` had no validation trigger. Any role
+with insert access could type the configured requester, attorney, and required
+approver names, manufacture every signature, and satisfy the settlement gate
+alone. Approval dates and record times were caller-controlled as well.
+
+**Fix.** A SECURITY DEFINER row trigger now verifies each name against the SOW's
+actual governance configuration, requires governed inserts to come from that
+same signed actor, and derives both approval chronology fields from the database.
+Owner historical imports remain supported.
+
+**Regression proof.** A Legal session attempting to record the requester's
+approval is refused. The actual requester, assigned attorney, and required
+approver can each record their own approval, a forged year-2000 chronology is
+overwritten, and the fully approved SOW still executes.
+
+**Validation.**
+
+- `node backend/db/test/executed.test.mjs` — 53 passed
+- `node backend/db/test/governance.test.mjs` — 47 passed
+
 ## Cycle 77 — negotiation chronology was caller-controlled
 
 **Observed defect.** Governed negotiation writes bound their actors but accepted
