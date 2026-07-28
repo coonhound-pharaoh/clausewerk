@@ -2488,3 +2488,7 @@ an internal service failure.
 Query-string selectors use strict UTF-8 decoding. Invalid bytes are refused as
 malformed input rather than replaced into a different identifier before an
 authorization-scoped lookup.
+
+## S19 — Query percent escapes use one grammar — SETTLED 2026-07-28
+A percent sign in a query string must be followed by two hexadecimal digits.
+Malformed escapes are refused before they can become literal identifier text.

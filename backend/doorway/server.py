@@ -210,6 +210,8 @@ class Handler(BaseHTTPRequestHandler):
             return None, Response(400, {"error": "the request target is malformed"})
 
     def _query(self, raw: str) -> tuple[dict[str, str], Response | None]:
+        if re.search(r"%(?![0-9A-Fa-f]{2})", raw):
+            return {}, Response(400, {"error": "the query string is malformed"})
         try:
             parsed = parse_qs(
                 raw, keep_blank_values=True, errors="strict",

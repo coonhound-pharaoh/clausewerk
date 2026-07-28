@@ -23,6 +23,23 @@ and DOCX media types, asserts a 400 response, and proves no body byte was read.
 - `python -m pytest doorway/test_server_protocol.py -q`
 - `python -m py_compile doorway/server.py doorway/test_server_protocol.py`
 
+## Cycle 5 — malformed query percent escapes
+
+**Observed defect.** Query parsing accepted malformed percent escapes literally.
+For example, `run=%ZZ` reached the document selector as `%ZZ`, even though the
+same invalid URL encoding was already refused on the static-file path.
+
+**Fix.** Reject any query percent sign that is not followed by exactly two
+hexadecimal digits before decoding fields.
+
+**Regression proof.** The protocol suite requires `run=%ZZ` to return no
+selector and a 400 response.
+
+**Validation.**
+
+- `python -m pytest doorway/test_server_protocol.py -q`
+- `python -m py_compile doorway/server.py doorway/test_server_protocol.py`
+
 ## Cycle 4 — invalid UTF-8 query selectors
 
 **Observed defect.** Query parsing used replacement decoding. An invalid
