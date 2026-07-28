@@ -195,6 +195,21 @@ await test('Legal cannot rewrite a finding’s severity before deciding it', asy
      'the blocking severity must remain the one the requester submitted');
 });
 
+await test('Legal cannot decide a finding directly before socialisation', async () => {
+  await throws(() => queryAs('legal_reviewer', `
+    update cw.override_finding
+       set decision='approved',
+           decided_by='forged-reviewer@clausewerk',
+           decided_at=now()
+     where request_id=${REQ} and finding_ref='data:F1'`,
+    [], PAT), 'has not been socialised');
+  const f = await one(`
+    select decision, decided_by, decided_at from cw.override_finding
+     where request_id=${REQ} and finding_ref='data:F1'`);
+  eq([f.decision, f.decided_by, f.decided_at], [null, null, null],
+     'the bypass attempt must leave the finding undecided');
+});
+
 await test('a request on its own passes NOTHING', async () => {
   // The whole product, in one assertion. If this ever returns a row for a
   // request that has only been asked for, the blanket button is back.

@@ -445,6 +445,7 @@ end $$;
 -- ── Append-only-ish: a decision is not revisited ──────────────────────────
 create or replace function cw.override_finding_decided_once() returns trigger
 language plpgsql as $$
+declare s cw.override_socialisation%rowtype;
 begin
   if old.decision is not null then
     raise exception 'finding % on request % was decided %; a decision is not '
@@ -457,6 +458,23 @@ begin
      or new.summary is distinct from old.summary then
     raise exception 'what a request covers cannot be rewritten, only decided'
       using errcode = 'restrict_violation';
+  end if;
+
+  if new.decision is not null then
+    select * into s from cw.override_socialisation
+     where request_id = old.request_id;
+    if not found then
+      raise exception
+        'override request % has not been socialised; no finding may be decided',
+        old.request_id using errcode = 'restrict_violation';
+    end if;
+    if now() < s.window_closes then
+      raise exception
+        'the review window for request % closes at %; no finding may be decided yet',
+        old.request_id, s.window_closes using errcode = 'restrict_violation';
+    end if;
+    new.decided_by := cw.app_actor();
+    new.decided_at := now();
   end if;
   return new;
 end $$;

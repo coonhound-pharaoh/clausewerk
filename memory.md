@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S77 — Finding decisions enforce the review window at the row — SETTLED 2026-07-28
+Every override-finding decision path requires recorded socialisation and an
+elapsed review window. Decision actor and time come from the authenticated
+session and database, including direct SQL paths.
+
 ## S76 — Override finding severity is immutable — SETTLED 2026-07-28
 The severity submitted on an override finding is part of what the request
 covers. Legal may decide the finding but cannot downgrade or otherwise rewrite

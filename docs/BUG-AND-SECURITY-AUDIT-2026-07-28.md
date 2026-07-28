@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 63 — direct finding decisions bypassed socialisation
+
+**Observed defect.** Legal holds direct update privilege on override findings
+for the governed decision function. The row trigger did not enforce
+socialisation, so direct SQL could approve or reject a finding before any
+audience or review window existed.
+
+**Fix.** The finding transition trigger now requires a socialisation row,
+requires its window to have closed, and binds `decided_by` and `decided_at` to
+the authenticated session and database time for every decision path.
+
+**Regression proof.** A real Legal reviewer attempts a direct approval before
+socialisation while supplying forged decision provenance. The update raises and
+all decision fields remain null.
+
+**Validation.**
+
+- `node backend/db/test/override.test.mjs` — 37 passed
+
 ## Cycle 62 — override finding severity was rewriteable
 
 **Observed defect.** The override-finding update guard froze its request,
