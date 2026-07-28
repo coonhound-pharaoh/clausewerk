@@ -482,12 +482,34 @@ alter table cw.override_notified      enable row level security;
 -- been found — the policies are individually reasonable and only the cycle is
 -- wrong. A definer-rights helper breaks the cycle by answering the question
 -- without re-entering the policy, exactly as cw.owns_agreement() does for deals.
+-- Its direct-call surface still mirrors those policies: viewers ask only about
+-- themselves, and requesters ask only about a request they opened.
 create or replace function cw.was_notified(p_request_id bigint, p_person text)
 returns boolean
 language sql stable
 security definer set search_path = cw, pg_temp as $$
   select exists (select 1 from cw.override_notified
-                  where request_id = p_request_id and person = p_person)
+                  where request_id = p_request_id
+                    and person = p_person
+                    and (
+                      coalesce(nullif(current_setting('role', true), 'none'),
+                               session_user)
+                        not in ('cw_viewer', 'cw_requester')
+                      or (
+                        coalesce(nullif(current_setting('role', true), 'none'),
+                                 session_user) = 'cw_viewer'
+                        and p_person = cw.app_actor()
+                      )
+                      or (
+                        coalesce(nullif(current_setting('role', true), 'none'),
+                                 session_user) = 'cw_requester'
+                        and exists (
+                          select 1 from cw.override_request r
+                           where r.request_id = p_request_id
+                             and r.requested_by = cw.app_actor()
+                        )
+                      )
+                    ))
 $$;
 
 revoke all on function cw.was_notified(bigint, text) from public;

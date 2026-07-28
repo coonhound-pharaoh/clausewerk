@@ -221,6 +221,20 @@ await test('the socialisation event is a SYSTEM act, never a person\'s', async (
   eq(e.n, '2');
 });
 
+await test('a viewer cannot probe another person’s notification status', async () => {
+  const own = await queryAs('viewer',
+    `select cw.was_notified($1,$2) as notified`, [REQ, SEC], SEC);
+  eq(own[0].notified, true, 'the notified viewer lost their own access check');
+  const probed = await queryAs('viewer',
+    `select cw.was_notified($1,$2) as notified`, [REQ, SEC], KIM);
+  eq(probed[0].notified, false,
+    'an uninvolved viewer learned another person’s notification relationship');
+  const requester = await queryAs('requester',
+    `select cw.was_notified($1,$2) as notified`, [REQ, SEC], DANA);
+  eq(requester[0].notified, true,
+    'the requester lost the notification view on their own request');
+});
+
 await test('Legal may still push a requester’s pending request along', async () => {
   const pushed = await openRequest();
   const n = await queryAs('legal_reviewer',

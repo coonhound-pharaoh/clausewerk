@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 29 — notification relationships were probeable by viewers
+
+**Observed defect.** `cw.was_notified` bypasses row security to break the
+recursive dependency between override requests and their notification rows.
+Any viewer could nevertheless call it with another person’s identity and learn
+whether that person was notified about a named override request.
+
+**Fix.** Preserve the recursion-safe definer but restore the parent policies’
+scope inside it: viewers may ask only about themselves, and requesters only
+about a request they opened. Legal, Audit, and the administrator retain the
+complete access story.
+
+**Regression proof.** A notified viewer and the request owner still receive
+`true`; an uninvolved viewer asking about that notified person receives
+`false`. All downstream override visibility checks remain green.
+
+**Validation.**
+
+- `node backend/db/test/override.test.mjs`
+- Result: 31 passed, 0 failed.
+
 ## Cycle 28 — sharing relationships were probeable by other viewers
 
 **Observed defect.** `cw.is_shared_with` bypasses row security to avoid a policy

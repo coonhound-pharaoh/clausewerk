@@ -2610,3 +2610,9 @@ The sharing helper may bypass row policies to prevent recursion, but a viewer
 can ask only whether they personally hold the share and a requester can ask
 only about an owned agreement. Other people’s sharing relationships are not
 probeable.
+
+## S43 — Notification checks preserve subject scope — SETTLED 2026-07-28
+The notification helper may bypass row policies to prevent recursion, but a
+viewer can ask only whether they personally were notified and a requester can
+ask only about a request they opened. Other people’s notification relationships
+are not probeable.
