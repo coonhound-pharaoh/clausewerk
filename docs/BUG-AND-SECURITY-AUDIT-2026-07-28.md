@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 72 — share lifecycle timestamps were caller-controlled
+
+**Observed defect.** Governed share and revocation transitions bound the
+authenticated actor but accepted caller-supplied `shared_at` and `revoked_at`.
+A future-dated revocation closed access immediately while permanently claiming
+the consequential act happened later.
+
+**Fix.** Governed application writes now derive both lifecycle timestamps from
+the database clock alongside the authenticated actor. Owner historical imports
+retain explicit timestamps.
+
+**Regression proof.** A Legal reviewer supplies a year-2000 share time and a
+Legal admin supplies a year-2099 revocation time. Both stored values fall within
+the current transition window, and revocation still closes viewer access.
+
+**Validation.**
+
+- `node backend/db/test/reading-room.test.mjs` — 23 passed
+- `node backend/db/test/executed.test.mjs` — 53 passed
+
 ## Cycle 71 — an execution header alone marked a deal signed
 
 **Observed defect.** Inserting `executed_agreement` immediately moved the deal

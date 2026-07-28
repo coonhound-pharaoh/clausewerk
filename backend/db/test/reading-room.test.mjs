@@ -119,12 +119,18 @@ await test('before any share, a viewer sees NO signed agreement at all', async (
 let SHARE;
 await test('a legal reviewer shares one, with a stated purpose', async () => {
   const r = await mustWrite('legal_reviewer',
-    `insert into cw.agreement_share (agreement_id, shared_with, shared_by, purpose)
+    `insert into cw.agreement_share
+       (agreement_id, shared_with, shared_by, shared_at, purpose)
      values ('AG-1', '${SAM}', 'impostor@clausewerk',
+             '2000-01-01T00:00:00Z',
              'socialising the data-privacy terms')
-     returning share_id, shared_by`, [], PAT);
+     returning share_id, shared_by,
+       shared_at > now() - interval '1 minute' and shared_at <= now()
+         as shared_time_is_fresh`, [], PAT);
   SHARE = r[0].share_id;
   eq(r[0].shared_by, PAT, 'the share does not name who made it');
+  eq(r[0].shared_time_is_fresh, true,
+    'the caller-supplied share timestamp survived');
 });
 
 await test('the share is on the chain, naming who and why', async () => {
@@ -264,10 +270,18 @@ console.log('\nunsharing is recorded, and the reach closes');
 await test('revoking a share closes the viewer\'s access', async () => {
   await mustWrite('legal_admin',
     `update cw.agreement_share
-        set revoked_by = 'impostor@clausewerk', revoked_at = now()
-      where share_id = ${SHARE} returning share_id, revoked_by`, [], LEGAL)
-    .then(r => eq(r[0].revoked_by, LEGAL,
-      'the caller-supplied revoker entered the permanent share record'));
+        set revoked_by = 'impostor@clausewerk',
+            revoked_at = '2099-01-01T00:00:00Z'
+      where share_id = ${SHARE}
+      returning share_id, revoked_by,
+        revoked_at > now() - interval '1 minute' and revoked_at <= now()
+          as revoked_time_is_fresh`, [], LEGAL)
+    .then(r => {
+      eq(r[0].revoked_by, LEGAL,
+        'the caller-supplied revoker entered the permanent share record');
+      eq(r[0].revoked_time_is_fresh, true,
+        'the caller-supplied revocation timestamp survived');
+    });
   const seen = await queryAs('viewer',
     `select agreement_id from cw.executed_agreement`, [], SAM);
   eq(seen, [], 'a revoked share still opens the agreement');
