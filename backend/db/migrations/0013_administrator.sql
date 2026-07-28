@@ -147,6 +147,25 @@ comment on table cw.account is
   'self-asserted actor name: the actor on an audit row should be somebody the '
   'system knows. A second role is a revoke and a grant, never a second row.';
 
+create or replace function cw.bind_account_actor() returns trigger
+language plpgsql as $$
+begin
+  -- Application account history names the authenticated Administrator.
+  -- Owner-authored bootstrap and historical imports have no application role.
+  if cw.app_role() is not null then
+    if tg_op = 'INSERT' then
+      new.created_by := cw.app_actor();
+    elsif old.state = 'active' and new.state = 'revoked' then
+      new.revoked_by := cw.app_actor();
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger account_bind_actor
+  before insert or update on cw.account
+  for each row execute function cw.bind_account_actor();
+
 -- History is not edited here either. An account is created once and revoked
 -- once; the display name and unit may be corrected, and the role may be moved,
 -- but the person, who created them and when are settled facts.

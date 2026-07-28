@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S51 — Account history binds actors to session — SETTLED 2026-07-28
+Application-role writes bind account `created_by` and `revoked_by` to
+`cw.app_actor()`. Bootstrap remains an owner/system act, while ordinary
+access-history rows cannot contradict the authenticated audit actor.
+
 ## S50 — Records-delegation evidence binds actors to session — SETTLED 2026-07-28
 Application-role writes bind delegation `granted_by` and `revoked_by` to
 `cw.app_actor()` before auditing. Authority over irreversible redaction cannot

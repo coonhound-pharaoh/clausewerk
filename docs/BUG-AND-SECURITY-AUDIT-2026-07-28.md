@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 37 — account history accepted false actors
+
+**Observed defect.** An Administrator could create or revoke an account while
+placing arbitrary identities in the immutable `created_by` and `revoked_by`
+fields. Audit events still named the authenticated actor, leaving contradictory
+permanent access-history evidence.
+
+**Fix.** A before-write trigger binds account creation and revocation
+attribution to `cw.app_actor()` for application-role sessions. Owner writes
+remain available for the bootstrap ceremony, migrations, and historical
+imports.
+
+**Regression proof.** The administrator suite supplies
+`impostor@clausewerk` for both operations and verifies the stored account row
+and revocation audit payload contain the authenticated Administrator.
+
+**Validation.**
+
+- `node backend/db/test/administrator.test.mjs`
+- Result: 46 passed, 0 failed.
+
 ## Cycle 36 — records delegation accepted false actors
 
 **Observed defect.** An Administrator could override `granted_by` when

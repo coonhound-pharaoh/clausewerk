@@ -334,10 +334,13 @@ await test('destruction is the administrator\'s, and legal admin\'s is revoked',
 });
 
 await test('an administrator creates an account, and it lands on the chain', async () => {
-  await mustWrite('administrator',
+  const created = await mustWrite('administrator',
     `insert into cw.account (person,display_name,unit,role,created_by)
-     values ('${BUYER}','Dana Buyer','Procurement','requester','${ADMIN}')
-     returning person`, [], ADMIN);
+     values ('${BUYER}','Dana Buyer','Procurement','requester',
+             'impostor@clausewerk')
+     returning person, created_by`, [], ADMIN);
+  eq(created[0].created_by, ADMIN,
+    'the caller-supplied creator entered the permanent account record');
   const a = await one(`select actor, actor_role, actor_kind, event_type, subject,
                               payload->>'role' as role
                        from cw.audit_event where event_type='account_created'`);
@@ -402,11 +405,17 @@ await test('moving somebody to a different role is recorded', async () => {
 });
 
 await test('revoking an account is recorded, and it cannot be un-revoked', async () => {
-  await mustWrite('administrator',
-    `update cw.account set state='revoked', revoked_by='${ADMIN}', revoked_at=now()
-     where person='${BUYER}' returning person`, [], ADMIN);
-  const a = await one(`select subject from cw.audit_event where event_type='account_revoked'`);
+  const revoked = await mustWrite('administrator',
+    `update cw.account
+        set state='revoked', revoked_by='impostor@clausewerk', revoked_at=now()
+      where person='${BUYER}' returning person, revoked_by`, [], ADMIN);
+  eq(revoked[0].revoked_by, ADMIN,
+    'the caller-supplied revoker entered the permanent account record');
+  const a = await one(`select subject, payload->>'revoked_by' as revoked_by
+                       from cw.audit_event where event_type='account_revoked'`);
   eq(a.subject, BUYER);
+  eq(a.revoked_by, ADMIN,
+    'the caller-supplied revoker entered the account audit event');
   await throws(() => db.exec(
     `update cw.account set state='active', revoked_by=null, revoked_at=null
      where person='${BUYER}'`),
