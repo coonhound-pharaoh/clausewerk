@@ -97,4 +97,11 @@ def classify(error: Exception) -> Refused:
         # A trigger saying no, in a sentence somebody wrote for a human to read.
         return Refused(status=409, reason=reason, kind="refused_on_merits")
 
+    if isinstance(error, psycopg.Error) and not isinstance(error, psycopg.DataError):
+        # A broken statement, failed transaction, or internal database error is
+        # the service's fault. Driver detail commonly names tables, columns and
+        # constraints, so it belongs in the log and never in the response.
+        sys.stderr.write(f"unexpected database error: {reason}\n")
+        return Refused(status=500, reason="the database operation failed", kind="broke")
+
     return Refused(status=400, reason=reason, kind="rejected")

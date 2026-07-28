@@ -23,6 +23,24 @@ and DOCX media types, asserts a 400 response, and proves no body byte was read.
 - `python -m pytest doorway/test_server_protocol.py -q`
 - `python -m py_compile doorway/server.py doorway/test_server_protocol.py`
 
+## Cycle 6 — unexpected database errors leaked as caller mistakes
+
+**Observed defect.** An unexpected psycopg failure fell through to a 400
+response containing the driver's raw message. Broken statements could therefore
+blame the caller and disclose internal table or column names.
+
+**Fix.** Preserve the existing classifications for operational, privilege,
+integrity, trigger, and caller data errors. Log any other psycopg error and
+return a redacted service-failure response.
+
+**Regression proof.** A simulated real psycopg `UndefinedColumn` error must
+produce a redacted 500 while retaining its diagnostic detail only in stderr.
+
+**Validation.**
+
+- `python -m pytest doorway/test_refusals.py -q`
+- `python -m py_compile doorway/refusals.py doorway/test_refusals.py`
+
 ## Cycle 5 — malformed query percent escapes
 
 **Observed defect.** Query parsing accepted malformed percent escapes literally.

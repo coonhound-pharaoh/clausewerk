@@ -120,6 +120,17 @@ def test_a_pool_timeout_is_covered_by_the_same_classification():
     assert issubclass(PoolTimeout, psycopg.OperationalError)
 
 
+def test_a_broken_statement_is_redacted_as_the_services_fault(capsys):
+    detail = "column secret_internal_column does not exist"
+
+    broke = classify(psycopg.errors.UndefinedColumn(detail))
+
+    assert broke.status == 500
+    assert broke.kind == "broke"
+    assert detail not in broke.as_body()["reason"]
+    assert detail in capsys.readouterr().err
+
+
 def test_every_refusal_is_showable(people, db: Database):
     """Whatever the kind, the interface must have something to say. A blank
     reason renders as a spinner that never resolves."""

@@ -2492,3 +2492,8 @@ authorization-scoped lookup.
 ## S19 — Query percent escapes use one grammar — SETTLED 2026-07-28
 A percent sign in a query string must be followed by two hexadecimal digits.
 Malformed escapes are refused before they can become literal identifier text.
+
+## S20 — Unexpected database errors are redacted failures — SETTLED 2026-07-28
+Only expected database refusals and caller data errors may leave as 4xx
+responses. Broken statements and other unexpected psycopg errors are logged
+with their diagnostic detail and returned as redacted 500 service failures.
