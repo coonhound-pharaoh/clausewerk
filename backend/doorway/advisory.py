@@ -54,6 +54,7 @@ import http.client
 import json
 import math
 import os
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -263,12 +264,12 @@ def semantic_difference(db: Database, caller: Caller, body: dict | None) -> Answ
     # Dropped before a single line below can read one of them.
     asked = {key: value for key, value in (body or {}).items()
              if key not in NOT_THE_CALLER_S_TO_SAY}
-    ticket_id = asked.get("ticket_id")
-    if ticket_id is None or not str(ticket_id).strip().isdigit():
+    ticket_text = str(asked.get("ticket_id") or "").strip()
+    if re.fullmatch(r"[0-9]{1,19}", ticket_text) is None:
         return Answer(400, {"error": "refused",
                             "reason": "name the ticket to be judged",
                             "kind": "rejected"})
-    ticket_id = int(str(ticket_id).strip())
+    ticket_id = int(ticket_text)
 
     try:
         with db.as_person(caller.person, caller.role) as request:

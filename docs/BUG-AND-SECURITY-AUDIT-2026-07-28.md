@@ -58,6 +58,24 @@ reads only the bounded amount and returns an absence naming the oversized reply.
 - `python -m pytest doorway/test_advisory.py -q -k "adapter"`
 - `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
 
+## Cycle 20 — malformed ticket IDs escaped integer conversion
+
+**Observed defect.** `str.isdigit()` accepts some Unicode numeral characters
+that `int()` rejects, while a thousands-digit ASCII value exceeds Python's
+integer-conversion safety limit. Both malformed identifiers became internal
+failures.
+
+**Fix.** Require ticket identifiers to contain 1–19 ASCII decimal digits, the
+input shape of PostgreSQL `bigint`, before conversion.
+
+**Regression proof.** Unicode superscript, 5,000-digit, negative, and decimal
+identifiers must all receive 400 responses without touching the database.
+
+**Validation.**
+
+- `python -m pytest doorway/test_advisory.py -q -k "malformed_ticket_ids"`
+- `python -m py_compile doorway/advisory.py doorway/test_advisory.py`
+
 ## Cycle 19 — provider redirects could receive the API key
 
 **Observed defect.** Python's default HTTP redirect handler copies ordinary

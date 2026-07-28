@@ -2562,3 +2562,8 @@ request that asked for an optional judgment.
 The model API key is an unredirected HTTP header. Python sends it to the
 configured provider endpoint and omits it from redirect requests, including
 redirects to a different host.
+
+## S34 — Advisory ticket IDs use bigint input grammar — SETTLED 2026-07-28
+Ticket identifiers are 1 to 19 ASCII decimal digits before integer conversion.
+Unicode numerals, signs, decimals, and pathological digit strings are rejected
+as caller input and cannot become conversion failures.

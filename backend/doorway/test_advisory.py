@@ -423,6 +423,14 @@ def test_a_request_that_names_no_ticket_is_refused(people, db):
     assert answered.status == 400
 
 
+@pytest.mark.parametrize("ticket_id", ["²", "9" * 5_000, "-1", "1.5"])
+def test_malformed_ticket_ids_are_refused_before_integer_conversion(ticket_id):
+    answered = advisory.semantic_difference(
+        None, LEGAL_CALLER, {"ticket_id": ticket_id})
+
+    assert answered.status == 400
+
+
 def test_a_requester_cannot_judge_a_stranger_s_ticket(people, db):
     ticket_id = decided_ticket(db, RITA_CALLER)
     answered = advisory.semantic_difference(db, SAM_CALLER, {"ticket_id": ticket_id})
