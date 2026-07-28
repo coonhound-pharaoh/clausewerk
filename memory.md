@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S48 — Legal-hold evidence binds actors to session — SETTLED 2026-07-28
+Application-role writes bind legal-hold `opened_by` and release `released_by`
+to `cw.app_actor()`. The immutable hold record and its audit events cannot
+attribute litigation actions to a caller-supplied identity.
+
 ---
 
 ## 2026-07-27 · All content is placeholder until further notice

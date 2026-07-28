@@ -615,6 +615,28 @@ comment on table cw.legal_hold is
 
 -- A hold can move exactly once, in one direction: open → released. Everything
 -- else about it is the record of why destruction was suspended.
+-- The permanent attribution is the authenticated session, not a name supplied
+-- in SQL. Keep owner writes available for migrations and historical imports:
+-- the owner has no application role, while every governed application write
+-- does. On release, bind the actor only when the hold actually moves from open
+-- to released; the immutability trigger below rejects every other rewrite.
+create or replace function cw.bind_legal_hold_actor() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    if tg_op = 'INSERT' then
+      new.opened_by := cw.app_actor();
+    elsif old.released_on is null and new.released_on is not null then
+      new.released_by := cw.app_actor();
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger legal_hold_bind_actor
+  before insert or update on cw.legal_hold
+  for each row execute function cw.bind_legal_hold_actor();
+
 create or replace function cw.legal_hold_immutable() returns trigger
 language plpgsql as $$
 begin

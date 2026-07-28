@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 34 — legal-hold evidence accepted false actors
+
+**Observed defect.** The roles allowed to open and release legal holds could
+write arbitrary `opened_by` and `released_by` values. Those values are
+immutable and copied into the audit trail, so a permitted caller could
+permanently attribute a litigation hold or consequential release to somebody
+else.
+
+**Fix.** A before-write trigger binds opening and release attribution to
+`cw.app_actor()` for every application-role session. Owner writes remain
+available for migrations and historical imports.
+
+**Regression proof.** The governance suite now attempts both operations with
+`impostor@clausewerk` while authenticated as `legal@clausewerk`, and verifies
+the permanent audit payload records the authenticated actor.
+
+**Validation.**
+
+- `node backend/db/test/governance.test.mjs`
+- Result: 44 passed, 0 failed.
+
 ## Cycle 33 — direct negotiation writes accepted false actors
 
 **Observed defect.** Negotiation row policies correctly scoped who could write,

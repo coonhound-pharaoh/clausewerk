@@ -392,11 +392,13 @@ await test('a legal hold names its matter', async () => {
 await test('opening a hold is a named, audited act', async () => {
   await mustWrite('legal_reviewer',
     `insert into cw.legal_hold (agreement_id,matter_ref,opened_by)
-     values ('AG-001','Northwind v. Us, 2026-CV-4417','legal@clausewerk')
-     returning hold_id`);
+     values ('AG-001','Northwind v. Us, 2026-CV-4417','impostor@clausewerk')
+     returning hold_id`, [], 'legal@clausewerk');
   const e = await one(`select payload from cw.audit_event
                        where event_type='legal_hold_opened' and subject='AG-001'`);
   eq(e.payload.matter_ref, 'Northwind v. Us, 2026-CV-4417');
+  eq(e.payload.opened_by, 'legal@clausewerk',
+    'the caller-supplied name entered the permanent audit record');
   const u = await one(`select cw.agreement_under_hold('AG-001') as held`);
   eq(u.held, true);
 });
@@ -454,9 +456,9 @@ await test('only a legal admin releases a hold', async () => {
 
 await test('releasing a hold is an audited act', async () => {
   await mustWrite('legal_admin',
-    `update cw.legal_hold set released_by='legal@clausewerk', released_on=current_date
+    `update cw.legal_hold set released_by='impostor@clausewerk', released_on=current_date
      where agreement_id='AG-001' and matter_ref like 'Northwind%'
-     returning hold_id`);
+     returning hold_id`, [], 'legal@clausewerk');
   const e = await one(`select payload from cw.audit_event
                        where event_type='legal_hold_released'`);
   eq(e.payload.released_by, 'legal@clausewerk');
