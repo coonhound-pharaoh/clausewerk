@@ -158,6 +158,12 @@ create trigger ladder_rung_matches_ladder
 create or replace function cw.ladder_rung_immutable() returns trigger
 language plpgsql as $$
 begin
+  if tg_op = 'DELETE' then
+    raise exception
+      'ladder % rung % is published; a rung cannot be deleted — publish a new '
+      'ladder instead', old.ladder_id, old.rung
+      using errcode = 'restrict_violation';
+  end if;
   if new.clause_id is distinct from old.clause_id
      or new.version is distinct from old.version
      or new.rung is distinct from old.rung then
@@ -171,6 +177,9 @@ end $$;
 
 create trigger ladder_rung_no_edit
   before update on cw.ladder_rung
+  for each row execute function cw.ladder_rung_immutable();
+create trigger ladder_rung_no_delete
+  before delete on cw.ladder_rung
   for each row execute function cw.ladder_rung_immutable();
 
 -- ── Ladder health (CLA §11 open question 4) ─────────────────────────────────

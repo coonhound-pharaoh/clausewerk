@@ -752,6 +752,15 @@ await test('the wording on a published rung cannot be swapped', async () => {
   eq(r.clause_id, 'IP-S-002', 'the published path is unchanged');
 });
 
+await test('a published rung cannot be deleted', async () => {
+  await throws(() => queryAs('legal_admin',
+    `delete from cw.ladder_rung where ladder_id=11 and rung=1`),
+    'a rung cannot be deleted');
+  const r = await one(`select clause_id from cw.ladder_rung
+                       where ladder_id=11 and rung=1`);
+  eq(r.clause_id, 'IP-S-002', 'the published rung disappeared');
+});
+
 await test('moving the floor is still allowed — that is a policy decision', async () => {
   // Deliberately NOT locked. How far down a ladder we are willing to go is a
   // live governance call; which wording sits on each rung is a published fact.

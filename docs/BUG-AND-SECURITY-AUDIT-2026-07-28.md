@@ -4,6 +4,25 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 102 — published ladder rungs could be deleted
+
+**Observed defect.** Published ladder rungs rejected wording and rung-number
+updates, but legal admins retained DELETE authority with no deletion trigger.
+Removing a rung could rewrite or erase the retreat path referenced by past
+concessions while bypassing the stated immutability guarantee.
+
+**Fix.** The ladder-rung immutability function now explicitly rejects DELETE,
+and a before-delete trigger applies it to every published rung. Moving the
+policy floor remains the intentionally permitted live decision.
+
+**Regression proof.** A legal admin attempts to delete a published rung. The
+statement raises and the exact original clause reference remains present.
+
+**Validation.**
+
+- `node backend/db/test/ladder.test.mjs` — 57 passed
+- `node backend/db/test/writer-sql.test.mjs` — 16 passed
+
 ## Cycle 101 — category short codes could invalidate existing clause IDs
 
 **Observed defect.** Clause inserts enforce that an ID prefix matches its
