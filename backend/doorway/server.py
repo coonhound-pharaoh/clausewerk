@@ -189,7 +189,12 @@ class Handler(BaseHTTPRequestHandler):
         return path[4:] if path.startswith("/api/") else path
 
     def _token(self) -> str | None:
-        header = self.headers.get("authorization") or ""
+        values = self.headers.get_all("authorization", [])
+        # Two credentials make identity depend on which HTTP hop chooses which
+        # field. Refuse the ambiguity instead of authenticating either one.
+        if len(values) != 1:
+            return None
+        header = values[0]
         scheme, separator, credentials = header.partition(" ")
         token = credentials.strip()
         return token if separator and scheme.casefold() == "bearer" and token else None

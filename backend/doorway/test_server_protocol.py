@@ -42,3 +42,12 @@ def test_content_length_accepts_only_the_http_ascii_decimal_grammar():
         assert refused is not None, ambiguous
         assert refused.status == 400, ambiguous
         assert handler.rfile.tell() == 0, ambiguous
+
+
+def test_duplicate_authorization_fields_never_select_an_identity():
+    handler = handler_with_headers(
+        ("Authorization", "Bearer attacker"),
+        ("Authorization", "Bearer victim"),
+    )
+
+    assert handler._token() is None
