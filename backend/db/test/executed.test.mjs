@@ -632,8 +632,13 @@ await test('the unconditional reading remains reachable, and nobody has chosen i
 // and opens for one everybody has.
 
 await test('a proposed departure nobody has approved authorises nothing', async () => {
-  await db.exec(`insert into cw.sow_override (sow_id, category_key, reason, proposed_by)
-                 values ('AG-102','data','Customer requires their own DPA wording','buyer@cw')`);
+  const proposed = await queryAs('requester',
+    `insert into cw.sow_override (sow_id, category_key, reason, proposed_by)
+     values ('AG-102','data','Customer requires their own DPA wording',
+             'impostor@cw')
+     returning proposed_by`, [], 'buyer@cw');
+  eq(proposed[0].proposed_by, 'buyer@cw',
+    'the caller-supplied proposer entered the permanent override record');
   const inForce = await rows(`select 1 from cw.sow_override_in_force where sow_id='AG-102'`);
   eq(inForce.length, 0, 'a proposal is not an authorisation');
   await throws(() => db.exec(`insert into cw.executed_agreement
@@ -680,8 +685,12 @@ await test('with everyone signed, the departure is authorised and the SOW execut
   await db.exec(`insert into cw.sow_override_approval
                    (override_id, approver_kind, required_approver_id, approver)
                  values (${o.override_id},'required',${req.required_approver_id},'dpo@cw')`);
-  await db.exec(`insert into cw.sow_override_settlement (override_id, settled_by)
-                 values (${o.override_id},'legal@cw')`);
+  const settled = await queryAs('legal_reviewer',
+    `insert into cw.sow_override_settlement (override_id, settled_by)
+     values (${o.override_id},'impostor@cw') returning settled_by`,
+    [], 'legal@cw');
+  eq(settled[0].settled_by, 'legal@cw',
+    'the caller-supplied settler entered the permanent override record');
 
   const inForce = await rowsAsLegal(`select category_key from cw.sow_override_in_force
                               where sow_id='AG-102'`);
@@ -700,6 +709,8 @@ await test('authorising a departure is audited', async () => {
                         where event_type='sow_override_authorised'`);
   eq(e.length, 1); eq(e[0].subject, 'AG-102');
   eq(e[0].payload.category_key, 'data');
+  eq(e[0].payload.settled_by, 'legal@cw',
+    'the caller-supplied settler entered the audit chain');
   assert(e[0].payload.reason, 'and the audit record carries why, not just that');
 });
 

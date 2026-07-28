@@ -112,6 +112,26 @@ create table cw.sow_override_settlement (
   approvals_at_settlement int
 );
 
+create or replace function cw.bind_sow_override_actor() returns trigger
+language plpgsql as $$
+begin
+  if cw.app_role() is not null then
+    if tg_table_name = 'sow_override' then
+      new.proposed_by := cw.app_actor();
+    else
+      new.settled_by := cw.app_actor();
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger sow_override_bind_actor
+  before insert on cw.sow_override
+  for each row execute function cw.bind_sow_override_actor();
+create trigger sow_override_settlement_bind_actor
+  before insert on cw.sow_override_settlement
+  for each row execute function cw.bind_sow_override_actor();
+
 create or replace function cw.sow_override_gate() returns trigger
 language plpgsql
 security definer set search_path = cw, pg_temp as $$

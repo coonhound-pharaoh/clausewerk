@@ -5,6 +5,11 @@ One record per important decision, newest first. Plain language.
 Detailed engineering write-ups live in [`docs/decisions/`](docs/decisions/); this file is the
 running log of *what we decided and why*, readable without opening the code.
 
+## S55 — SOW override actions bind actors to session — SETTLED 2026-07-28
+Application-role inserts bind SOW override `proposed_by` and settlement
+`settled_by` to `cw.app_actor()`. Named approval subjects remain distinct from
+the requester or Legal actor performing the proposal or authorization.
+
 ## S54 — Concession actions bind actors to session — SETTLED 2026-07-28
 Application-role inserts bind concession `settled_by` and `withdrawn_by` to
 `cw.app_actor()` before immutable state and audit events are written. Named

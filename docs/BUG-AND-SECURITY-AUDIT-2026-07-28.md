@@ -4,6 +4,26 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 41 — SOW override actions accepted false actors
+
+**Observed defect.** Requesters or Legal callers could propose or authorize a
+statement-of-work departure while placing arbitrary identities in immutable
+`proposed_by` or `settled_by`. The false authorizer was copied into the audit
+chain.
+
+**Fix.** Before-insert triggers bind proposal and authorization attribution to
+`cw.app_actor()` for application-role sessions. Named approval subjects remain
+unchanged, and owner writes remain available for historical imports.
+
+**Regression proof.** The executed-agreement suite supplies `impostor@cw` for
+both governed operations and verifies the permanent rows and authorization
+audit payload name the authenticated requester and Legal reviewer.
+
+**Validation.**
+
+- `node backend/db/test/executed.test.mjs`
+- Result: 52 passed, 0 failed.
+
 ## Cycle 40 — concession actions accepted false actors
 
 **Observed defect.** A permitted caller could settle or withdraw a concession
