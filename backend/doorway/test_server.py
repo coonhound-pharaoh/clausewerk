@@ -710,6 +710,24 @@ def test_excessively_nested_json_is_a_bad_request_not_a_service_failure():
     assert not app.seen
 
 
+def test_negative_content_length_is_refused_before_dispatch():
+    app = Records(Response(200, {"ok": True}))
+
+    with stub_serving(app) as base:
+        parsed = urllib.parse.urlparse(base)
+        with socket.create_connection((parsed.hostname, parsed.port), timeout=5) as client:
+            client.sendall(
+                b"POST /api/sign-in HTTP/1.0\r\n"
+                b"Content-Type: application/json\r\n"
+                b"Content-Length: -1\r\n\r\n"
+            )
+            reply = client.makefile("rb").read()
+
+    assert b" 400 " in reply.split(b"\r\n", 1)[0]
+    assert b"content length cannot be negative" in reply
+    assert not app.seen
+
+
 # A DECLARED LENGTH LARGER THAN WHAT ARRIVES is guarded in `_read_document`
 # (the short-read check) and is deliberately NOT tested here: proving it needs a
 # client that promises bytes and then stops, which leaves the socket waiting for

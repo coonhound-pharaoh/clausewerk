@@ -190,6 +190,8 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("content-length") or 0)
         except ValueError:
             return None, Response(400, {"error": "unreadable request"})
+        if length < 0:
+            return None, Response(400, {"error": "content length cannot be negative"})
         if length > MAX_BODY:
             return None, Response(413, {"error": "that request is too large"})
         if length <= 0:
@@ -245,6 +247,8 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("content-length") or 0)
         except ValueError:
             return None, Response(400, {"error": "unreadable request"})
+        if length < 0:
+            return None, Response(400, {"error": "content length cannot be negative"})
         if length > MAX_DOCUMENT_BYTES:
             # Refused UNREAD, which is the entire point of checking the header
             # first: a service that reads a gigabyte before deciding it did not

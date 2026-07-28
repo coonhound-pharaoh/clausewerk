@@ -56,3 +56,15 @@ body and refused with 400.
 **Proof.**
 `test_excessively_nested_json_is_a_bad_request_not_a_service_failure` sends
 2,000 nested levels and proves the app is never called.
+
+## 5. Negative body lengths reached the application
+
+**Risk.** A negative `Content-Length` parsed successfully and the JSON path
+treated it as an absent body. Invalid HTTP framing could therefore be dispatched
+as a valid empty request instead of being stopped at the socket boundary.
+
+**Fix.** Both JSON and document receivers now reject negative declared lengths
+with 400.
+
+**Proof.** `test_negative_content_length_is_refused_before_dispatch` sends the
+invalid header over a raw socket and proves there is no application call.
