@@ -2453,3 +2453,11 @@ Mike extended U14a: the AI risk-exposure estimate applies not only to an accepte
 carries an AI-estimated % of risk it would transfer from supplier to customer, before the buyer
 chooses. Same judgment rules: advisory, provenance-stamped, labelled estimate, never a decision,
 never caller-supplied. Home: WP-3 round analysis (NC-17 area), shown beside the ladder ranking.
+
+## U14e — In-product AI judgment is intended scope, not an open question 2026-07-27
+Mike, correcting an over-cautious gate: Clausewerk calling AI judgment inside the negotiation
+module was always the intent — it analyzes risk AND drafts recommended language for attorney
+approval (the review queue's proposal→named-lawyer flow is the built home for that). D-8 is NOT
+"may the product call a model" — that is settled by the plan (WP-3, WP-5). D-8 reduces to
+provider selection: which model provider, whose key, one bill. Still owner-named before the
+first call is wired, but it is procurement, not scope.

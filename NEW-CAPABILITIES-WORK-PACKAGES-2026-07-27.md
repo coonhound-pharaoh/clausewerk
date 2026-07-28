@@ -119,8 +119,11 @@ two more the moment the first one (NC-01) merges.
 
 ## Owner additions after Gate 3 (2026-07-27, recorded — packages not yet re-cut)
 
-Two AI advisory features were added by the owner after this set passed Gate 3. Neither changes
-an existing package's contract; each needs a small package authored when its area is picked up:
+Two AI advisory features were added by the owner after this set passed Gate 3, and have since
+been authored as packages NC-25 and NC-26 (end of this document). They introduce one new
+decision, D-8: Clausewerk itself calling an AI model is a new outside dependency — a provider,
+a key, a per-call cost — and it needs the owner's approval before either package starts.
+Summary of the two features:
 
 - **AI semantic-difference measurement** (plan WP-6 area): how much the *meaning* changed between
   the AI draft and the approved text. An AI judgment stored with provenance, labelled an estimate,
@@ -132,6 +135,12 @@ an existing package's contract; each needs a small package authored when its are
   every PROPOSED move in round analysis carries its estimate before the buyer chooses, and an
   accepted concession carries what the choice actually cost. Same judgment rules. Recorded in
   `memory.md` (U14a–U14d).
+- **Mid-negotiation drafting** (owner intent confirmed 2026-07-27, memory.md U14e): when a
+  supplier's edit has no good pre-approved alternative, the AI drafts recommended counter-language
+  — which lands in the review queue as a proposal for a named attorney to approve, edit or
+  reject, exactly the flow 0008 built (AI-draft reason code, frozen baseline, no self-approval
+  since NC-05). To be authored as its own package in the WP-3 area once NC-17 and NC-25's model
+  seam exist; the language a model proposes is content, placeholder until Legal reviews it.
 
 ## Order of work
 
@@ -1673,10 +1682,129 @@ and D-7 (who may ask).
 
 ---
 
+## NC-25 — Advisory judgments: the record, the model seam, and the semantic-difference score
+
+*Serves plan WP-6 (owner addition U14c). The first feature where Clausewerk itself calls an AI
+model — everything before this treats AI as an outside submitter.*
+
+**Objective.** Give AI judgments a permanent, honest home — an advisory-assessment record separate
+from the frozen draft and ticket rows — and deliver the first judgment into it: how much the
+*meaning* changed between the AI's draft and what Legal approved, shown beside the arithmetic
+score, never instead of it (owner ruling, memory.md U14b/U14c).
+
+**Gate — D-8, narrowed by the owner (2026-07-27, memory.md U14e).** That Clausewerk itself calls
+AI judgment is settled intent, not an open question — the owner confirmed the negotiation module
+was always meant to analyze risk and draft recommended language for attorney approval (WP-3,
+WP-5). What remains of D-8 is procurement only: **the owner names the model provider** (whose
+key, one bill) before the first call is wired. The recommendation, when asked: the same provider
+family the interview pipeline uses, so there is one bill and one integration to watch.
+
+**Prerequisites**
+
+- D-8 approved (the model dependency, above).
+- NC-11 merged — it is the sole owner of the draft-record migration, and this package's migration
+  must sequence behind it (migration number claimed on disk at start, as always).
+- Gate C already holds (the connection work is committed as of 2026-07-27 evening).
+
+**Scope**
+
+- One migration: `cw.advisory_assessment` — an append-only record holding: what was assessed (the
+  ticket and the two frozen texts it points at), the judgment kind (`semantic_difference` first;
+  NC-26 adds `risk_exposure`), the score, the model, model version, prompt and inputs (the same
+  provenance discipline the draft record already carries, 0008's shape), who asked, and when.
+  Append-only with no update or delete grants, like every evidence table in this repository.
+  A judgment is re-runnable as models improve: a new row is appended, the old row stands, and
+  the read surface shows the latest while keeping the history.
+- A thin model-adapter module in the doorway (the seam every later AI feature calls), with
+  ADR-0005 discipline: when the model is unavailable, the honest answer is **no judgment,
+  recorded as absent** — never a substitute number, never a stale cache presented as fresh
+  (a judgment has no deterministic fallback, and pretending otherwise is the failure mode
+  ADR-0005 exists to prevent).
+- The semantic-difference pipeline: on demand (and optionally on approval), the adapter is given
+  the two frozen texts and returns a difference judgment with a short stated basis; both land in
+  the assessment row. The caller never supplies the score (the U14 rule, applied to judgments).
+- A read surface: the metrics view gains the latest semantic judgment beside the arithmetic
+  figure, each labelled as what it is — a measurement and an estimate.
+- Tests in the house discipline: the record refuses updates and deletes; a second run appends
+  rather than replaces; the caller cannot write a score; the model-unavailable path records an
+  honest absence; no test asserts on any judgment's wording or value (content rule — a model's
+  opinion is content).
+
+**Out of scope**
+
+- The risk-exposure judgment (NC-26).
+- Any threshold, alarm, or "too different" rule — governance settings, deliberately unset (U4).
+- Retro-scoring old synthetic records in bulk.
+- Any change to the frozen draft/ticket tables — the D-4 four-field ruling stands untouched.
+
+**Target files** — one new migration; `backend/doorway/advisory.py` (NEW — the adapter and the
+pipeline); `backend/doorway/test_advisory.py` (NEW); one dispatch line in `app.py` and a read in
+`reads.py` (both now single-writer-free, Gate C being satisfied — claim them in the shared-file
+queue order); `backend/db/test/advisory.test.mjs` (NEW).
+
+**Acceptance criteria** — the assessment row is append-only and provenance-complete, proven by
+test; a caller-supplied score is ignored, proven by test; model-down records an absence, proven
+by test; the metrics read shows measurement and judgment side by side with distinct labels;
+`npm run verify` green including all three harnesses; `git diff --stat backend/engine/` empty.
+
+**Risks** — per-call cost is invisible until it isn't: the package records a count of model calls
+in the audit chain so usage is a fact, not a guess. The judgment's quality is content and is
+placeholder until Legal reviews prompts — never a defect (owner rule).
+
+**Rollback** — revert the migration by its footer, delete the two new modules and tests, remove
+the dispatch and read lines. The append-only rows already written stay, as evidence rows do.
+
+---
+
+## NC-26 — Risk-exposure judgments in round analysis, both directions
+
+*Serves plan WP-3 (owner additions U14a/U14d). Consumes NC-25's record and adapter.*
+
+**Objective.** Every proposed negotiation move shown in round analysis carries an AI estimate of
+the percentage of risk it would transfer from supplier to customer — before the buyer chooses —
+and an accepted concession carries what the choice actually cost. Baselined on the original
+clause; always an estimate with its basis stated; never a decision (owner rulings U14a, U14d).
+
+**Gate.** D-8 (the model dependency, approved once for NC-25, reused here). Round analysis itself
+(NC-17) must exist — this package extends its results surface, so it sequences after NC-17, which
+carries its own gates.
+
+**Prerequisites** — NC-25 merged (the record and the adapter are its); NC-17 merged (the analysis
+this judgment attaches to); NC-01 already merged (the positions being judged are ownership-scoped).
+
+**Scope sketch (outline — full detail is authored when NC-17's shape is final)**
+
+- Extend the assessment record's use, not its shape: kind `risk_exposure`, pointing at a
+  negotiation position/alternative (prospective) or a concession (retrospective), with the
+  original clause named as the baseline in the inputs.
+- The prospective path: when round analysis ranks alternatives, each alternative is offered to
+  the adapter with the original clause, the proposed language, and the concession history; the
+  estimate and its stated basis land as assessment rows and travel with the analysis answer,
+  labelled advisory.
+- The retrospective path: on concession settlement, the same judgment against what was actually
+  accepted — the "what it cost" record.
+- Model-down: analysis proceeds without estimates, absences recorded — a buyer is never blocked
+  by a judgment being unavailable, because advice that gates action has become a decision.
+- Tests: same discipline as NC-25; additionally, analysis-without-model still answers, proven by
+  test; no test pins any estimate's value or wording.
+
+**Out of scope** — any automatic refusal or gate driven by a risk estimate (advice never
+decides); threshold/alarm rules (governance settings, unset); portfolio aggregation of risk
+scores (that is WP-8 territory and waits on D-7).
+
+**Evidence** — owner rulings in `memory.md` U14a–U14d; the advisory record and adapter (NC-25);
+round analysis (NC-17); ADR-0005 (fallbacks); 0011's position and concession records.
+
+**What must be true before this is specified in full** — D-8 approved; NC-17's result shape
+merged; NC-25's record landed.
+
+---
+
 ## Open issues carried forward
 
-1. **The connection work is uncommitted.** Nine packages gate on files that are finished but not
-   committed. One ruling releases them.
+1. **The connection work is committed** (2026-07-27 evening, branch `assembly-connection-2026-07-27`)
+   — Gate C's condition now holds; the nine packages it gated are released, pending the branch
+   reaching `main`.
 2. **D-6 is framed on a false picture** and must be re-put before it is answered (NC-15).
 3. **The matcher-fallback reading** — escalation-only versus keyword-then-escalate — is assumed by
    NC-17 and should be confirmed by the owner.
