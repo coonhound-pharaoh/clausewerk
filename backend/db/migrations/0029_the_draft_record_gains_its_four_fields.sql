@@ -207,6 +207,21 @@ begin
   -- the caller supplied. A control the caller can fill in themselves is not a
   -- control, and the owner settled on 2026-07-27 that this figure is the
   -- database's to compute (D-4, 1.3).
+  -- Direct Legal UPDATE is an intentional path for the database-derived edit
+  -- measurements, so the no-self-review rule must live here as well as in the
+  -- helper. Legal-originated tickets retain the existing carve-out.
+  if new.state = 'verified'
+     and old.opened_by = cw.app_actor()
+     and not exists (
+       select 1 from cw.effective_role e
+        where e.person = old.opened_by
+          and e.role in ('legal_reviewer','legal_admin')) then
+    raise exception
+      'review ticket % was opened by %, who may not also decide it',
+      old.ticket_id, old.opened_by
+      using errcode = 'insufficient_privilege';
+  end if;
+
   if new.state = 'verified' then
     new.edited_before_approval := (new.approved_text is distinct from new.proposed_text);
     sim := cw.text_overlap(new.proposed_text, new.approved_text);

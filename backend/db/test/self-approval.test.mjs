@@ -101,9 +101,16 @@ console.log('\nthe opener of a requester-originated ticket cannot verify it');
 
 await test('the opener is refused even holding a Legal role, and nothing moves', async () => {
   const id = await openTicket('requester', BUYER, 'Notice within 48 hours.');
-  // The same person, now acting with a Legal role. The role check passes; the
-  // new check does not.
-  await refused(() => verify('legal_reviewer', BUYER, id, 'DP-S-501', 'B. Uyer'));
+  // The same person, now acting with a Legal role, takes the direct table path.
+  // The row transition itself must enforce separation, not only the helper.
+  await refused(() => queryAs('legal_reviewer', `
+    update cw.review_ticket
+       set state='verified',
+           approved_text='Supplier shall notify Customer promptly.',
+           decided_by='forged-reviewer@clausewerk',
+           minted_clause_id='DP-S-501',
+           minted_version=1
+     where ticket_id=${id}`, [], BUYER));
   const t = await one(`select state, minted_clause_id from cw.review_ticket where ticket_id=${id}`);
   eq(t.state, 'pending', 'a refused verification must leave the ticket where it was');
   eq(t.minted_clause_id, null);

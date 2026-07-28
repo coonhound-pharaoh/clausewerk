@@ -4,6 +4,27 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 66 — direct ticket verification bypassed self-review separation
+
+**Observed defect.** The review helper prevented a requester-originated ticket
+from being verified by its opener, but the intentional direct Legal update path
+did not. The opener could switch to a Legal database role and verify their own
+request without calling the helper.
+
+**Fix.** The final review-ticket transition trigger now enforces the
+authenticated-opener separation check for verified transitions, while retaining
+the existing carve-out for tickets opened by a person with an effective Legal
+role.
+
+**Regression proof.** A requester opens a ticket, then the same actor attempts a
+complete direct verified transition under the Legal role. The update raises,
+the ticket remains pending, and no clause version is minted.
+
+**Validation.**
+
+- `node backend/db/test/self-approval.test.mjs` — 9 passed
+- `node backend/db/test/review-queue.test.mjs` — 45 passed
+
 ## Cycle 65 — direct decisions bypassed self-review separation
 
 **Observed defect.** The no-self-decision check existed only in the helper
