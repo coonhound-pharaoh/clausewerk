@@ -87,6 +87,12 @@ NEVER_FROM_THE_BODY = frozenset({
     # a list like this goes wrong: it grows by whatever the last endpoint happened
     # to be called.
     "requester",
+    # `baseline_chosen_by` is an actor for the same reason `opened_by` is: it
+    # records WHO made the U1 choice between opening a renewal from last term's
+    # executed positions and opening it from library standard. A body that could
+    # name somebody else would put another person's name on a commercial
+    # decision they did not make.
+    "baseline_chosen_by",
 })
 
 
@@ -456,6 +462,134 @@ WRITES: dict[str, Write] = {
         rule="insert on cw.audit_event only — the administrator holds no write on "
              "cw.agreement_retention, so a nudge cannot become a destruction",
         fields=(Field("agreement_id"), Field("note", required=False)),
+    ),
+
+    # ── The negotiation record ──────────────────────────────────────────────
+    #
+    # Six endpoints for six acts. Every one of them is a single statement, which
+    # is why they are entries here and not a module of their own: a Write holds
+    # exactly one statement, and each of these is one.
+    #
+    # None of them checks a permission. Migration 0027 replaced the four
+    # role-only INSERT policies on these tables with the house two-branch shape —
+    # Legal unconditional, a requester gated on owning the deal — so "you may
+    # only write against your own deal" is the database's sentence to say. An
+    # ownership test written here would be the second copy of that rule.
+    "POST /negotiations": Write(
+        sql="""insert into cw.negotiation (agreement_id, paper, opened_by, baseline,
+                                  renews_agreement_id, baseline_chosen_by,
+                                  baseline_note)
+       values (%(agreement_id)s, %(paper)s, current_setting('cw.actor'),
+               %(baseline)s, %(renews_agreement_id)s, current_setting('cw.actor'),
+               %(baseline_note)s)
+       returning negotiation_id, agreement_id, paper, baseline, state, opened_on""",
+        rule="cw.negotiation write_scoped policy (0027) — Legal, or the requester "
+             "who owns the agreement",
+        fields=(
+            Field("agreement_id"), Field("paper"), Field("baseline"),
+            Field("renews_agreement_id", required=False),
+            Field("baseline_note", required=False),
+        ),
+    ),
+
+    # A SEPARATE endpoint rather than a flag on the one above, because opening
+    # from last term's executed positions is a different commercial act from
+    # opening from library standard, and it seeds the positions as well.
+    #
+    # `baseline` passes through when supplied and null when not: null means the
+    # recorded default in cw.governance_setting, and that default is a settled
+    # decision (0012) rather than an open question. Restating the default here
+    # would be a second copy of it.
+    "POST /negotiations/renew": Write(
+        sql="""select cw.open_renewal(%(agreement_id)s, %(renews_agreement_id)s,
+              current_setting('cw.actor'), %(baseline)s, %(paper)s, %(note)s)
+              as negotiation_id""",
+        rule="execute on cw.open_renewal() — held by requester, legal_reviewer and "
+             "legal_admin (0011). The function is SECURITY DEFINER because it reads "
+             "the prior agreement and the library; its own ownership check is NC-03",
+        fields=(
+            Field("agreement_id"), Field("renews_agreement_id"), Field("paper"),
+            Field("baseline", required=False),
+            Field("note", required=False),
+        ),
+    ),
+
+    # The sequence guard (cw.round_is_next) and the run-id rule
+    # (only_our_rounds_have_a_run) are the schema's, and both refusals travel
+    # back unchanged. Neither is pre-empted here: a check in Python would be a
+    # second copy that eventually stops agreeing with the first.
+    "POST /negotiations/rounds": Write(
+        sql="""insert into cw.negotiation_round
+         (negotiation_id, round_no, direction, document_sha256, storage_uri,
+          sent_on, actor, run_id)
+       values (%(negotiation_id)s, %(round_no)s, %(direction)s,
+               %(document_sha256)s, %(storage_uri)s, %(sent_on)s,
+               current_setting('cw.actor'), %(run_id)s)
+       returning negotiation_id, round_no, direction, sent_on, recorded_at""",
+        rule="cw.negotiation_round write_scoped policy (0027); cw.round_is_next() "
+             "refuses a gap in the sequence",
+        fields=(
+            Field("negotiation_id"), Field("round_no"), Field("direction"),
+            Field("document_sha256"), Field("storage_uri"), Field("sent_on"),
+            Field("run_id", required=False),
+        ),
+    ),
+
+    # No movement row is written here. cw.position_opens() writes the opening
+    # one, so a second insert from this side would record the same fact twice.
+    "POST /negotiations/positions": Write(
+        sql="""insert into cw.negotiation_position
+         (negotiation_id, category_key, our_clause_id, our_version,
+          their_text_ref, round_raised, opened_from)
+       values (%(negotiation_id)s, %(category_key)s, %(our_clause_id)s,
+               %(our_version)s, %(their_text_ref)s, %(round_raised)s,
+               %(opened_from)s)
+       returning position_id, negotiation_id, category_key, round_raised,
+                 opened_from""",
+        rule="cw.negotiation_position write_scoped policy (0027); cw.position_opens() "
+             "records the opening movement, so this endpoint does not",
+        fields=(
+            Field("negotiation_id"), Field("category_key"),
+            Field("our_clause_id", required=False),
+            Field("our_version", required=False),
+            Field("their_text_ref", required=False),
+            Field("round_raised"), Field("opened_from"),
+        ),
+    ),
+
+    # `to_state` is not restated in Python. The table names the states it
+    # accepts, and a second copy of that list is how two copies quietly stop
+    # agreeing.
+    "POST /negotiations/positions/move": Write(
+        sql="""insert into cw.position_movement
+         (position_id, round_no, to_state, current_rung, actor, note)
+       values (%(position_id)s, %(round_no)s, %(to_state)s, %(current_rung)s,
+               current_setting('cw.actor'), %(note)s)
+       returning movement_id, position_id, round_no, to_state, moved_at""",
+        rule="cw.position_movement write_scoped policy (0027); the state list is the "
+             "table's check constraint",
+        fields=(
+            Field("position_id"), Field("round_no"), Field("to_state"),
+            Field("current_rung", required=False), Field("note", required=False),
+        ),
+    ),
+
+    # Escalation is its own endpoint because it is the act a person means to
+    # perform, and nobody should reach Legal by typing a string into a state
+    # field. It escalates and it does nothing else — creating the review ticket
+    # alongside it would be two governed acts in one call.
+    "POST /negotiations/positions/escalate": Write(
+        sql="""insert into cw.position_movement
+         (position_id, round_no, to_state, current_rung, actor, note)
+       values (%(position_id)s, %(round_no)s, 'escalated', %(current_rung)s,
+               current_setting('cw.actor'), %(note)s)
+       returning movement_id, position_id, round_no, to_state, moved_at""",
+        rule="cw.position_movement write_scoped policy (0027) — the same rule as a "
+             "move; what differs is that the state is not the caller's to choose",
+        fields=(
+            Field("position_id"), Field("round_no"),
+            Field("current_rung", required=False), Field("note", required=False),
+        ),
     ),
 
     # ── Stewardship ─────────────────────────────────────────────────────────

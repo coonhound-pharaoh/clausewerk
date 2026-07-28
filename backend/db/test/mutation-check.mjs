@@ -732,10 +732,20 @@ grant usage, select on sequence cw.supersession_id_seq to cw_legal_reviewer;`,
   // U1 is an owner decision and both paths must be REACHABLE. This collapses
   // the two into one, which is the failure the work package named explicitly:
   // building one path and stubbing the other.
+  //
+  // REPOINTED 2026-07-27 by NC-03. 0031 replaces cw.open_renewal wholesale to
+  // add the ownership check, and quotes the prior body in its reverting footer
+  // as this repository's migrations do. The footer is comment text, but its
+  // lines carry the old body verbatim behind a `--   ` prefix, so the bare
+  // pattern matched twice inside 0031 and preflight refused the whole run.
+  // The leading newline is what distinguishes the two: the live branch begins a
+  // line, the quoted copy sits behind the comment prefix. It still matches BOTH
+  // live definitions — 0011's and 0031's — which is required, since 0031 runs
+  // last and an unmutated copy there would undo the mutation (trap 5.4a).
   { suite: 'negotiation.test.mjs',
     name: 'the executed-agreement baseline is not actually built',
-    find: `  if chosen = 'executed_agreement' then`,
-    repl: '  if false then',
+    find: `\n  if chosen = 'executed_agreement' then`,
+    repl: '\n  if false then',
     expect: 'by default a renewal opens from the executed agreement’s positions' },
 
   // ════════════════════════════════════════════════════════════════════════

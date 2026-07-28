@@ -95,6 +95,25 @@ BODIES: dict[str, dict] = {
     "POST /watchers": {"category_key": "data", "person": "leah@clausewerk"},
     "POST /watchers/remove": {"watcher_id": 1},
     "POST /retention/nudge": {"agreement_id": "AG-1", "note": "please review"},
+    "POST /negotiations": {
+        "agreement_id": "AG-1", "paper": "ours", "baseline": "library_standard",
+    },
+    "POST /negotiations/renew": {
+        "agreement_id": "AG-2", "renews_agreement_id": "AG-1", "paper": "ours",
+    },
+    "POST /negotiations/rounds": {
+        "negotiation_id": 1, "round_no": 1, "direction": "issued",
+        "document_sha256": "c" * 64, "storage_uri": "store://round-1",
+        "sent_on": "2026-07-27",
+    },
+    "POST /negotiations/positions": {
+        "negotiation_id": 1, "category_key": "data", "round_raised": 1,
+        "opened_from": "library_standard",
+    },
+    "POST /negotiations/positions/move": {
+        "position_id": 1, "round_no": 1, "to_state": "held",
+    },
+    "POST /negotiations/positions/escalate": {"position_id": 1, "round_no": 1},
     "POST /checkpoints": {},
     "POST /health-checks/anchor": {},
     "POST /health-checks/chain": {},
@@ -547,3 +566,354 @@ def test_the_deals_endpoint_does_not_scope_rows_itself(people, db: Database):
         f"GET /deals scopes its own rows: {statement!r}. The policy on "
         "cw.agreement decides who sees what."
     )
+
+
+# ── 10. The negotiation record ──────────────────────────────────────────────
+#
+# Six endpoints, and what is being proved about them is not that they insert
+# rows. It is that WHO may write is settled by migration 0027 and not by
+# anything in Python: Legal writes against any deal, a requester writes against
+# their own and is refused on somebody else's, and the two roles that read but
+# never write are refused everywhere.
+#
+# Every refusal below is the database's. None of these tests reaches for a
+# second connection or a second role after being told no.
+
+NEG_ADMINISTRATOR = Caller(person="a.okafor@clausewerk", role="administrator")
+NEG_LEGAL_ADMIN = Caller(person="r.vance@clausewerk", role="legal_admin")
+NEG_REVIEWER = Caller(person="p.nkemi@clausewerk", role="legal_reviewer")
+NEG_AUDITOR = Caller(person="t.imani@clausewerk", role="auditor")
+NEG_OWNER = Caller(person="d.buyer@clausewerk", role="requester")
+NEG_STRANGER = Caller(person="e.other@clausewerk", role="requester")
+
+OWNED_DEAL = "AG-NEG-OWNED"
+OTHER_DEAL = "AG-NEG-OTHER"
+PRIOR_DEAL = "AG-NEG-PRIOR"
+RENEWAL_DEAL = "AG-NEG-RENEWAL"
+
+NEGOTIATION_WRITES = (
+    "POST /negotiations",
+    "POST /negotiations/renew",
+    "POST /negotiations/rounds",
+    "POST /negotiations/positions",
+    "POST /negotiations/positions/move",
+    "POST /negotiations/positions/escalate",
+)
+
+
+def a_round(negotiation_id, round_no=1, direction="issued"):
+    return {
+        "negotiation_id": negotiation_id, "round_no": round_no,
+        "direction": direction, "document_sha256": f"{round_no:064x}",
+        "storage_uri": f"store://round-{round_no}", "sent_on": "2026-07-27",
+    }
+
+
+@pytest.fixture
+def negotiating(db: Database, owner_url: str, schema: str):
+    """Two requesters with a deal each, a Legal cast, and a prior term to renew
+    from.
+
+    The cast comes from the demo seed so the roles are the real ones, granted
+    and countersigned the way the system grants them. The second requester is
+    added here because ownership cannot be proved with only one.
+    """
+    from doorway.seed_demo import seed
+
+    seed(owner_url=owner_url, app_url=schema)
+
+    with db.as_person(NEG_ADMINISTRATOR.person, NEG_ADMINISTRATOR.role) as request:
+        request.write_one(
+            "insert into cw.account (person, display_name, unit, role, created_by) "
+            "values (%s,%s,%s,%s,%s)",
+            ("e.other@clausewerk", "Elle Other", "Procurement", "requester",
+             NEG_ADMINISTRATOR.person))
+        request.write_one(
+            "insert into cw.role_grant (action, person, role, reason) "
+            "values ('granted',%s,'requester',%s)",
+            ("e.other@clausewerk", "a second requester to be refused as"))
+
+    run(db, NEG_LEGAL_ADMIN, "POST /categories",
+        {"key": "data", "label": "Data Privacy", "short": "DP"})
+
+    for deal, who in ((OWNED_DEAL, NEG_OWNER), (PRIOR_DEAL, NEG_OWNER),
+                      (RENEWAL_DEAL, NEG_OWNER), (OTHER_DEAL, NEG_STRANGER)):
+        run(db, who, "POST /deals", {"agreement_id": deal, "counterparty": "Northwind"})
+
+    # A prior term to renew from. Written on the owner connection because this
+    # is scenery, not the act under test: cw.open_renewal refuses outright
+    # unless the agreement it renews has an executed run behind it.
+    with psycopg.connect(owner_url, autocommit=True) as owner:
+        owner.execute("insert into cw.snapshot (snapshot_id) values (%s)", ("a" * 64,))
+        owner.execute("insert into cw.ruleset (ruleset_id) values (%s)", ("b" * 64,))
+        owner.execute(
+            "insert into cw.run (run_id, agreement_id, vendor, manifest, "
+            "manifest_source, snapshot_id, ruleset_id, result_hash, "
+            "engine_version, gate_open, created_by) "
+            "values (%s,%s,'Northwind','{}'::jsonb,'manual',%s,%s,%s,'test',true,%s)",
+            ("RUN-PRIOR", PRIOR_DEAL, "a" * 64, "b" * 64, "d" * 64,
+             NEG_OWNER.person))
+        owner.execute(
+            "insert into cw.executed_agreement (agreement_id, run_id, executed_on, "
+            "effective_on) values (%s,'RUN-PRIOR', current_date, current_date)",
+            (PRIOR_DEAL,))
+    return db
+
+
+def open_negotiation(db: Database, caller: Caller, agreement_id: str) -> int:
+    produced = run(db, caller, "POST /negotiations", {
+        "agreement_id": agreement_id, "paper": "ours",
+        "baseline": "library_standard"})
+    return produced[0]["negotiation_id"]
+
+
+def open_position(db: Database, caller: Caller, negotiation_id: int) -> int:
+    produced = run(db, caller, "POST /negotiations/positions", {
+        "negotiation_id": negotiation_id, "category_key": "data",
+        "round_raised": 1, "opened_from": "library_standard"})
+    return produced[0]["position_id"]
+
+
+def test_the_owning_requester_records_a_whole_negotiation(negotiating, db: Database):
+    """Open it, record a round, raise a position, move it, escalate it. Five
+    acts, five endpoints, one deal the caller owns."""
+    negotiation_id = open_negotiation(db, NEG_OWNER, OWNED_DEAL)
+
+    recorded = run(db, NEG_OWNER, "POST /negotiations/rounds",
+                   a_round(negotiation_id))
+    assert recorded[0]["round_no"] == 1
+
+    position_id = open_position(db, NEG_OWNER, negotiation_id)
+
+    moved = run(db, NEG_OWNER, "POST /negotiations/positions/move", {
+        "position_id": position_id, "round_no": 1, "to_state": "held"})
+    assert moved[0]["to_state"] == "held"
+
+    escalated = run(db, NEG_OWNER, "POST /negotiations/positions/escalate", {
+        "position_id": position_id, "round_no": 2})
+    assert escalated[0]["to_state"] == "escalated"
+
+
+@pytest.mark.parametrize("caller", [NEG_REVIEWER, NEG_LEGAL_ADMIN],
+                         ids=["legal_reviewer", "legal_admin"])
+def test_legal_writes_against_a_deal_it_does_not_own(
+    negotiating, db: Database, caller: Caller
+):
+    """Legal never appears in cw.agreement.requester, so a two-branch policy
+    that forgot the Legal branch would lock Legal out of the whole record."""
+    negotiation_id = open_negotiation(db, caller, OWNED_DEAL)
+    run(db, caller, "POST /negotiations/rounds", a_round(negotiation_id))
+    position_id = open_position(db, caller, negotiation_id)
+    run(db, caller, "POST /negotiations/positions/move", {
+        "position_id": position_id, "round_no": 1, "to_state": "conceded"})
+    run(db, caller, "POST /negotiations/positions/escalate", {
+        "position_id": position_id, "round_no": 2})
+
+
+def test_a_requester_is_refused_on_another_persons_deal(negotiating, db: Database):
+    """0027's rule, seen through the endpoints. Each act is attempted
+    separately, because closing one without the others achieves nothing."""
+    negotiation_id = open_negotiation(db, NEG_OWNER, OWNED_DEAL)
+    position_id = open_position(db, NEG_OWNER, negotiation_id)
+
+    attempts = {
+        "POST /negotiations": {
+            "agreement_id": OWNED_DEAL, "paper": "ours",
+            "baseline": "library_standard"},
+        "POST /negotiations/rounds": a_round(negotiation_id),
+        "POST /negotiations/positions": {
+            "negotiation_id": negotiation_id, "category_key": "data",
+            "round_raised": 1, "opened_from": "library_standard"},
+        "POST /negotiations/positions/move": {
+            "position_id": position_id, "round_no": 1, "to_state": "held"},
+        "POST /negotiations/positions/escalate": {
+            "position_id": position_id, "round_no": 1},
+    }
+    for key, body in attempts.items():
+        shaped = answer(db, NEG_STRANGER, key, body)
+        assert shaped.refused, (
+            f"{key} let a requester write against a deal they do not own. It "
+            f"answered {shaped.status} {shaped.body!r}")
+        assert shaped.body.get("kind") != "rejected", (
+            f"{key} refused for a missing field rather than for whose deal it "
+            f"is: {shaped.body!r}")
+
+
+@pytest.mark.parametrize("key", NEGOTIATION_WRITES)
+@pytest.mark.parametrize("caller", [NEG_AUDITOR, NEG_ADMINISTRATOR],
+                         ids=["auditor", "administrator"])
+def test_the_reading_roles_write_nothing_in_the_negotiation_record(
+    negotiating, db: Database, caller: Caller, key: str
+):
+    """Both hold select and neither holds insert (0011, 0013). Refused by the
+    grant, before any policy is consulted."""
+    shaped = answer(db, caller, key, BODIES[key])
+    assert shaped.refused, (
+        f"{key} let {caller.role} write. It answered {shaped.status} "
+        f"{shaped.body!r}")
+    assert shaped.body.get("reason", "").strip()
+    assert shaped.body.get("kind") != "rejected", (
+        f"{key} refused {caller.role} for a missing field: {shaped.body!r}")
+
+
+def test_a_renewal_opens_from_the_prior_term(negotiating, db: Database):
+    """The settled U1 choice, passed through and recorded rather than inferred."""
+    produced = run(db, NEG_OWNER, "POST /negotiations/renew", {
+        "agreement_id": RENEWAL_DEAL, "renews_agreement_id": PRIOR_DEAL,
+        "paper": "ours", "baseline": "executed_agreement"})
+    negotiation_id = produced[0]["negotiation_id"]
+    assert negotiation_id
+
+    with db.as_person(NEG_OWNER.person, NEG_OWNER.role) as request:
+        rows = request.rows(
+            "select baseline, renews_agreement_id, opened_by, baseline_chosen_by "
+            "from cw.negotiation where negotiation_id = %s", (negotiation_id,))
+    assert rows[0]["baseline"] == "executed_agreement"
+    assert rows[0]["renews_agreement_id"] == PRIOR_DEAL
+    assert rows[0]["opened_by"] == NEG_OWNER.person
+    assert rows[0]["baseline_chosen_by"] == NEG_OWNER.person
+
+
+def test_a_renewal_left_to_the_recorded_default_is_not_overridden_here(
+    negotiating, db: Database
+):
+    """Absent baseline means null, and null means the governance setting. The
+    doorway does not restate the default — a second copy of a settled decision
+    is how the two stop agreeing."""
+    produced = run(db, NEG_OWNER, "POST /negotiations/renew", {
+        "agreement_id": RENEWAL_DEAL, "renews_agreement_id": PRIOR_DEAL,
+        "paper": "ours"})
+
+    with db.as_person(NEG_OWNER.person, NEG_OWNER.role) as request:
+        chosen = request.rows(
+            "select baseline from cw.negotiation where negotiation_id = %s",
+            (produced[0]["negotiation_id"],))[0]["baseline"]
+        recorded = request.rows(
+            "select value from cw.governance_setting "
+            "where key = 'renewal_default_baseline'")[0]["value"]
+    assert chosen == recorded
+
+
+def test_the_renewal_shortcut_is_scoped_by_ownership_too(negotiating, db: Database):
+    """The one endpoint whose refusal had to be checked deliberately.
+
+    cw.open_renewal is SECURITY DEFINER, so it runs past the write policies
+    0027 installed — the ownership rule cannot reach it from there, and it has
+    its own instead. Asserted rather than assumed, because a renewal that
+    refused for some other reason (no executed term behind it, say) would look
+    identical from out here. The fixture gives this deal a real prior term, so
+    the only thing left to refuse is whose deal it is.
+    """
+    shaped = answer(db, NEG_STRANGER, "POST /negotiations/renew", {
+        "agreement_id": RENEWAL_DEAL, "renews_agreement_id": PRIOR_DEAL,
+        "paper": "ours", "baseline": "library_standard"})
+    assert shaped.refused, (
+        f"a stranger opened a renewal on somebody else's deal: {shaped.body!r}")
+    assert shaped.body.get("kind") != "rejected", shaped.body
+
+    # The same call by the owner succeeds, which is what makes the refusal above
+    # about ownership rather than about the endpoint being broken.
+    assert not answer(db, NEG_OWNER, "POST /negotiations/renew", {
+        "agreement_id": RENEWAL_DEAL, "renews_agreement_id": PRIOR_DEAL,
+        "paper": "ours", "baseline": "library_standard"}).refused
+
+
+def test_a_round_out_of_sequence_is_the_databases_refusal(negotiating, db: Database):
+    """The gap guard lives in cw.round_is_next(). Nothing in Python pre-empts
+    it, and the refusal arrives as the database stated it."""
+    negotiation_id = open_negotiation(db, NEG_OWNER, OWNED_DEAL)
+    shaped = answer(db, NEG_OWNER, "POST /negotiations/rounds",
+                    a_round(negotiation_id, round_no=3))
+    assert shaped.refused
+    assert shaped.body.get("reason", "").strip()
+
+
+def test_raising_a_position_records_its_opening_movement_once(
+    negotiating, db: Database
+):
+    """cw.position_opens() writes the opening row. The endpoint writing a second
+    one would record the same fact twice — which is the trap this checks."""
+    negotiation_id = open_negotiation(db, NEG_OWNER, OWNED_DEAL)
+    position_id = open_position(db, NEG_OWNER, negotiation_id)
+
+    with db.as_person(NEG_OWNER.person, NEG_OWNER.role) as request:
+        movements = request.rows(
+            "select to_state, actor from cw.position_movement "
+            "where position_id = %s", (position_id,))
+    assert len(movements) == 1
+    assert movements[0]["to_state"] == "open"
+    assert movements[0]["actor"] == NEG_OWNER.person
+
+
+def test_escalation_does_not_take_its_state_from_the_body(negotiating, db: Database):
+    """A caller should not reach Legal by typing a string, and cannot: the
+    endpoint takes no state field at all."""
+    escalate = WRITES["POST /negotiations/positions/escalate"]
+    assert "to_state" not in {spec.name for spec in escalate.fields}
+
+    negotiation_id = open_negotiation(db, NEG_OWNER, OWNED_DEAL)
+    position_id = open_position(db, NEG_OWNER, negotiation_id)
+    produced = run(db, NEG_OWNER, "POST /negotiations/positions/escalate", {
+        "position_id": position_id, "round_no": 1, "to_state": "settled"})
+    assert produced[0]["to_state"] == "escalated"
+
+
+def test_every_negotiation_act_reaches_the_audit_chain(negotiating, db: Database):
+    """Recorded by the triggers in 0011, which is why no endpoint writes an
+    audit row of its own — a second write would record each act twice."""
+    before = {row["seq"] for row in chain(db)}
+
+    negotiation_id = open_negotiation(db, NEG_OWNER, OWNED_DEAL)
+    run(db, NEG_OWNER, "POST /negotiations/rounds", a_round(negotiation_id))
+    position_id = open_position(db, NEG_OWNER, negotiation_id)
+    run(db, NEG_OWNER, "POST /negotiations/positions/move", {
+        "position_id": position_id, "round_no": 1, "to_state": "held"})
+
+    added = [row for row in chain(db) if row["seq"] not in before]
+    kinds = [row["event_type"] for row in added]
+    assert "negotiation_opened" in kinds
+    assert "negotiation_round_recorded" in kinds
+    # Raising the position and moving it are two movements, and each is its own
+    # audit row. One would mean an act went unrecorded.
+    assert kinds.count("position_moved") == 2
+    for row in added:
+        assert row["actor"] == NEG_OWNER.person
+
+
+def test_each_negotiation_endpoint_is_reachable_through_the_service(
+    negotiating, db: Database
+):
+    """The package's central claim: a WRITES entry is a whole endpoint. Nothing
+    was added to app.py, and these routes answer anyway."""
+    from doorway.app import App
+
+    service = App(db)
+    token = service.sign_in(NEG_OWNER.person).body["token"]
+
+    opened = service.handle("POST", "/negotiations", token, {
+        "agreement_id": OWNED_DEAL, "paper": "ours",
+        "baseline": "library_standard"})
+    assert opened.status == 200, opened.body
+    negotiation_id = opened.body["rows"][0]["negotiation_id"]
+
+    recorded = service.handle("POST", "/negotiations/rounds", token,
+                              a_round(negotiation_id))
+    assert recorded.status == 200, recorded.body
+
+    raised = service.handle("POST", "/negotiations/positions", token, {
+        "negotiation_id": negotiation_id, "category_key": "data",
+        "round_raised": 1, "opened_from": "library_standard"})
+    assert raised.status == 200, raised.body
+    position_id = raised.body["rows"][0]["position_id"]
+
+    for path, body in (
+        ("/negotiations/positions/move",
+         {"position_id": position_id, "round_no": 1, "to_state": "held"}),
+        ("/negotiations/positions/escalate",
+         {"position_id": position_id, "round_no": 2}),
+        ("/negotiations/renew",
+         {"agreement_id": RENEWAL_DEAL, "renews_agreement_id": PRIOR_DEAL,
+          "paper": "ours"}),
+    ):
+        answered = service.handle("POST", path, token, body)
+        assert answered.status == 200, (path, answered.body)

@@ -44,7 +44,7 @@ for (const f of readdirSync(MIGRATIONS).filter(f => f.endsWith('.sql')).sort())
 
 const rows = async (s, p) => (await db.query(s, p)).rows;
 const one  = async (s, p) => (await rows(s, p))[0];
-const { queryAs, mustWrite } = roleHelpers(db);
+const { queryAs, mustWrite, mustNotWrite } = roleHelpers(db);
 
 // The five summary views scope themselves since 0027, and cw.app_role() is
 // null on the owner's connection (settled decision U3), so a view read as the
@@ -613,6 +613,86 @@ await test('every one of the five views keeps its column list and order', async 
   assert(was.length > 0, 'the comparison database produced no columns to compare');
   eq(now, was, 'a column moved, was renamed or changed type in one of the five views');
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// The renewal shortcut asks whose deal it is (0031)
+// ════════════════════════════════════════════════════════════════════════════
+//
+// cw.open_renewal is SECURITY DEFINER, so it INSERTs into cw.negotiation and
+// cw.negotiation_position with 0027's four insert policies switched off. 0027's
+// header names that door and leaves it open on purpose; 0031 closes it with the
+// same two-branch test asked inside the function.
+//
+// Two things these tests must keep apart, because a check that refuses
+// everybody would satisfy the refusal on its own: the refusal below, and the
+// three successes around it.
+//
+// NOTHING HERE ASSERTS ON THE REFUSAL'S WORDING. What is asserted is that the
+// database raised rather than quietly writing, and that the row is absent
+// afterwards.
+console.log('\nthe renewal shortcut asks whose deal it is (0031)');
+
+await db.exec(`
+  reset role;
+  select set_config('cw.actor','legal@clausewerk',false);
+  insert into cw.agreement (agreement_id,counterparty,requester) values
+    ('AG-310','Northwind','${BUYER}'),
+    ('AG-311','Contoso','${OTHER}'),
+    ('AG-312','Contoso','${OTHER}'),
+    ('AG-313','Contoso','${OTHER}');`);
+
+await test('a requester opens a renewal on their own deal, unchanged', async () => {
+  // The control for the refusal below, and the U1 assertion at the same time:
+  // the positions this renewal opens from are still the ones actually in force
+  // in the executed agreement, concession carried. 0031 changed who may ask,
+  // not what the answer is.
+  const r = await mustWrite('requester',
+    `select cw.open_renewal('AG-310','AG-001','${BUYER}') as id`, [], BUYER);
+  const p = await rows(
+    `select category_key, our_clause_id, our_version, opened_from
+     from cw.negotiation_position where negotiation_id=$1 order by category_key`,
+    [r[0].id]);
+  eq(p.length, 2, 'one position per category the executed contract settles');
+  eq(p[0].our_clause_id, 'DP-H-052',
+     'still the position ACTUALLY in force — U1 is untouched by this check');
+  eq(p[0].opened_from, 'executed_agreement');
+});
+
+await test('a requester is refused a renewal on somebody else’s deal', async () => {
+  // mustNotWrite distinguishes a raised refusal from the silent no-op that is
+  // finding D1's shape. A SECURITY DEFINER function cannot no-op here — it
+  // would have inserted — so a silent pass would mean the check is absent.
+  const how = await mustNotWrite('requester',
+    `select cw.open_renewal('AG-311','AG-001','${BUYER}')`, []);
+  eq(how, 'raised', 'the database itself must refuse, not the caller');
+  const n = await one(
+    `select count(*)::int as c from cw.negotiation where agreement_id='AG-311'`);
+  eq(n.c, 0, 'and nothing was written on the way to the refusal');
+});
+
+await test('the refusal is about who asked, not about the renewal’s merits', async () => {
+  // Structural, not textual: 42501 is what refusals.py maps to "not_permitted"
+  // and 403. A refusal raised with any other code would reach a caller as
+  // though the renewal itself were wrong.
+  let code;
+  try { await queryAs('requester',
+          `select cw.open_renewal('AG-311','AG-001','${BUYER}')`, [], BUYER); }
+  catch (e) { code = e.code ?? e.cause?.code; }
+  eq(code, '42501', 'the refusal must carry the insufficient-privilege code');
+});
+
+for (const role of ['legal_reviewer', 'legal_admin']) {
+  await test(`${role} still opens a renewal on a deal they do not own`, async () => {
+    // Unconditional by design: Legal sees every deal everywhere else in this
+    // schema. Both agreements below belong to the other requester.
+    const ag = role === 'legal_reviewer' ? 'AG-312' : 'AG-313';
+    const r = await mustWrite(role,
+      `select cw.open_renewal('${ag}','AG-001','${role}@clausewerk') as id`);
+    const p = await one(`select count(*)::int as c from cw.negotiation_position
+                         where negotiation_id=$1`, [r[0].id]);
+    assert(p.c > 0, 'the renewal opened but seeded no positions');
+  });
+}
 
 await db.exec(`reset role;`);
 
