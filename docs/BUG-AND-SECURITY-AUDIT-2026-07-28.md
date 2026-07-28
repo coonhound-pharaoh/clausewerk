@@ -4,6 +4,28 @@ This is the durable ledger for the repeated whole-codebase audit. Each entry
 records a confirmed system defect, the bounded fix, and the evidence used to
 validate it. Placeholder contract content is outside this audit.
 
+## Cycle 30 — records actors could be impersonated
+
+**Observed defect.** The irreversible redaction and purge definers accepted an
+actor argument and checked that named person’s authority, but never required
+the name to match the session actor. An undelegated Legal caller could borrow a
+delegate’s identity to erase content, and an administrator-role session could
+attribute a purge to a different administrator.
+
+**Fix.** Bind each actor argument to `cw.app_actor()` before checking
+delegation, retention state, or touching records. The argument remains only the
+permanent attribution of the person actually signed in.
+
+**Regression proof.** An undelegated legal admin attempts redaction under a
+delegate’s name and an administrator-role session attempts purge under another
+administrator’s name. Both are refused before changing lifecycle state; the
+real delegate and real administrator controls still succeed.
+
+**Validation.**
+
+- `node backend/db/test/redaction.test.mjs`
+- Result: 22 passed, 0 failed.
+
 ## Cycle 29 — notification relationships were probeable by viewers
 
 **Observed defect.** `cw.was_notified` bypasses row security to break the

@@ -253,6 +253,14 @@ language plpgsql
 security definer set search_path = cw, pg_temp as $$
 declare r cw.agreement_retention%rowtype; matters text;
 begin
+  -- p_actor is recorded permanently and is also the subject of the delegation
+  -- check. It is a claim about the session, not an identity selector.
+  if p_actor is distinct from cw.app_actor() then
+    raise exception
+      'the redaction actor must match the signed-in person; % cannot act as %',
+      cw.app_actor(), p_actor using errcode = 'insufficient_privilege';
+  end if;
+
   -- Asked of the data, not of the connection — see cw.may_redact(). An
   -- Administrator qualifies by role; anybody else needs a live delegation.
   if not cw.may_redact(p_actor) then
@@ -321,6 +329,14 @@ language plpgsql
 security definer set search_path = cw, pg_temp as $$
 declare r cw.agreement_retention%rowtype; matters text;
 begin
+  -- The EXECUTE grant proves the connection's role; this binds the permanent
+  -- attribution to the person actually named on that connection.
+  if p_actor is distinct from cw.app_actor() then
+    raise exception
+      'the purge actor must match the signed-in person; % cannot act as %',
+      cw.app_actor(), p_actor using errcode = 'insufficient_privilege';
+  end if;
+
   -- No delegation here, and that asymmetry is the owner's decision rather than
   -- an oversight. Removing content can be handed out; removing the record
   -- cannot.

@@ -2616,3 +2616,8 @@ The notification helper may bypass row policies to prevent recursion, but a
 viewer can ask only whether they personally were notified and a requester can
 ask only about a request they opened. Other people’s notification relationships
 are not probeable.
+
+## S44 — Records actions bind actor to session — SETTLED 2026-07-28
+Redaction and purge actor arguments must equal `cw.app_actor()` before any
+delegation or lifecycle check. A caller cannot borrow another person’s records
+authority or place another person’s name on an irreversible disposal event.

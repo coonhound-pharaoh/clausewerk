@@ -157,6 +157,16 @@ await test('only the administrator may delegate, and it lands on the chain', asy
   assert(e.why, 'the delegation records no reason, so nobody can review it later');
 });
 
+await test('an undelegated caller cannot borrow a delegate’s identity', async () => {
+  await throws(() => queryAs('legal_admin',
+    `select cw.redact_agreement('AG-1','${PAT}')`, [], LEGAL),
+    'redaction actor must match the signed-in person',
+    'an undelegated caller redacted content under a colleague’s name');
+  const state = await one(
+    `select redacted_on from cw.agreement_retention where agreement_id='AG-1'`);
+  eq(state.redacted_on, null, 'the impersonation refusal changed the record');
+});
+
 await test('the delegate may now redact, and it is marked as delegated', async () => {
   await execAs('legal_reviewer', `select cw.redact_agreement('AG-1','${PAT}')`, PAT);
   const e = await one(`select payload->>'delegated' as d, payload->>'redacted_by' as who
@@ -222,6 +232,16 @@ await test('redacting twice is refused', async () => {
 
 // ── The purge ─────────────────────────────────────────────────────────────
 console.log('\nthe record goes, and the chain remembers that it did');
+
+await test('a purge cannot be attributed to a different administrator', async () => {
+  await throws(() => queryAs('administrator',
+    `select cw.purge_agreement('AG-1','${ADMIN}')`, [], 'impostor@clausewerk'),
+    'purge actor must match the signed-in person',
+    'an administrator-role session purged under another person’s name');
+  const state = await one(
+    `select purged_on from cw.agreement_retention where agreement_id='AG-1'`);
+  eq(state.purged_on, null, 'the impersonation refusal changed the record');
+});
 
 await test('the administrator purges the reviewed record', async () => {
   await execAs('administrator', `select cw.purge_agreement('AG-1','${ADMIN}')`, ADMIN);
