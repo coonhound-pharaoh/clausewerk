@@ -55,6 +55,7 @@ import json
 import math
 import os
 import re
+import threading
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -73,6 +74,19 @@ DEFAULT_MODEL = "gpt-4o-mini"
 ENDPOINT = "https://api.openai.com/v1/chat/completions"
 TIMEOUT_SECONDS = 20
 MAX_RESPONSE_BYTES = 1_000_000
+
+# How many judgments may be in flight at once. The second belt, and it is not
+# the same belt as the transaction split below.
+#
+# The split stops this path holding a database connection while it waits, which
+# is what could stop the WHOLE product. This bounds how many threads can be
+# parked on one slow provider at all — ThreadingHTTPServer accepts unbounded
+# concurrent requests, and a provider having a bad afternoon should degrade this
+# one endpoint rather than the process. Deliberately below the serving pool's
+# default max_size of 10, so that even if a future edit put a connection back
+# inside the wait, it could not consume every one of them.
+MAX_CONCURRENT_JUDGMENTS = 4
+_JUDGMENT_SLOTS = threading.Semaphore(MAX_CONCURRENT_JUDGMENTS)
 
 # What the provenance record says when the call never got far enough for the
 # provider to name a build. Not blank: a blank in a provenance column reads as
@@ -301,8 +315,37 @@ def semantic_difference(db: Database, caller: Caller, body: dict | None) -> Answ
                               "been decided and an approved text exists",
                     "kind": "not_yet"})
 
+        # ── The model call, holding NOTHING ─────────────────────────────────
+        #
+        # Outside the `with` above, and that placement is the whole fix. The
+        # call is allowed TIMEOUT_SECONDS, the serving pool holds max_size=10
+        # connections, and the server accepts unbounded concurrent requests —
+        # so ten simultaneous assessments used to occupy every connection the
+        # service had, for up to twenty seconds each. Sign-in and every other
+        # screen queued behind them, and the error they eventually got said the
+        # service could not reach its database, which was sitting there
+        # perfectly healthy. Someone would have spent an afternoon on that.
+        #
+        # Nothing requires the read and the write to be atomic. The judgment is
+        # advisory by this module's own definition, and the insert is a single
+        # row that either lands or does not.
+        #
+        # WHAT THE WINDOW MEANS, decided here rather than left to be discovered:
+        # the ticket may be decided, withdrawn or re-texted while the model is
+        # thinking. The row still stands, because it stores `baseline_text` and
+        # `compared_text` verbatim — it is a judgment about those two frozen
+        # texts, and it says so in its own columns. If the ticket itself is gone
+        # by then, the foreign key refuses the insert and the caller gets a
+        # classified refusal rather than a row about nothing.
+        with _JUDGMENT_SLOTS:
             judgment = judge_semantic_difference(baseline, compared)
 
+        # ── The write, in its own short transaction ─────────────────────────
+        #
+        # Reopened as the same caller, so authority is checked again against the
+        # roles in force now. A person revoked during the window is refused here
+        # by the database, in its own words.
+        with db.as_person(caller.person, caller.role) as request:
             recorded = request.rows(
                 """insert into cw.advisory_assessment
                      (ticket_id, draft_id, baseline_text, compared_text,

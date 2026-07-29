@@ -345,14 +345,14 @@ def test_the_service_reads_exactly_one_header(running):
 
     source = (Path(__file__).parent / "server.py").read_text(encoding="utf-8")
     read = {name.lower() for name in
-            re.findall(r"""self\.headers\.get\(\s*["']([^"']+)["']""", source)}
+            re.findall(r"""self\.headers\.get(?:_all)?\(\s*["']([^"']+)["']""", source)}
 
     assert "authorization" in read, "the bearer token is not being read at all"
     assert read == {"authorization", "content-length", "content-type",
-                    "content-disposition"}, (
-        f"server.py reads {sorted(read)}. Only these four headers may be read: "
-        "the one naming the SESSION, and three describing the BODY — its "
-        "length, its kind, and, for a document, the name the caller gave it. "
+                    "content-disposition", "transfer-encoding"}, (
+        f"server.py reads {sorted(read)}. Only these five headers may be read: "
+        "the one naming the SESSION, and four describing the BODY — its "
+        "length, its kind, its transfer encoding, and, for a document, the name the caller gave it. "
         "Anything else is a new way for a caller to influence a request."
     )
     # WIDENED FROM TWO TO FOUR when the system learned to RECEIVE a document

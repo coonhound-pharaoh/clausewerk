@@ -84,7 +84,9 @@ MUTATIONS = [
     ),
     (
         "sign-in looks up identity on a privileged connection",
-        "doorway/identity.py",
+        # Follows the constant: it moved to sessions.py so that module could name
+        # it too without closing an import cycle back through identity.py.
+        "doorway/sessions.py",
         'LOOKUP_ROLE = "viewer"',
         'LOOKUP_ROLE = "legal_admin"',
         "test_prohibitions.py::test_sign_in_reads_as_the_least_privileged_role",
@@ -121,27 +123,35 @@ MUTATIONS = [
         '    cache = effective_role.__dict__.setdefault("cache", {})\n    if person in cache:\n        return cache[person]\n    with db.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:\n        row = request.one(\n            "select role from cw.effective_role where person = %s", (person,)\n        )\n    cache[person] = row[0] if row else None\n    return cache[person]',
         "test_server.py::test_revocation_bites_at_the_next_request",
     ),
+    # Both session rows below anchor on the comment above the delete, not on the
+    # delete itself: the two expiry deletes are byte-identical, and a bare
+    # pattern would match twice and mutate whichever came first.
     (
         "sessions never expire",
         "doorway/sessions.py",
-        "            if self._now() >= expires_at:",
-        "            if False:",
+        "            # Drop expired before lookup, so we never return a dead session.\n"
+        '            request.write("delete from cw.session where expires_at <= %s", (now,))',
+        "            # Drop expired before lookup, so we never return a dead session.\n"
+        "            pass",
         "test_retirement.py::test_a_session_expires_and_re_sign_in_is_required",
     ),
     (
         "expired sessions pile up until each token is presented again",
         "doorway/sessions.py",
-        "            self._by_token = {\n                t: held for t, held in self._by_token.items() if held[1] > now}",
-        "            pass",
+        '            request.write("delete from cw.session where expires_at <= %s", (now,))\n'
+        "            request.write(\n",
+        "            request.write(\n",
         "test_sessions.py::test_expired_sessions_are_swept_when_a_new_one_is_issued",
     ),
-    (
-        "removing an expired session crashes if another request removed it first",
-        "doorway/sessions.py",
-        "                self._by_token.pop(token, None)",
-        "                del self._by_token[token]",
-        "test_sessions.py::test_an_entry_removed_mid_check_is_no_session_not_a_crash",
-    ),
+    # RETIRED 2026-07-28 — "removing an expired session crashes if another
+    # request removed it first". The hazard was a KeyError on an in-memory dict
+    # popped by two requests at once. Sessions now live in the database and both
+    # expiry paths are `delete ... where expires_at <= %s`, which removes zero
+    # rows without complaint when another request got there first. There is no
+    # line left whose mutation reproduces the hazard, and the test it named was
+    # deleted with the dict. Retired rather than repointed, on owner decision,
+    # because inventing a replacement guarantee to keep the count at 36 would be
+    # a design change wearing a repair's clothes. Recorded in memory.md.
 
     (
         "a body of the wrong shape crashes the service instead of a 400",
@@ -331,9 +341,14 @@ MUTATIONS = [
         # contract they want.
         "the query selector is discarded before it reaches the app",
         "doorway/server.py",
-        "        selector = {k: v[0] for k, v in parse_qs(parsed.query).items()\n"
-        "                    if k in QUERY_KEYS and v}",
-        "        selector = {}",
+        # Repointed 2026-07-28: commit add0554 moved this capture into `_query`
+        # and the row had been stale on committed main ever since.
+        "        return {\n"
+        "            key: values[0]\n"
+        "            for key, values in parsed.items()\n"
+        "            if key in QUERY_KEYS and values\n"
+        "        }, None",
+        "        return {}, None",
         "test_documents.py::test_a_run_recorded_through_the_service_rebuilds_through_the_service",
     ),
     # ── The three gates on the one act that cannot be undone ─────────────────
@@ -373,7 +388,10 @@ MUTATIONS = [
     (
         "the engine's refusal is reworded on the way out",
         "doorway/manifests.py",
-        '                    "reason": reasons[0],',
+        # `reasons[0]` became `first` when the index was guarded against an
+        # empty list; the guarantee — the engine's own sentence reaches the
+        # caller — is unchanged.
+        '                    "reason": first,',
         '                    "reason": "That category is not permitted.",',
         "test_manifests.py::test_the_refusal_is_the_engine_s_own_words",
     ),

@@ -50,6 +50,12 @@ import psycopg
 # insufficient_privilege.
 INSUFFICIENT_PRIVILEGE = "42501"
 
+# psycopg's own words when it cannot turn a Python value into a bind parameter.
+# A driver-internal string, and named here rather than buried in the branch so
+# that a psycopg upgrade which reworded it breaks one obvious constant and the
+# test that pins it, rather than silently reopening B1.
+CANNOT_ADAPT = "cannot adapt type"
+
 
 @dataclass(frozen=True)
 class Refused:
@@ -96,6 +102,36 @@ def classify(error: Exception) -> Refused:
     if isinstance(error, psycopg.errors.RaiseException):
         # A trigger saying no, in a sentence somebody wrote for a human to read.
         return Refused(status=409, reason=reason, kind="refused_on_merits")
+
+    if isinstance(error, psycopg.ProgrammingError) and CANNOT_ADAPT in str(error):
+        # THE FLOOR, and the one place this file reads a message rather than a
+        # code. That is not the habit the header argues against: that rule is
+        # about refusals the DATABASE issues, which all carry a SQLSTATE. This
+        # error never reached the database. psycopg failed to turn a Python
+        # value into a parameter, and the exception carries sqlstate None.
+        #
+        # Narrow deliberately. Three unrelated conditions raise ProgrammingError
+        # with no SQLSTATE, verified against psycopg 3.3.4:
+        #
+        #   cannot adapt type 'dict' ...        the caller sent the wrong shape
+        #   query parameter missing: x          OUR bug
+        #   the query has 2 placeholders ...    OUR bug
+        #
+        # Keying on "no SQLSTATE" would sweep all three into 400 and tell the
+        # caller they made a mistake about our bug — the same failure this
+        # branch exists to fix, running backwards. So the last two fall through
+        # to the catch-all below and stay 500 'broke', and a test pins that.
+        #
+        # The value's shape is refused at the boundary by
+        # writes.refuse_structured, which names the field. This is the backstop
+        # for a bind site that guard has not reached, and it says less because
+        # it knows less. The driver's message names the placeholder and is
+        # logged, never returned.
+        sys.stderr.write(f"value could not be bound as a parameter: {reason}\n")
+        return Refused(status=400,
+                       reason="a field carried an object or a list where a "
+                              "plain value belongs",
+                       kind="rejected")
 
     if isinstance(error, psycopg.Error) and not isinstance(error, psycopg.DataError):
         # A broken statement, failed transaction, or internal database error is

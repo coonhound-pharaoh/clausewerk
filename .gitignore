@@ -60,3 +60,10 @@ backend/.mutation-service/
 
 # The demo data directory a walkthrough creates. Regenerate with seed-demo.mjs.
 backend/cw-demo-data/
+
+# Agent scratch. `.claude/worktrees/` holds live git worktrees — whole second
+# checkouts of this repo — so committing it would embed a copy of the tree in
+# its own history. launch.json is deliberately NOT ignored: it is shared dev
+# config.
+.claude/worktrees/
+.claude/*.lock

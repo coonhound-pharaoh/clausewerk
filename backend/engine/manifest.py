@@ -94,7 +94,13 @@ def check_manifest(manifest: Manifest, categories: CategoryMap) -> Manifest:
       model's output and the run record disagree on how many risks there were.
     - Severity is coerced to the two-value enum, matched on meaning rather
       than spelling, and every real rewrite is recorded in `coerced` with the
-      original claim. 'Baseline' is synthetic — the always-include pass emits
+      original claim. A *real* rewrite is one that changes the MEANING of what
+      the model said. Fixing spelling or case — 'HIGH' stored as 'High' — is
+      not one, and is deliberately absent from `coerced`: recording it would
+      bury the rewrites that did change meaning in noise. This is pinned by
+      `test_manifest.py::test_high_is_matched_on_meaning_not_spelling`, so a
+      reader who expects case changes here should read that test before
+      changing the code. 'Baseline' is synthetic — the always-include pass emits
       it — and a manifest claiming it is as much a hallucination as an
       invented category, so it lands in `coerced` too.
 

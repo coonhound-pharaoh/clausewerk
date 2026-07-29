@@ -104,7 +104,7 @@ class App:
 
     def __init__(self, db: Database, now: Callable[[], float] | None = None):
         self._db = db
-        self._sessions = Sessions(now=now)
+        self._sessions = Sessions(db, now=now)
 
     @property
     def sessions(self) -> Sessions:
@@ -131,12 +131,18 @@ class App:
         issued = self._sessions.issue(who["person"], length)
         return Response(200, {
             "token": issued.token,
-            # Seconds from now, deliberately NOT a timestamp. The session
-            # clock is the service's own monotonic clock, whose zero point is
-            # arbitrary — the old field exported that raw value under the
-            # name "expiresAt", a "timestamp" of roughly January 1970. No
-            # screen consumed it yet, which is exactly why no test caught it;
-            # the first one to render it would have misbehaved silently.
+            # Seconds from now, deliberately NOT a timestamp. The original
+            # reason was that the session clock was the service's own monotonic
+            # clock, whose zero point is arbitrary — the old field exported that
+            # raw value under the name "expiresAt", a "timestamp" of roughly
+            # January 1970. No screen consumed it yet, which is exactly why no
+            # test caught it; the first one to render it would have misbehaved
+            # silently.
+            #
+            # Sessions now keep wall-clock time (sessions.py), so that specific
+            # hazard is gone. The field stays seconds-from-now anyway, for a
+            # different and better reason: a duration needs no agreement between
+            # the service's clock and the browser's, and a timestamp does.
             "expiresInSeconds": length,
             "person": who["person"],
             "role": who["role"],

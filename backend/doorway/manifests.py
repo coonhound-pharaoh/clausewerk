@@ -63,6 +63,17 @@ class Malformed(Exception):
     """
 
 
+# What a refusal says when the engine dropped a risk for a reason this layer
+# cannot restate. Today it is unreachable: the engine drops a risk under exactly
+# the one condition that makes CategoryMap.key_for raise, so re-asking always
+# yields a sentence. It exists so that adding a SECOND drop reason to the engine
+# degrades the explanation rather than crashing the endpoint that gives it.
+#
+# One copy, imported by runs.py, because the pre-flight and the enforcement must
+# refuse identically — a second literal here is a rule with two copies.
+DROPPED_WITHOUT_REASON = "the engine dropped this category"
+
+
 def manifest_from(body: dict) -> Manifest:
     """A request body, as the engine's own type.
 
@@ -169,11 +180,19 @@ def check(db: Database, caller: Caller, body: dict | None) -> Answer:
                     except UnknownCategory as unknown:
                         reasons.append(str(unknown))
 
-                _record(request, manifest, list(checked.dropped), reasons[0],
+                # `reasons` is non-empty only because the engine drops a risk
+                # under exactly the condition that makes key_for raise. That
+                # coupling is real today and undocumented, and the day a second
+                # drop reason is added to the engine, an unguarded reasons[0]
+                # would raise IndexError and answer "the service failed" — on
+                # the path whose whole job is to explain a refusal.
+                first = reasons[0] if reasons else DROPPED_WITHOUT_REASON
+
+                _record(request, manifest, list(checked.dropped), first,
                         accepted=False)
                 return Answer(409, {
                     "error": "refused",
-                    "reason": reasons[0],
+                    "reason": first,
                     "kind": "unknown_category",
                     "dropped": [risk.category for risk in checked.dropped],
                     "reasons": reasons,
@@ -237,8 +256,11 @@ def _record(request, manifest: Manifest, dropped: list[Risk], reason: str,
     """
     event = "manifest_checked" if accepted else "manifest_refused"
     request.write(
-        f"select cw.audit('{event}', %(vendor)s, %(payload)s::jsonb)",
+        # Bound, not interpolated — see the note at the identical writer in
+        # runs.py.
+        "select cw.audit(%(event)s, %(vendor)s, %(payload)s::jsonb)",
         {
+            "event": event,
             "vendor": manifest.vendor,
             "payload": json.dumps({
                 "reason": reason,

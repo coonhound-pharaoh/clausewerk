@@ -250,7 +250,7 @@ class Handler(BaseHTTPRequestHandler):
         if len(values) > 1:
             return None, Response(400, {"error": "content length is ambiguous"})
         raw = values[0] if values else "0"
-        if re.fullmatch(r"[0-9]+", raw) is None:
+        if re.fullmatch(r"-?[0-9]+", raw) is None:
             return None, Response(400, {"error": "unreadable request"})
         # Keep conversion itself bounded. Python deliberately refuses
         # pathologically long decimal strings; allowing that ValueError to

@@ -103,7 +103,7 @@ def test_a_pending_countersign_confers_nothing(people, db: Database):
 
 def test_a_person_with_no_effective_role_gets_no_session(people, db: Database):
     """Failing closed. Not a viewer session, not a degraded one — none."""
-    sessions = Sessions()
+    sessions = Sessions(db)
     with pytest.raises(NoEffectiveRole):
         sign_in(db, sessions, "luke@clausewerk")
     assert len(sessions) == 0, "a refused sign-in still issued a session"
@@ -124,13 +124,13 @@ def test_countersigning_turns_the_grant_on(people, db: Database):
             "'leah@clausewerk')", (grant_id,))
 
     assert effective_role(db, "luke@clausewerk") == "legal_reviewer"
-    issued = sign_in(db, Sessions(), "luke@clausewerk")
+    issued = sign_in(db, Sessions(db), "luke@clausewerk")
     assert issued.token
 
 
 def test_an_unknown_person_gets_no_session(people, db: Database):
     with pytest.raises(NoEffectiveRole):
-        sign_in(db, Sessions(), "nobody@clausewerk")
+        sign_in(db, Sessions(db), "nobody@clausewerk")
 
 
 # ── Revocation ──────────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ def test_an_unknown_person_gets_no_session(people, db: Database):
 def test_a_revoked_person_is_out_on_their_next_request(people, db: Database):
     """B.8 test 3. Not their next sign-in — which for an eight-hour session could
     be never."""
-    sessions = Sessions()
+    sessions = Sessions(db)
     issued = sign_in(db, sessions, "rita@clausewerk")
     assert caller_for(db, sessions, issued.token) == Caller("rita@clausewerk", "requester")
 
@@ -159,7 +159,7 @@ def test_a_revoked_person_is_out_on_their_next_request(people, db: Database):
 def test_the_session_ends_when_the_role_goes(people, db: Database):
     """Somebody whose authority is withdrawn is signed out rather than left
     holding a token that is refused on every request without explanation."""
-    sessions = Sessions()
+    sessions = Sessions(db)
     issued = sign_in(db, sessions, "rita@clausewerk")
 
     with db.as_person("admin@clausewerk", "administrator") as request:
@@ -182,7 +182,7 @@ def test_the_session_ends_when_the_role_goes(people, db: Database):
 def test_a_session_expires_on_the_length_the_administrator_sets(people, db: Database):
     """The length comes from the operational setting, not from a constant."""
     clock = {"t": 1000.0}
-    sessions = Sessions(now=lambda: clock["t"])
+    sessions = Sessions(db, now=lambda: clock["t"])
 
     with db.as_person("admin@clausewerk", "administrator") as request:
         request.write_one(
@@ -212,7 +212,7 @@ def test_a_nonsense_session_length_falls_back_rather_than_to_zero(people, db: Da
 
 
 def test_signing_out_ends_the_session(people, db: Database):
-    sessions = Sessions()
+    sessions = Sessions(db)
     issued = sign_in(db, sessions, "rita@clausewerk")
     sessions.end(issued.token)
     with pytest.raises(NoSession):
@@ -220,7 +220,7 @@ def test_signing_out_ends_the_session(people, db: Database):
 
 
 def test_no_token_is_no_session(people, db: Database):
-    sessions = Sessions()
+    sessions = Sessions(db)
     for token in (None, "", "made-up-token"):
         with pytest.raises(NoSession):
             caller_for(db, sessions, token)
