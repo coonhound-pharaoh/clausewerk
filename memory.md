@@ -3274,6 +3274,62 @@ Boundary pinned deliberately: `>` not `>=`, so a session expiring exactly now is
 over. The two read alike and the wrong one keeps every session alive one extra
 second — invisible, and it only ever surfaces as an argument about clocks.
 
+## S114 — A concurrency test says what it hunts, and hunts it 200 times — SETTLED 2026-07-28
+Audit finding D-2, the last one open. `test_the_store_survives_genuinely_parallel_traffic`
+had been changed in three ways when the session store moved to the database,
+none of them noted:
+
+  1. Its iteration count was cut from 200 to 50. That quartered the chance of
+     hitting the interleaving it exists to catch, while the row in the report
+     went on saying it was watching. A concurrency test quietly made a quarter
+     as likely to fire is worse than one that was deleted, because a deleted
+     test is visibly absent. RESTORED to 200, and timed rather than guessed:
+     the body costs about five seconds. The reduction bought nothing.
+  2. Its docstring lost the sentence naming what it hunts — "any unguarded
+     read-check-remove surfaces here as a KeyError or a dictionary-changed-size
+     error" — and gained "proves the database correctly handles concurrent
+     modifications", which names no failure at all. The original specifics were
+     genuinely obsolete (the dictionary is gone), so the fix is not to restore
+     them but to name the DATABASE-era equivalents: a deadlock between one
+     connection's sweep and another's insert, a unique violation on
+     token_sha256 when they race, `tuple concurrently updated`, and a
+     connection returned to the pool still inside a transaction.
+     A test that does not say what failure it looks for cannot be reviewed, and
+     cannot tell you whether it is still looking for the right thing.
+  3. The shared `db` fixture created 60 accounts, 58 of them for the exclusive
+     use of this one test, under the comment "create users for all tests". They
+     now belong to the test that wants them. Fixture setup that provisions for
+     one test while claiming to serve all of them is how the next person to need
+     `p50` ends up debugging somebody else's file.
+
+HONEST LIMIT, recorded so nobody reads more into it: this is a stress test, not
+a proof. It can only fail if a race actually occurs, so a green run means "did
+not reproduce", never "cannot happen". That is why the iteration count is worth
+arguing about at all.
+
+## S115 — The session table is guarded on the SQL side too — SETTLED 2026-07-28
+`db/test/` had NO coverage of `cw.session` whatsoever. Findings A-1, A-2 and A-3
+were all found by reading migration 0032 and confirmed with throwaway probes;
+nothing in either suite asserted what the policy on that table did, so the suite
+would not have caught any of them and would not have caught their
+reintroduction.
+
+`db/test/session.test.mjs` closes that: 16 checks covering who may reach the
+table, that the trusted actor name cannot be taken by an account, that a raw key
+is refused by the column, that an expired row is distinguishable from a live one
+by the row alone, and that every other role is refused outright.
+
+WHY IT BELONGS ON THIS SIDE and is not a duplicate of the Python tests. The
+guarantee lives in the database. A Python test cannot fail if somebody widens
+the policy and never touches Python — which is exactly how A-1 arrived. The
+Python suite covers what the doorway DOES; this covers what the database
+REFUSES.
+
+Verified to be a guard rather than decoration, the check [[S107]] exists to
+insist on: with 0033 removed, four of the sixteen fail. No wiring was needed —
+`run-all.mjs` discovers `*.test.mjs`, so a suite is run because it is there
+rather than because somebody remembered to list it.
+
 ## S116 — The obligations core is built: OB-01–05, OB-08, OB-12 — 2026-07-28
 Seven of the fifteen OB packages implemented, tested and mutation-guarded, per
 `OBLIGATIONS-WORK-PACKAGES-2026-07-28.md`:

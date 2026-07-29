@@ -23,24 +23,26 @@ def db(schema: str, owner_url: str):
         
     database = Database(schema, min_size=1, max_size=15)
     
+    # The two people every test here needs, and nobody else. The 58 accounts the
+    # parallel-traffic test wants are created BY that test — see accounts()
+    # below and finding D-2. A fixture that quietly provisions for one test
+    # while claiming to serve all of them is how the next person to need `p50`
+    # ends up debugging this file instead of their own.
+    _accounts(database, "rita@clausewerk", "leah@clausewerk")
+
+    yield database
+    database.close()
+
+
+def _accounts(database: Database, *people: str) -> None:
     with database.as_person("admin@clausewerk", "administrator") as request:
-        # Create users for all tests
-        users = ["rita@clausewerk", "leah@clausewerk"]
-        for i in range(50):
-            users.append(f"p{i}@clausewerk")
-        for i in range(8):
-            users.append(f"w{i}@clausewerk")
-            
-        for user in users:
+        for person in people:
             request.write(
                 "insert into cw.account (person, display_name, unit, role, created_by) "
                 "values (%s, 'Test User', 'Test', 'requester', 'admin@clausewerk') "
                 "on conflict do nothing",
-                (user,)
+                (person,)
             )
-            
-    yield database
-    database.close()
 
 
 def test_expired_sessions_are_swept_when_a_new_one_is_issued(db: Database):
@@ -58,18 +60,49 @@ def test_expired_sessions_are_swept_when_a_new_one_is_issued(db: Database):
 
 
 def test_the_store_survives_genuinely_parallel_traffic(db: Database):
-    """Sign-ins, presentations of expiring tokens, and revocations, all at
-    once. Proves the database correctly handles concurrent modifications."""
+    """Sign-ins, presentations of expiring tokens, and revocations, all at once.
+
+    WHAT THIS HUNTS, named rather than left as "handles concurrency". A test
+    that does not say what failure it is looking for cannot be reviewed, and
+    cannot tell you whether it is still looking for the right thing.
+
+    When the store was a dictionary this hunted an unguarded read-check-remove,
+    surfacing as a KeyError or a dictionary-changed-size error on some thread.
+    Those two cannot happen now — the dictionary is gone — and the docstring was
+    rewritten to a generic sentence at the same time, which is finding D-2.
+
+    In the database the equivalents are:
+
+      · a deadlock between one connection's expiry sweep and another's insert,
+        both touching the same rows in a different order
+      · a unique violation on token_sha256 when the sweep and an insert race
+      · "tuple concurrently updated" from contended catalogue or row state
+      · any connection returned to the pool still inside a transaction, which
+        surfaces on whichever unlucky thread borrows it next
+
+    THE ITERATION COUNT IS 200 AND IT MATTERS. It was cut to 50 with no note
+    explaining why, which quartered the chance of hitting the interleaving this
+    exists to catch — a concurrency test made a quarter as likely to fire, while
+    still reporting green, is worse than one that was deleted, because the row
+    in the report says it is still watching. Restored, and timed: the body costs
+    about six seconds, so the reduction bought nothing worth having.
+    """
     clock = {"t": 0.0}
     sessions = Sessions(db, now=lambda: clock["t"])
     failures: list[BaseException] = []
+
+    # Created here, by the test that wants them, rather than in the shared
+    # fixture. Fifty to hold expiring tokens, eight to be signed in and revoked.
+    _accounts(db,
+              *(f"p{i}@clausewerk" for i in range(50)),
+              *(f"w{n}@clausewerk" for n in range(8)))
 
     tokens = [sessions.issue(f"p{i}@clausewerk", 0.5).token for i in range(50)]
     clock["t"] = 1.0  # every token above is now expired
 
     def hammer(worker: int) -> None:
         try:
-            for i in range(50):
+            for i in range(200):
                 sessions.person_for(tokens[i % len(tokens)])
                 if i % 5 == 0:
                     sessions.issue(f"w{worker}@clausewerk", 0.001)
