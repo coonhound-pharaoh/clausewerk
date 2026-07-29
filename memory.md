@@ -3030,3 +3030,69 @@ GAP LEFT OPEN, recorded rather than quietly carried: `db/test/` has no SQL-side
 coverage of `cw.session` at all, and the SQL mutation harness
 (`db/test/mutation-check.mjs`) carries no row for this guarantee. The Python
 boundary test is what guards it today.
+
+## S107 — The outage mutation row is retired, not repaired — SETTLED 2026-07-28
+Defect B11, found on the first run of the doorway mutation harness after its
+preflight was repaired ([[S104]]) — the row had been listed as a guard for an
+unknown length of time while guarding nothing, invisibly, because the harness
+was aborting before it ran anything.
+
+The row mutated `if isinstance(error, psycopg.OperationalError):` in
+`refusals.py` and named
+`test_refusals.py::test_the_database_being_unreachable_is_not_the_callers_fault`.
+It scored MISS.
+
+WHY IT CANNOT BE REPAIRED. Deleting that branch does not blame the caller. An
+OperationalError falls through to the generic `psycopg.Error` catch-all, which
+also answers 500 `broke` and also keeps the driver's message — hosts and ports
+included — out of the response. Both facts the test names remain true. What the
+branch actually contributes is a MORE SPECIFIC SENTENCE: "the service could not
+reach its database" rather than "the database operation failed". That is
+wording, and this repository does not test wording.
+
+So the row was misnamed rather than the code broken: the promise is genuinely
+kept, by the catch-all, and the branch is defence in depth on the message.
+Retired with this reason on owner decision, for the same reason as the session
+delete-race row — inventing something for a row to guard, to keep the count up,
+is a design change wearing a repair's clothes. 34 rows, preflight clean.
+
+THE CONDITION FOR ITS RETURN, written down so it is not re-litigated from
+scratch: if an outage is ever given its own `kind`, distinct from `broke`, so a
+screen can say "try again shortly" rather than "something is broken", that IS
+observable and this row should come back guarding it. That was offered and
+declined for now — the retryable/not-retryable distinction is a product
+question, not a test question.
+
+## S108 — The migration ledger records a checksum — SETTLED 2026-07-28
+Closes the gap [[S105]] had to work around. `migrate.py` ledgered applied
+migrations by FILENAME ONLY, so a migration edited after it had been applied was
+skipped in silence on every database that already ran it, forever, with no
+mechanism by which the drift could become visible — a fresh test database would
+rebuild from the edited file and report green while production ran the old one.
+
+Proven both ways against a throwaway database, 2026-07-28: with the checksum the
+edit is caught and refuses to proceed; without it the edited file is skipped
+silently.
+
+WHERE IT LIVES, and why not in a migration. The ledger is `migrate.py`'s own
+bookkeeping, not part of the schema being migrated. It cannot be altered BY a
+migration, because every migration — including that one — is recorded in it. So
+the column is created by the ledger statement itself, with an `add column if not
+exists` for installations that predate it.
+
+THE DIGEST IS OVER DECODED TEXT, NOT RAW BYTES. `read_text` performs universal
+newline translation, and git converts line endings on this repository, so a byte
+digest would report every migration as altered on a fresh clone.
+`mutation_check.py` relies on the same property.
+
+WHAT IT CANNOT DO, recorded so nobody reads more assurance into it than it
+earns: rows written before the column existed carry no digest and are given one
+from whatever is on disk NOW. That establishes a baseline and proves nothing
+about the past — a migration edited last week is recorded as correct. The
+backfill writes a line to stderr saying exactly that rather than reporting a
+clean bill of health it has not earned. Drift is detectable from this point
+forward, not before.
+
+Consequence worth stating: the forward-only rule in [[S105]] is now enforceable
+rather than merely conventional, and the question "has this migration been
+applied here?" can be asked of the ledger instead of by hand.

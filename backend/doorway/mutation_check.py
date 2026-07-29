@@ -208,13 +208,34 @@ MUTATIONS = [
         '    if "permission denied" in reason.lower() or "row-level security" in reason.lower():',
         "test_refusals.py::test_the_database_s_own_words_reach_the_caller_unchanged",
     ),
-    (
-        "an outage is blamed on the caller",
-        "doorway/refusals.py",
-        "    if isinstance(error, psycopg.OperationalError):",
-        "    if False:",
-        "test_refusals.py::test_the_database_being_unreachable_is_not_the_callers_fault",
-    ),
+    # RETIRED 2026-07-28 — "an outage is blamed on the caller", which mutated
+    # `if isinstance(error, psycopg.OperationalError):` in doorway/refusals.py
+    # and named test_the_database_being_unreachable_is_not_the_callers_fault.
+    #
+    # It scored MISS on the first run of this harness after the preflight was
+    # repaired — the row had been listed as a guard for a long time while
+    # guarding nothing, which nobody could see because the harness was aborting
+    # before it ran.
+    #
+    # WHY IT CANNOT BE MADE TO WORK. Deleting that branch does not blame the
+    # caller. An OperationalError falls through to the generic psycopg.Error
+    # catch-all below it, which also answers 500 `broke` and also keeps the
+    # driver's message — hosts and ports included — out of the response. Both
+    # facts the test names are still true, so the test passes with the branch
+    # gone. What the branch actually contributes is a MORE SPECIFIC SENTENCE:
+    # "the service could not reach its database" instead of "the database
+    # operation failed". That is wording, and this repository does not test
+    # wording — a test that pinned it would fail on correct work.
+    #
+    # So the row was misnamed rather than broken. The promise it claimed to hold
+    # is genuinely held, by the catch-all, and the branch is defence in depth on
+    # the message. Retired on owner decision rather than repointed, for the same
+    # reason the session delete-race row was: inventing something for it to
+    # guard, to keep a number up, is a design change wearing a repair's clothes.
+    #
+    # If an outage is ever given its own `kind` — so a screen can say "try again
+    # shortly" rather than "something broke" — that IS observable, and this row
+    # should come back guarding it. Recorded in memory.md.
     (
         "an unexpected failure reads its own insides out to the caller",
         "doorway/server.py",
