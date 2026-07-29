@@ -28,7 +28,7 @@ import psycopg
 import pytest
 
 from doorway.db import Database
-from doorway.sessions import LOOKUP_ACTOR, LOOKUP_ROLE, Sessions
+from doorway.sessions import LOOKUP_ACTOR, LOOKUP_ROLE, Sessions, fingerprint
 
 ADMIN = "admin@clausewerk"
 LEGAL = "leah@clausewerk"
@@ -56,13 +56,19 @@ def test_a_viewer_cannot_read_a_session_key(library):
     issued = Sessions(library).issue(ADMIN, 3600.0)
 
     with library.as_person(SUPPLIER, "viewer") as request:
-        rows = request.rows("select token, person from cw.session")
+        rows = request.rows("select token_sha256, person from cw.session")
 
-    assert rows == [], "a viewer read live session keys"
+    assert rows == [], "a viewer read live session rows"
     # And the row really is there — otherwise this passes for the wrong reason.
+    #
+    # Since 0034 the column holds a fingerprint rather than the key, so this
+    # looks the row up the way the doorway does. That the stored value is no
+    # longer the key is A-2's guarantee and belongs to test_session_secrecy.py;
+    # this file is only about who may reach the row at all.
     with library.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:
         assert request.rows(
-            "select token from cw.session where token = %s", (issued.token,))
+            "select token_sha256 from cw.session where token_sha256 = %s",
+            (fingerprint(issued.token),))
 
 
 def test_a_viewer_cannot_sign_everybody_out(library):
@@ -84,8 +90,8 @@ def test_a_viewer_cannot_plant_a_session(library):
     with library.as_person(SUPPLIER, "viewer") as request:
         with pytest.raises(psycopg.Error):
             request.write(
-                "insert into cw.session (token, person, expires_at) "
-                "values ('forged', %s, 99999999999)", (ADMIN,))
+                "insert into cw.session (token_sha256, person, expires_at) "
+                "values (%s, %s, 99999999999)", (fingerprint("forged"), ADMIN))
 
 
 def test_sign_in_itself_still_works(library):

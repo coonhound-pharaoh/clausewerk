@@ -3096,3 +3096,107 @@ forward, not before.
 Consequence worth stating: the forward-only rule in [[S105]] is now enforceable
 rather than merely conventional, and the question "has this migration been
 applied here?" can be asked of the ledger instead of by hand.
+
+## S109 — The session table holds a fingerprint, not a key — SETTLED 2026-07-28
+Audit finding A-2. `cw.session.token` held the bearer credential VERBATIM. In
+memory that was defensible; in a table it is durable — the key was in every
+backup, every `pg_dump`, every replica and every console session for the rest of
+its eight-hour life, and anyone holding one of those held working credentials
+for everyone signed in.
+
+DISTINCT FROM A-1 ([[S106]]), and the two are easy to conflate. 0033 stopped the
+wrong ROLE reading this table. It could do nothing about a COPY of the table,
+and a backup is a copy. A-1 is about who may read the row; A-2 is about what the
+row is worth once read. Both were needed.
+
+Migration `0034` renames the column to `token_sha256` and hashes the existing
+rows in place. The rename is not cosmetic: a column called `token` holding
+something that is not a token is the kind of lie this schema is careful not to
+tell. `sessions.fingerprint()` is the one copy of the rule, used at every site
+where a key is stored or looked up — a single site that forgot would put a live
+credential back in the table with nothing looking wrong.
+
+NOBODY WAS SIGNED OUT, verified end to end 2026-07-28 against a throwaway
+database built at 0033: a session was planted with its key in the clear, 0034
+was applied, the column stopped holding the key, and the same key still signed
+in. PostgreSQL's `sha256` agrees with Python's `hashlib` byte for byte, which is
+what makes that work. This is why doing it NOW was cheap — the same migration
+against a customer database with live sessions would have been a forced
+company-wide sign-out.
+
+NO SALT, deliberately. A salt defends a guessable secret against a rainbow
+table. This secret is 256 bits from the OS entropy source, so there is nothing
+to guess and nothing to look up; a per-row salt would only stop the lookup being
+a single indexed equality. This is not a password. Token generation was already
+correct and is unchanged.
+
+THE TEST THAT CARRIES THIS is not "the column differs from the key" — it is
+`test_the_stored_value_cannot_be_presented_as_a_key`. Hashing that left the
+stored value usable would merely rename the credential and a backup would still
+be a set of working logins. Five of the seven tests in
+`test_session_secrecy.py` were demonstrated failing against the pre-fix code.
+
+A CHECK constraint requires 64 hex characters, so a future writer who forgets to
+fingerprint fails loudly at the insert rather than quietly storing a live key —
+a `token_urlsafe(32)` is 43 characters and is refused.
+
+STILL OPEN and deliberately not bundled: A-3, where expiry rests entirely on a
+DELETE whose stated purpose is housekeeping. Moving that sweep to a scheduled
+job — a reasonable thing for somebody to do — would silently honour every
+expired session. It is a one-line predicate on the lookup and it is a separate
+decision.
+
+## S110 — The SQL mutation harness was red on main, for the Python harness's exact reason — REPAIRED 2026-07-28
+The 2026-07-28 status report named one remaining unknown: nobody had checked
+whether `db/test/mutation-check.mjs` had rotted the way the doorway harness had
+(B10). Checked, and it had: the afternoon hardening series (16:31–17:35, the
+"Freeze/Bind/Enforce … at rows" commits) edited guarded code in applied
+migrations without repointing the harness. Its preflight — correctly — refused
+to run anything, so all 218 database protection checks were unevaluated and
+`npm run verify` was red on `main` from that moment. Four checks were stale by
+preflight; a FIFTH was found only by the run itself, reported MISS.
+
+THE LESSON THAT IS NEW, worth keeping beside trap 5.4a: **duplicating a guard
+into a second layer quietly makes the first layer's mutation unprovable.** The
+row-enforcement work copied three override guards from the deciding function
+into a row trigger. The helper's UPDATE fires that trigger, so breaking either
+single copy changes nothing observable — the other copy refuses in its place,
+and the harness reports MISS for a protection that is intact but no longer
+individually provable. Preflight cannot see this: the pattern may still be
+unique (the fifth casualty was). The repair is to mutate what both layers
+share (the stored window value, for the window guard) or the LAST line of
+defense (the trigger copy, caught by a direct-UPDATE test) — never the
+redundant inner copy.
+
+All five checks repointed with reasons written in the file; 218/218 caught by
+their named test; baseline 24/24 suites green. Uncommitted, on purpose — the
+working tree carries another session's in-flight A-2 work ([[S109]]) and the
+owner decides what is bundled with what.
+
+## S111 — Obligations, signature, and notifications: architecture accepted, D-1/D-2/D-3 settled — 2026-07-28
+The owner accepted `OBLIGATIONS-ARCHITECTURE.md` and settled its three decisions, each as
+recommended:
+
+- **D-1 — the system never says "breach."** It computes and reports **overdue** (date
+  arithmetic); breach is a legal claim, so asserting it is a named human's recorded act on
+  top of the computed fact, if the organisation wants it recorded at all. This settles LCMA
+  open question #2. Cost accepted: no report can say "in breach" unattended.
+- **D-2 — DocuSign is the first signature provider**, behind a five-operation
+  provider-agnostic seam (send, status, retrieve, void, verify_event); Adobe Acrobat Sign
+  is the intended seam-proving second adapter. Build-vs-buy was decided on one fact: a
+  completion certificate is only evidence if somebody independent issued it — our own
+  certificate about our own contract is self-attestation. Wet-ink manual filing stays.
+- **D-3 — notifications are a daily digest at start of business**, with a short
+  Administrator-maintained immediate list (socialisation, countersign, envelope
+  completion/decline) held as an operational setting, not code.
+
+Also in the accepted architecture, worth remembering because it inverts the LCMA sketch:
+**obligation states pending/due/overdue are COMPUTED, never stored** (ADR-0006's precedent
+extended) — there is no state-mover job to run, so none to silently die, which is the failure
+mode this repository has now caught twice in its own harnesses. Only human acts are recorded:
+satisfy (with evidence), waive (full ADR-0008 path), reassign. Registration of obligations
+from pinned clause-version templates is deterministic, idempotent, and re-derivable, like the
+run store.
+
+Each settled decision becomes a `cw.governance_setting` row in the migration that builds the
+thing it governs. Work-package cutting is the next step; not yet done.

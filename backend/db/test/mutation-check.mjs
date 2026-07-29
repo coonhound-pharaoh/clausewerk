@@ -878,12 +878,20 @@ grant insert, update on cw.clause_version to cw_administrator;`,
   // The actor binding. Without it acted_by is whatever the caller typed, and
   // the access history — the one record that says who let whom in — names
   // whoever the writer preferred.
+  // REPOINTED 2026-07-28: "Bind account lifecycle timestamps" (cb7a84a) added
+  // an acted_at binding inside this exact block, which destroyed the old `find`.
+  // The replacement now keeps the timestamp binding and severs the actor
+  // binding ONLY — one guarantee at a time, and the timestamp work gets its own
+  // guard if it ever needs one.
   { suite: 'role-grant.test.mjs',
     name: 'the actor on a grant is whatever the caller claims',
     find: `  if not new.is_bootstrap then
     new.acted_by := cw.app_actor();
+    new.acted_at := now();
   end if;`,
-    repl: '  if false then end if;',
+    repl: `  if not new.is_bootstrap then
+    new.acted_at := now();
+  end if;`,
     expect: 'the actor on a grant is the connection\'s person, not a claim' },
 
   { suite: 'role-grant.test.mjs',
@@ -1481,22 +1489,41 @@ where f.decision = 'approved'`,
 
   // THE WINDOW, SKIPPED. The watchers are told and given no time to object,
   // which makes the socialisation decoration.
+  //
+  // REPOINTED 2026-07-28: "Enforce override decision windows at rows" (76008f2)
+  // duplicated the guard into the row trigger, so `if now() < s.window_closes`
+  // now appears twice in 0015 AND either single copy is masked by the other —
+  // the helper's UPDATE fires the trigger, so breaking one guard alone changes
+  // nothing observable. The mutation therefore moves to the one thing both
+  // layers consult: the stored window itself. Computed to close in the past,
+  // every decision is immediately allowed and the named test sees it.
   { suite: 'override.test.mjs',
     name: 'a decision can be taken before the window closes',
-    find: `  if now() < s.window_closes then`,
-    repl: `  if false then`,
+    find: `  closes := now() + (`,
+    repl: `  closes := now() - (`,
     expect: 'a decision inside the window is refused' },
 
   // The guard skipped entirely. With no socialisation row, `now() < s.window_closes`
   // compares against null, which is not true — so the window check falls through
   // too and the decision lands on a request nobody was ever told about.
+  //
+  // REPOINTED 2026-07-28, and this one the preflight could NOT catch: the row
+  // enforcement work duplicated the guard into the trigger with different
+  // wording, so the helper's copy above stayed unique — the pattern still
+  // matched, the mutation still applied, and it reported MISS because the
+  // trigger refused in the helper's place. Same masking as its two siblings,
+  // found by the run rather than the preflight. The check now breaks the
+  // TRIGGER's copy — the last line of defense — and is caught by the test that
+  // decides by direct UPDATE, which nothing else refuses.
   { suite: 'override.test.mjs',
     name: 'a decision can be taken before any socialisation at all',
-    find: `  if not found then
-    raise exception 'override request % has not been socialised; the point of the '`,
-    repl: `  if false then
-    raise exception 'override request % has not been socialised; the point of the '`,
-    expect: 'nothing can be decided before the request has been socialised' },
+    find: `    if not found then
+      raise exception
+        'override request % has not been socialised; no finding may be decided',`,
+    repl: `    if false then
+      raise exception
+        'override request % has not been socialised; no finding may be decided',`,
+    expect: 'Legal cannot decide a finding directly before socialisation' },
 
   // SOCIALISATION RECORDED AS SENT WHEN NOBODY WAS TOLD — a lie in the
   // permanent record, and the failure the whole step exists to prevent.
@@ -1537,10 +1564,22 @@ where f.decision = 'approved'`,
     raise exception 'finding % on request % was decided %; a decision is not '`,
     expect: 'a decided finding is not revisited' },
 
+  // REPOINTED 2026-07-28: "Enforce override self-review at rows" (37af0cd)
+  // duplicated this guard into the row trigger, doubling the bare pattern in
+  // 0015. The check now anchors on the TRIGGER's copy — distinguishable by its
+  // own raise wording — because that is the copy the named test exercises: it
+  // decides by direct UPDATE with the window already closed, so the trigger's
+  // self-check is the only refusal in its path. The helper's copy is
+  // unprovable redundancy behind it: the helper's UPDATE fires this same
+  // trigger, so breaking the helper's copy alone changes nothing observable.
   { suite: 'override.test.mjs',
     name: 'somebody can decide their own override request',
-    find: `  if r.requested_by = cw.app_actor() then`,
-    repl: `  if false then`,
+    find: `    if r.requested_by = cw.app_actor() then
+      raise exception
+        'nobody decides their own override request — % asked for request %',`,
+    repl: `    if false then
+      raise exception
+        'nobody decides their own override request — % asked for request %',`,
     expect: 'a reviewer cannot decide a request they opened' },
 
   { suite: 'override.test.mjs',
@@ -1707,11 +1746,16 @@ drop policy read_scoped on cw.executed_document;`,
     repl: `;`,
     expect: "an unshared viewer's reading room is empty, not refused" },
 
+  // REPOINTED 2026-07-28: the share-evidence hardening series (b696fd9…6a04d5f)
+  // rewrote cw.is_shared_with — the revocation test is no longer the closing
+  // clause, so the old `find` with its trailing paren matched nothing. Same
+  // mutation, same guarantee: the revocation clause alone is dropped and the
+  // rest of the predicate is untouched.
   { suite: 'reading-room.test.mjs',
     name: 'a revoked share still opens the agreement',
     find: `       and shared_with = p_person
-       and revoked_at is null)`,
-    repl: `       and shared_with = p_person)`,
+       and revoked_at is null`,
+    repl: `       and shared_with = p_person`,
     expect: "revoking a share closes the viewer's access" },
 
   { suite: 'reading-room.test.mjs',

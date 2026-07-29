@@ -138,9 +138,10 @@ MUTATIONS = [
     (
         "expired sessions pile up until each token is presented again",
         "doorway/sessions.py",
-        '            request.write("delete from cw.session where expires_at <= %s", (now,))\n'
-        "            request.write(\n",
-        "            request.write(\n",
+        "            # to fill the database one sign-in at a time.\n"
+        '            request.write("delete from cw.session where expires_at <= %s", (now,))',
+        "            # to fill the database one sign-in at a time.\n"
+        "            pass",
         "test_sessions.py::test_expired_sessions_are_swept_when_a_new_one_is_issued",
     ),
     # RETIRED 2026-07-28 — "removing an expired session crashes if another

@@ -27,6 +27,7 @@ in this codebase.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import secrets
 from dataclasses import dataclass
@@ -52,6 +53,33 @@ LOOKUP_ROLE = "viewer"
 # only reading the staff list to find out who somebody is. Nothing is audited
 # under it, because looking somebody up is not a governed act.
 LOOKUP_ACTOR = "__signin__"
+
+
+def fingerprint(token: str) -> str:
+    """What gets STORED for a session key. Never the key itself.
+
+    THE ONE COPY OF THIS. Every place a key is written down or looked up goes
+    through here, because a single site that forgot would put a live credential
+    back in the table and nothing would look wrong.
+
+    A session key is a bearer credential: whoever holds it IS the person, with
+    no second factor and no audit trail distinguishing them from the real
+    holder. Held in memory that was defensible. Held in a table it is durable —
+    it survives into every backup, every replica and every console session for
+    the rest of its life, and a copy of the table would be a copy of everyone's
+    credentials.
+
+    A fingerprint can confirm a key that a caller presents and cannot produce
+    one. So the table stops being worth stealing, and lookup stays a single
+    indexed equality.
+
+    No salt, deliberately, and this is the one place that reasoning belongs. A
+    salt defends against a guessable secret being found in a rainbow table. This
+    secret is 256 bits from the OS entropy source, so there is nothing to guess
+    and nothing to look up; a per-row salt would only mean the lookup could no
+    longer be a single equality. This is not a password.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 _DURATION = re.compile(r"^\s*(\d+)\s*([smhd])\s*$")
 _UNIT_SECONDS = {"s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0}
@@ -109,9 +137,13 @@ class Sessions:
             # unauthenticated door, so unswept growth is a way for a stranger
             # to fill the database one sign-in at a time.
             request.write("delete from cw.session where expires_at <= %s", (now,))
+            # The FINGERPRINT is stored; the key itself is returned below and
+            # then forgotten. This is the only moment the doorway ever holds a
+            # key it could write down, and it does not.
             request.write(
-                "insert into cw.session (token, person, expires_at) values (%s, %s, %s)",
-                (token, person, expires_at)
+                "insert into cw.session (token_sha256, person, expires_at) "
+                "values (%s, %s, %s)",
+                (fingerprint(token), person, expires_at)
             )
 
         return Issued(token=token, expires_at=expires_at)
@@ -130,12 +162,16 @@ class Sessions:
         with self._db.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:
             # Drop expired before lookup, so we never return a dead session.
             request.write("delete from cw.session where expires_at <= %s", (now,))
-            row = request.one("select person from cw.session where token = %s", (token,))
+            row = request.one(
+                "select person from cw.session where token_sha256 = %s",
+                (fingerprint(token),))
             return row[0] if row else None
 
     def end(self, token: str) -> None:
         with self._db.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:
-            request.write("delete from cw.session where token = %s", (token,))
+            request.write(
+                "delete from cw.session where token_sha256 = %s",
+                (fingerprint(token),))
 
     def end_all_for(self, person: str) -> None:
         """Drop every session a person holds, used when they are revoked.

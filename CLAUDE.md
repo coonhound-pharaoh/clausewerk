@@ -16,6 +16,11 @@
   pins it fails on correct work. This bit us five times in one day (2026-07-27), including a test
   still demanding a sentence decision `U9` had made false weeks earlier.
 
+## Touched a migration? Run the mutation harness (2026-07-28)
+- Any edit to `backend/db/migrations/` must be followed by `node backend/db/test/mutation-check.mjs`
+  before committing. Both mutation harnesses went silently red in two days because guarded code
+  was reworded without repointing the checks that watch it (B10, then S110 in `memory.md`).
+
 ## Product Boundary (Mike, 2026-07-25)
 - We are responsible for the **system** — recording, gating, checking, provenance. We are **not**
   responsible for the contract text that ends up in it; that belongs to the people using it
