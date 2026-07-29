@@ -3374,3 +3374,41 @@ This commit completes them; nothing was lost.
 Still open from the package set: OB-09/10 (outbox + email tick — needs the
 doorway quiet), OB-07 (doorway endpoints), OB-11/15 (shell), OB-06/13 (gated
 on NC-07), OB-14 (blocked on deployment).
+
+## S117 — Notifications built: the outbox, the address book, and the tick (OB-09, OB-10) — 2026-07-29
+The notification service is real. 0042 holds the record half: an append-only
+outbox (one SENT digest per person per day is a unique index, not a promise),
+an Administrator-maintained address book (the watcher-list shape — a person
+who could redirect their own notifications could silence their own countersign
+nudges), cw.assert_may_run_notifications() (authority in the schema, never an
+`if role ==` in Python), and cw.notification_gap (a person with work waiting
+whom no channel can reach, derived from the SAME source as the digest).
+doorway/notifications.py holds the tick: derive fresh from cw.waiting_for,
+send BETWEEN transactions (B2 — as_person holds one transaction for its whole
+block, so the channel call must sit outside it), record every outcome, retry
+failures, refuse non-administrators with the schema's words. Three new reads
+(/waiting, /notifications/outbox, /notifications/gap) and two address writes.
+
+**D-3's cadence row was NOT added — it already existed.** 0013 seeded
+`notification_digest` as an engineering default ('daily'); 0042 SETTLES that
+row (value daily_start_of_business, decided_by owner, rationale replaced)
+rather than planting a near-duplicate beside it. The
+owner-decisions-settle-in-later-migrations pattern, applied deliberately.
+Only `notification_immediate_list` is a new row.
+
+**Three tripwires fired and were answered, not silenced:** the Administrator
+privilege sweep (allowlist extended with reasons — its third catch), the
+operational-settings pin (four → five, with the sentence), and the doorway
+read-count pin (33 → 36). Each exists to force exactly this conversation.
+
+**The digest carries references, never content, by construction** — the
+assembler is handed kinds, ids and dates from cw.waiting_for and has no
+access to clause text; a test proves the ticket's proposed text cannot appear
+in the email about it.
+
+Verification after a machine crash mid-gate (Docker restarted): 28/28 suites,
+776 doorway tests, 253/253 SQL mutations, 34/34 Python harness checks.
+
+Immediate-on-occurrence sends are the one deliberate deferral: the governed
+list is stored and the machinery ready, but the event paths that consult it
+(above all OB-13's envelope adapter) arrive with their own packages.

@@ -37,7 +37,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from doorway import advisory, documents, executions, manifests, reads, runs, writes
+from doorway import (
+    advisory, documents, executions, manifests, notifications, reads, runs,
+    writes,
+)
 from doorway.db import Database
 from doorway.identity import (
     Caller, NoEffectiveRole, NoSession, caller_for, identity_of, session_length,
@@ -102,9 +105,14 @@ DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.docu
 class App:
     """The whole service, minus the socket."""
 
-    def __init__(self, db: Database, now: Callable[[], float] | None = None):
+    def __init__(self, db: Database, now: Callable[[], float] | None = None,
+                 email_channel: notifications.Channel | None = None):
         self._db = db
         self._sessions = Sessions(db, now=now)
+        # The channel seam (OB-10). Injected by tests; built from deployment
+        # configuration otherwise. An unconfigured system gets a channel whose
+        # sends fail WITH A REASON, recorded on the outbox — never silence.
+        self._email = email_channel or notifications.channel_from_env()
 
     @property
     def sessions(self) -> Sessions:
@@ -230,6 +238,15 @@ class App:
 
         if key == "POST /agreements/execute":
             answered = executions.execute(self._db, caller, body or {})
+            return Response(answered.status, answered.body)
+
+        # The notification tick (OB-10). Not a Write for the reason POST /runs
+        # is not: it derives, talks to an outside party, and records outcomes —
+        # three acts, one of them off-premises. Its authority is the schema's
+        # (cw.assert_may_run_notifications), and every send lands between
+        # transactions, never inside one (B2).
+        if key == "POST /notifications/tick":
+            answered = notifications.tick(self._db, caller, self._email)
             return Response(answered.status, answered.body)
 
         return Response(404, {"error": "no such endpoint", "path": path})

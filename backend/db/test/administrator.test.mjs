@@ -183,6 +183,18 @@ const ADMIN_MAY_WRITE = {
   // is the authority to redact, and purging stays the Administrator's own act
   // with nothing to hand out.
   'records_delegate':   ['INSERT','UPDATE'],
+  // Where people can be reached (0042, OB-09). Insert to set an address,
+  // update to record its removal — the watcher-list shape, for the same
+  // reason: being taken off a delivery route is a change that stays on the
+  // record. Operational machinery, not contract content; a person who could
+  // set their own address could silence their own countersign nudges, so it
+  // is the Administrator's alone. The sweep caught this on its first run —
+  // third time it has earned itself.
+  'notification_address': ['INSERT','UPDATE'],
+  // What was actually sent (0042). INSERT only, append-only for everybody:
+  // the tick records deliveries and outcomes, and a delivery cannot be
+  // un-sent. Carries references and outcomes, never contract content.
+  'notification_outbox':  ['INSERT'],
 };
 
 console.log('\ndecision U5: contract content is WRITABLE by the administrator NOWHERE');

@@ -77,12 +77,16 @@ const value = async (k) => (await one(
 // ── The four operational rows exist and say what they do ──────────────────
 console.log('\nfour operational settings, each with a default and a purpose');
 
-await test('exactly the four named rows are operational, and no others', async () => {
+await test('exactly the five named rows are operational, and no others', async () => {
+  // Five since 0042: D-3 settled the existing notification_digest row and
+  // added the immediate list beside it — the fifth row arrived as a proposal
+  // with an owner decision behind it, which is exactly what this pin is for.
   const r = await rows(
     `select key from cw.governance_setting where kind='operational' order by key`);
   eq(r.map(x => x.key),
-    ['notification_digest','override_review_window','session_length','ticket_expiry'],
-    'the operational set has drifted — a fifth row is a proposal, not a drive-by');
+    ['notification_digest','notification_immediate_list','override_review_window',
+     'session_length','ticket_expiry'],
+    'the operational set has drifted — a new row is a proposal, not a drive-by');
 });
 
 await test('every operational row ships with a value and a stated purpose', async () => {

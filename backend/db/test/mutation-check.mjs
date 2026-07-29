@@ -2664,6 +2664,57 @@ grant update on cw.obligation_template to cw_legal_reviewer;`,
     find: `  where t.state = 'pending' and p_role in ('legal_reviewer','legal_admin')`,
     repl: `  where t.state = 'pending' and p_role is not null`,
     expect: 'a role audience reaches every holder of the role' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The outbox and the address book (0042, OB-09)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { suite: 'notifications.test.mjs',
+    name: 'anybody runs the notification tick',
+    find: `  if cw.app_role() is distinct from 'administrator' then
+    raise exception
+      'the notification tick is the Administrator''s act; % holds %',`,
+    repl: `  if false then
+    raise exception
+      'the notification tick is the Administrator''s act; % holds %',`,
+    expect: 'only the administrator may run the notification tick' },
+
+  { suite: 'notifications.test.mjs',
+    name: 'anybody maintains the address book',
+    find: `create policy administrator_maintains on cw.notification_address for insert
+  with check (cw.app_role() = 'administrator');`,
+    repl: `create policy administrator_maintains on cw.notification_address for insert
+  with check (cw.app_role() is not null);
+grant insert on cw.notification_address to cw_legal_admin;
+grant usage, select on sequence cw.notification_address_address_id_seq to cw_legal_admin;`,
+    expect: 'nobody but the administrator maintains addresses' },
+
+  { suite: 'notifications.test.mjs',
+    name: 'anybody records a send',
+    find: `create policy tick_records on cw.notification_outbox for insert
+  with check (cw.app_role() = 'administrator');`,
+    repl: `create policy tick_records on cw.notification_outbox for insert
+  with check (cw.app_role() is not null);
+grant insert on cw.notification_outbox to cw_legal_admin;
+grant usage, select on sequence cw.notification_outbox_outbox_id_seq to cw_legal_admin;`,
+    expect: 'only the administrator records a send' },
+
+  { suite: 'notifications.test.mjs',
+    name: 'the delivery record becomes editable',
+    find: `create trigger notification_outbox_frozen before update on cw.notification_outbox
+  for each row execute function cw.notification_frozen();`,
+    repl: `select 1;`,
+    expect: 'the outbox is append-only — not even the owner edits a delivery' },
+
+  // The gap goes quiet: the address check dropped, so every waiting person
+  // reads as reachable and the silence looks like good news.
+  { suite: 'notifications.test.mjs',
+    name: 'an unreachable person is reported as covered',
+    find: `  and not exists (select 1 from cw.notification_address a
+                   where a.person = e.person and a.channel = 'email'
+                     and a.removed_at is null);`,
+    repl: `  and false;`,
+    expect: 'a person with work waiting and no address is a visible gap' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();

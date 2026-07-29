@@ -414,6 +414,40 @@ READS: dict[str, Read] = {
         rule="cw.run_finding read_scoped policy — a finding is visible exactly "
              "when its run is",
     ),
+
+    # ── Notifications (OB-08/09) ────────────────────────────────────────────
+    # The workspace panel: what is waiting on THE CALLER, derived fresh on
+    # every read. The view passes the caller's own name and role to
+    # cw.waiting_for, so there is nothing here to scope — it is self-scoping
+    # by construction, and the daily digest reads the same derivation.
+    "GET /waiting": Read(
+        sql="""select kind, subject_ref, due_on, since
+          from cw.waiting_on_you
+          order by due_on nulls last, since nulls last, kind, subject_ref""",
+        rule="cw.waiting_on_you (0041) — self-scoping by construction; one "
+             "derivation feeds this panel and the digest, so they cannot "
+             "disagree",
+    ),
+
+    # What was actually sent, to whom, carrying which references. A person
+    # sees their own deliveries; the machine's operator and its examiners see
+    # all of them.
+    "GET /notifications/outbox": Read(
+        sql="""select outbox_id, person, channel, sent_on, kind, refs, sent_at,
+                 outcome, failure
+          from cw.notification_outbox order by outbox_id desc""",
+        rule="cw.notification_outbox read_scoped policy — own rows, plus "
+             "administrator, auditor and legal_admin in full",
+    ),
+
+    # People being waited on whom no channel can reach. Empty is good news
+    # only if somebody is looking, which is why this is an endpoint and not a
+    # query somebody has to remember.
+    "GET /notifications/gap": Read(
+        sql="""select person, role from cw.notification_gap order by person""",
+        rule="cw.notification_gap grant — administrator, auditor and "
+             "legal_admin; everyone else is refused, not shown an empty list",
+    ),
 }
 
 

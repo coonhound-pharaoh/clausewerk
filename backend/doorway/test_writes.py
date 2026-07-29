@@ -122,6 +122,10 @@ BODIES: dict[str, dict] = {
         "agreement_id": "AG-1", "doc_seq": 1, "observed_sha256": "a" * 64,
     },
     "POST /health-checks/rebuild": {"run_id": "RUN-1", "observed_hash": "b" * 64},
+    "POST /notifications/addresses": {
+        "person": "leah@clausewerk", "address": "leah@example.com",
+    },
+    "POST /notifications/addresses/remove": {"person": "leah@clausewerk"},
 }
 
 

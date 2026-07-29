@@ -660,6 +660,30 @@ WRITES: dict[str, Write] = {
         rule="cw.record_rebuild_spot_check() compares against cw.run.result_hash",
         fields=(Field("run_id"), Field("observed_hash")),
     ),
+
+    # ── The address book (OB-09) ────────────────────────────────────────────
+    # Administrator-maintained, the watcher-list shape: a person who could
+    # redirect their own notifications could silence their own countersign
+    # nudges. The setter and remover are bound from the connection by the
+    # schema's triggers, whatever a body claims.
+    "POST /notifications/addresses": Write(
+        sql="""insert into cw.notification_address (person, channel, address, set_by)
+       values (%(person)s, 'email', %(address)s, current_setting('cw.actor'))
+       returning address_id, person, channel, address""",
+        rule="cw.notification_address administrator_maintains policy — "
+             "administrator only; setting is audited by trigger",
+        fields=(Field("person"), Field("address")),
+    ),
+
+    "POST /notifications/addresses/remove": Write(
+        sql="""update cw.notification_address
+          set removed_by = current_setting('cw.actor'), removed_at = now()
+        where person = %(person)s and channel = 'email' and removed_at is null
+       returning address_id""",
+        rule="cw.notification_address administrator_removes policy; the trigger "
+             "binds the remover, audits the removal, and refuses a second one",
+        fields=(Field("person"),),
+    ),
 }
 
 
