@@ -449,11 +449,16 @@ await test('breach is asserted only on an overdue fact (D-1)', async () => {
 });
 
 await test('nobody but legal admin asserts breach', async () => {
+  // As the deal's OWNER, deliberately: a non-owning requester is refused by
+  // the guard's scoped lookup before the policy is consulted, which would
+  // mask a widened policy (the S110 shape, found live by a MISS). For the
+  // owner, the policy is the only refusal in the path.
   const other = (await one(`select obligation_id from cw.obligation_instance
     where agreement_id='AG-OB3' and kind='deliver' and occurrence=1`)).obligation_id;
-  await mustNotWrite('requester', `
+  await throws(() => queryAs('requester', `
     insert into cw.obligation_act (obligation_id,act,note,acted_by)
-    values (${other},'breach_asserted','late','x')`, [], BUYER);
+    values (${other},'breach_asserted','late','x')`, [], BUYER),
+    'row-level security');
 });
 
 await test('an unowned obligation on a live deal is a visible gap', async () => {
@@ -541,6 +546,130 @@ await test('closing the last survivor opens the close gate', async () => {
     select closeable from cw.agreement_close_eligibility
     where agreement_id='AG-OB1'`, [], DANA);
   eq(c, [{ closeable: true }]);
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Waiver is an override (0039, OB-05) — riding the 0015 machinery
+// ════════════════════════════════════════════════════════════════════════════
+
+console.log('\nwaiver: request, socialise, approve — then, and only then, the act');
+
+const REFRAIN = (await one(`select obligation_id from cw.obligation_instance
+  where agreement_id='AG-OB3' and kind='refrain'`)).obligation_id;
+const ORPHAN = (await one(`select obligation_id from cw.obligation_instance
+  where agreement_id='AG-OB3' and occurrence=99`)).obligation_id;
+
+// The request, socialised with its window already closed — the 0015 machinery
+// owns those guards and proves them in its own suite; this one seeds past them
+// the way override.test.mjs itself does.
+await db.exec(`
+  insert into cw.override_request (run_id,agreement_id,requested_by,justification)
+    values ('RUN-OB3','AG-OB3','${BUYER}',
+            'The vendor ceased trading; the deletion duty cannot be performed.');
+`);
+const WREQ = (await one(`select request_id from cw.override_request
+  where agreement_id='AG-OB3'`)).request_id;
+await db.exec(`
+  insert into cw.override_finding (request_id,finding_ref,severity,summary)
+    values (${WREQ},'obligation:${REFRAIN}','High','waive the deletion duty'),
+           (${WREQ},'obligation:${ORPHAN}','High','waive the orphaned duty');
+`);
+// Socialised through the real machinery — the deal owner is the audience —
+// then the window is moved into the past as the owner, the way
+// override.test.mjs itself closes a window (there is deliberately no role
+// that can shorten a live one).
+await queryAs('legal_reviewer',
+  `select cw.socialise_override_request(${WREQ})`, [], PAT);
+await db.exec(`update cw.override_socialisation
+  set window_closes = now() - interval '1 minute' where request_id=${WREQ}`);
+
+await test('a waiver without an approved override authorises nothing', async () => {
+  await throws(() => queryAs('legal_admin', `
+    insert into cw.obligation_act (obligation_id,act,note,override_ref,acted_by)
+    values (${REFRAIN},'waived','vendor gone',${WREQ},'x')`, [], DANA),
+    'a proposal is not an approval');
+  await throws(() => queryAs('legal_admin', `
+    insert into cw.obligation_act (obligation_id,act,note,acted_by)
+    values (${REFRAIN},'waived','vendor gone','x')`, [], DANA),
+    'a proposal is not an approval', 'no reference at all is no better');
+});
+
+await test('an approval for a different obligation authorises nothing', async () => {
+  await queryAs('legal_reviewer',
+    `select cw.decide_override_finding(${WREQ},'obligation:${ORPHAN}','approved')`,
+    [], PAT);
+  await throws(() => queryAs('legal_admin', `
+    insert into cw.obligation_act (obligation_id,act,note,override_ref,acted_by)
+    values (${REFRAIN},'waived','vendor gone',${WREQ},'x')`, [], DANA),
+    'a proposal is not an approval',
+    'the request is real and carries an approval — for the OTHER duty');
+});
+
+await test('a requester cannot record the waiver act', async () => {
+  // As the deal's owner, for the same reason as the breach test: only the
+  // policy stands between the owner and the insert, so only this shape can
+  // see the policy widen.
+  await throws(() => queryAs('requester', `
+    insert into cw.obligation_act (obligation_id,act,note,override_ref,acted_by)
+    values (${ORPHAN},'waived','approved, so I will book it myself',${WREQ},'x')`,
+    [], BUYER),
+    'row-level security');
+});
+
+await test('with the approval in force, the waiver closes the survivor', async () => {
+  await queryAs('legal_reviewer',
+    `select cw.decide_override_finding(${WREQ},'obligation:${REFRAIN}','approved')`,
+    [], PAT);
+  await mustWrite('legal_admin', `
+    insert into cw.obligation_act (obligation_id,act,note,override_ref,acted_by)
+    values (${REFRAIN},'waived','Vendor in liquidation; duty impossible.',${WREQ},'x')`,
+    [], DANA);
+  const s = await queryAs('legal_admin', `
+    select state, closed_by from cw.obligation_state where obligation_id=${REFRAIN}`,
+    [], DANA);
+  eq(s, [{ state: 'waived', closed_by: DANA }]);
+  const c = await queryAs('legal_admin', `
+    select closeable from cw.agreement_close_eligibility where agreement_id='AG-OB3'`,
+    [], DANA);
+  eq(c, [{ closeable: true }], 'the last survivor is terminal, so the deal may close');
+  const e = await one(`select count(*)::int as n from cw.audit_event
+    where event_type='obligation_waived' and subject='${REFRAIN}'`);
+  eq(e.n, 1);
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// The waiting-on-you derivation (0041, OB-08)
+// ════════════════════════════════════════════════════════════════════════════
+
+console.log('\nwaiting-on-you: derived fresh, never stored');
+
+await test('the workspace panel answers for the caller alone', async () => {
+  const mine = await queryAs('requester',
+    `select kind, subject_ref from cw.waiting_on_you`, [], BUYER);
+  assert(mine.some(r => r.kind === 'renewal_window' && r.subject_ref === 'AG-OB3'),
+    'the renewal window on their own deal is on the list');
+  assert(mine.some(r => r.kind === 'obligation' && r.subject_ref === String(OVERDUE)),
+    'their overdue duty is on the list');
+  assert(!mine.some(r => r.subject_ref === String(ORPHAN)),
+    'the unowned duty is nobody’s panel entry — it is the gap surface’s job');
+  const rival = await queryAs('requester',
+    `select count(*)::int as n from cw.waiting_on_you`, [], 'rival@clausewerk');
+  eq(rival[0].n, 0, 'a person with nothing waiting sees nothing — no leakage either');
+});
+
+await test('a role audience reaches every holder of the role', async () => {
+  await db.exec(`
+    insert into cw.review_ticket
+      (agreement_id,category_key,severity,reason_code,provenance_badge,proposed_text)
+    values ('AG-OB1','data','High','human-escalated','VENDOR LANGUAGE',
+            'Supplier shall notify Customer within seventy-two (72) hours.')`);
+  const admin = await queryAs('legal_admin',
+    `select kind from cw.waiting_on_you where kind='review_ticket'`, [], DANA);
+  eq(admin.length, 1, 'an unclaimed ticket waits on anybody who can decide it');
+  const buyer = await queryAs('requester',
+    `select count(*)::int as n from cw.waiting_on_you where kind='review_ticket'`,
+    [], BUYER);
+  eq(buyer[0].n, 0, 'a requester holds no deciding role, so it does not wait on them');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

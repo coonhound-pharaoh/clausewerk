@@ -3273,3 +3273,48 @@ sweep-on-issue row, and inventing a guarantee for it would be the thing
 Boundary pinned deliberately: `>` not `>=`, so a session expiring exactly now is
 over. The two read alike and the wrong one keeps every session alive one extra
 second — invisible, and it only ever surfaces as an argument about clocks.
+
+## S116 — The obligations core is built: OB-01–05, OB-08, OB-12 — 2026-07-28
+Seven of the fifteen OB packages implemented, tested and mutation-guarded, per
+`OBLIGATIONS-WORK-PACKAGES-2026-07-28.md`:
+
+- **0035** templates through the gate (born proposed, no self-approval,
+  approved-immutable, retired-terminal, never deleted).
+- **0036** registration: deterministic derivation at execution, pinned to
+  templates as they stood on the execution date, idempotent by
+  (agreement, template, occurrence), coverage gaps reported, re-derivable via
+  cw.obligation_rederive(). Termination-anchored duties register UNANCHORED
+  (due null) — wiring the termination date is deferred, stated in 0036.
+- **0037** acts: satisfy (mandatory non-empty note), reassign (named person),
+  breach_asserted (legal_admin only, only on an arithmetically overdue duty —
+  D-1's governance row lands here). Append-only, actor-bound, audited.
+- **0038** computed states: pending/due/overdue are a VIEW over the calendar
+  (ADR-0006 extended) — no state-mover job exists, so none can die. Close
+  eligibility computed; unanchored survivors block close (fail closed).
+- **0039** waiver RIDES the 0015 override machinery: finding_ref
+  'obligation:<id>', socialise, window, decide — only cw.override_passes
+  authorises the act. No second approval machine to rot.
+- **0040** envelope record (D-2 row lands here): append-only event stream,
+  state moves ONLY via the definer trigger (D1 pre-empted), sequence-guarded.
+  Hash-equality is NOT the sent-vs-signed test — providers overlay signature
+  pages; the record keeps both hashes instead of minting false incidents.
+- **0041** waiting-on-you: one definer derivation feeds panel and future
+  digest; reads BASE tables (a definer reading scoped views gets nothing).
+
+Verification: 248/248 mutations caught by their named test; all suites green.
+
+**A NEW TESTING LESSON, sibling to S110:** a BEFORE-trigger that looks the
+row up under the caller's RLS refuses a NON-OWNING caller before any policy
+is consulted — so a widened policy is invisible to a test running as the
+wrong person. Found live: two policy mutations reported MISS because
+mustNotWrite's fourth argument is an options object, not the actor, and the
+tests silently ran as a non-owner. Policy tests must run as the person the
+policy would admit, with only the policy left to refuse them.
+
+**Interleave note:** migrations 0035–0038 and mid-flight test states were
+swept into the other session's A-3 commit (7a270f7) — same shape as S112.
+This commit completes them; nothing was lost.
+
+Still open from the package set: OB-09/10 (outbox + email tick — needs the
+doorway quiet), OB-07 (doorway endpoints), OB-11/15 (shell), OB-06/13 (gated
+on NC-07), OB-14 (blocked on deployment).

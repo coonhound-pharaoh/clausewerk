@@ -2569,6 +2569,101 @@ grant update on cw.obligation_template to cw_legal_reviewer;`,
          (where s.survives and s.closed_as is null) = 0) as closeable`,
     repl: `       true as closeable`,
     expect: 'an unanchored survivor reads pending, and blocks close' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Waiver is an override (0039, OB-05)
+  // ════════════════════════════════════════════════════════════════════════
+
+  // The proposal-is-not-approval fault, at the waiver gate.
+  { suite: 'obligations.test.mjs',
+    name: 'a merely proposed waiver authorises the act',
+    find: `    if new.override_ref is null or not exists (
+      select 1 from cw.override_passes p
+       where p.request_id = new.override_ref
+         and p.finding_ref = 'obligation:' || new.obligation_id) then`,
+    repl: `    if false then`,
+    expect: 'a waiver without an approved override authorises nothing' },
+
+  { suite: 'obligations.test.mjs',
+    name: 'anybody on the deal records the waiver act',
+    find: `  or (act = 'waived' and cw.app_role() in ('legal_reviewer','legal_admin'))`,
+    repl: `  or (act = 'waived' and cw.app_role() is not null)`,
+    expect: 'a requester cannot record the waiver act' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The envelope record (0040, OB-12)
+  // ════════════════════════════════════════════════════════════════════════
+
+  { suite: 'signature-envelope.test.mjs',
+    name: 'envelope events may arrive out of order',
+    find: `  if new.seq is distinct from (
+       select count(*)::int from cw.signature_envelope_event e
+        where e.envelope_id = new.envelope_id) then`,
+    repl: `  if false then`,
+    expect: 'events arrive in sequence or not at all' },
+
+  { suite: 'signature-envelope.test.mjs',
+    name: 'a terminal envelope keeps taking events',
+    find: `  if env.state <> 'sent' then
+    raise exception
+      'envelope % is % — a terminal envelope takes no further events',`,
+    repl: `  if false then
+    raise exception
+      'envelope % is % — a terminal envelope takes no further events',`,
+    expect: 'a terminal envelope takes no further events' },
+
+  // The D1 shape at the new gate: without the definer trigger's move, the
+  // envelope stays 'sent' forever and only a test running as the real role
+  // can see it.
+  { suite: 'signature-envelope.test.mjs',
+    name: 'a completed envelope never moves off sent',
+    find: `  if new.event in ('completed','declined','voided','expired') then`,
+    repl: `  if false then`,
+    expect: 'a terminal event moves the state — as a real role, not the owner' },
+
+  { suite: 'signature-envelope.test.mjs',
+    name: 'the envelope evidence becomes editable',
+    find: `create trigger envelope_state_moves_by_event
+  before update on cw.signature_envelope
+  for each row execute function cw.envelope_state_moves_by_event();`,
+    repl: `select 1;`,
+    expect: 'the envelope record is evidence — no edits, no deletions' },
+
+  { suite: 'signature-envelope.test.mjs',
+    name: 'any requester opens an envelope on any deal',
+    find: `create policy send_envelope on cw.signature_envelope for insert with check (
+  cw.app_role() in ('legal_reviewer','legal_admin')
+  or (cw.app_role() = 'requester'
+      and cw.owns_agreement(signature_envelope.agreement_id)));`,
+    repl: `create policy send_envelope on cw.signature_envelope for insert with check (
+  cw.app_role() is not null);`,
+    expect: 'a requester cannot open an envelope on another buyer’s deal' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The waiting-on-you derivation (0041, OB-08)
+  // ════════════════════════════════════════════════════════════════════════
+  // A derivation that hides work is this family's whole failure mode: each
+  // source a test consumes gets its own silent-drop (or silent-widen) row.
+
+  { suite: 'obligations.test.mjs',
+    name: 'due obligations vanish from the waiting list',
+    find: `  where s.owner_person = p_person and s.state in ('due','overdue')`,
+    repl: `  where false`,
+    expect: 'the workspace panel answers for the caller alone' },
+
+  { suite: 'obligations.test.mjs',
+    name: 'the renewal window never reaches the person who owns the deal',
+    find: `    and ea.term_end <= current_date + 90`,
+    repl: `    and false`,
+    expect: 'the workspace panel answers for the caller alone' },
+
+  // Widened, not dropped — the subtler break: the ticket queue starts waiting
+  // on people who hold no deciding role at all.
+  { suite: 'obligations.test.mjs',
+    name: 'review tickets wait on everybody, whatever their role',
+    find: `  where t.state = 'pending' and p_role in ('legal_reviewer','legal_admin')`,
+    repl: `  where t.state = 'pending' and p_role is not null`,
+    expect: 'a role audience reaches every holder of the role' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();
