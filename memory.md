@@ -3200,3 +3200,24 @@ run store.
 
 Each settled decision becomes a `cw.governance_setting` row in the migration that builds the
 thing it governs. Work-package cutting is the next step; not yet done.
+
+## S112 — Commit 1580c77 is four workstreams wearing one label — 2026-07-28
+The commit titled "Store a fingerprint of the session key, not the key (A-2)" contains far
+more than A-2. Two sessions shared one working tree; the owner instructed this session to
+commit its work in logical chunks, and the other session committed and pushed everything
+staged — both sessions' work — minutes before that happened. Nothing was lost, but the label
+under-describes the contents. What 1580c77 actually carries:
+
+- **A-2** (the other session's): migration 0034, `sessions.py`, the secrecy/privacy tests,
+  the Python harness update, `STATUS-2026-07-28.md`, memory entry S109.
+- **The SQL mutation harness repair** (this session's): five stale checks repointed in
+  `backend/db/test/mutation-check.mjs` after the afternoon hardening series moved their
+  anchors; 218/218 green again; the CLAUDE.md rule requiring the harness after any
+  migration edit; memory entry S110.
+- **The 2026-07-28 feature proposal**: `FEATURE-PROPOSAL-2026-07-28.md`.
+- **The obligations/signature/notifications architecture**: `OBLIGATIONS-ARCHITECTURE.md`
+  with owner decisions D-1/D-2/D-3 settled; memory entry S111.
+
+Splitting was considered and rejected: the commit was already pushed, and rewriting shared,
+published history under a live second session trades a labelling defect for a real one.
+This entry is the correction instead.
