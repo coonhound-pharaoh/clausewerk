@@ -2373,6 +2373,202 @@ grant usage, select on sequence cw.records_delegate_delegate_id_seq to cw_legal_
                         </span>
                       )}`,
     expect: 'an unusable rung stays on the ladder rather than being hidden' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Obligation templates (0035, OB-01) · the third content type through the gate
+  // ════════════════════════════════════════════════════════════════════════
+
+  // The ungoverned INSERT again: a row born approved with a hand-written
+  // approver never meets the transition trigger.
+  { suite: 'obligations.test.mjs',
+    name: 'an obligation template can be born already approved',
+    find: `  if new.state <> 'proposed' or new.approved_by is not null
+     or new.approved_on is not null or new.retired_on is not null then`,
+    repl: `  if false then`,
+    expect: 'a template is born proposed, whatever the caller claims' },
+
+  { suite: 'obligations.test.mjs',
+    name: 'an approved obligation template stays editable',
+    find: `  if old.state = 'approved'
+     and (new.clause_id     is distinct from old.clause_id`,
+    repl: `  if false
+     and (new.clause_id     is distinct from old.clause_id`,
+    expect: 'an approved template is immutable — retire it and author a new one' },
+
+  { suite: 'obligations.test.mjs',
+    name: 'a retired obligation template comes back by edit',
+    find: `  if old.state = 'retired' then
+    raise exception
+      'obligation template % is retired; a retired template never comes back '`,
+    repl: `  if false then
+    raise exception
+      'obligation template % is retired; a retired template never comes back '`,
+    expect: 'a retired template never comes back' },
+
+  { suite: 'obligations.test.mjs',
+    name: 'the proposer may approve their own template',
+    find: `    if old.proposed_by is not distinct from cw.app_actor() then`,
+    repl: `    if false then`,
+    expect: 'nobody approves their own obligation template' },
+
+  // Grant and policy widened TOGETHER, deliberately: each alone is masked by
+  // the other (the S110 lesson), so the pair is what the named test proves.
+  { suite: 'obligations.test.mjs',
+    name: 'a legal reviewer may decide obligation templates',
+    find: `create policy admin_decides on cw.obligation_template for update
+  using      (cw.app_role() = 'legal_admin')
+  with check (cw.app_role() = 'legal_admin');`,
+    repl: `create policy admin_decides on cw.obligation_template for update
+  using      (cw.app_role() in ('legal_admin','legal_reviewer'))
+  with check (cw.app_role() in ('legal_admin','legal_reviewer'));
+grant update on cw.obligation_template to cw_legal_reviewer;`,
+    expect: 'a legal reviewer cannot decide a template — only legal admin' },
+
+  { suite: 'obligations.test.mjs',
+    name: 'an obligation template can be deleted',
+    find: `create trigger obligation_template_no_delete
+  before delete on cw.obligation_template
+  for each row execute function cw.obligation_template_no_delete();`,
+    repl: 'select 1;',
+    expect: 'a template is never deleted — not even by the owner' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Registration (0036, OB-02) · the deterministic derivation at execution
+  // ════════════════════════════════════════════════════════════════════════
+
+  // The pin removed: registration reads templates as they stand TODAY instead
+  // of as they stood at execution, and a signed deal's obligation set changes
+  // because Legal improved a template — the exact drift ADR-0006 forbids.
+  { suite: 'obligations.test.mjs',
+    name: 'registration reads current templates, not pinned-at-execution ones',
+    find: `      and t.approved_on <= ea.executed_on`,
+    repl: `      and true`,
+    expect: 'a template approved after execution reaches future registrations only' },
+
+  // The insert-missing guard removed. The unique key is the second layer here
+  // (the S110 shape), so the observable break is a re-run RAISING instead of
+  // quietly adding nothing — either way the named test sees idempotence die.
+  { suite: 'obligations.test.mjs',
+    name: 'a registration re-run duplicates the set (or dies trying)',
+    find: `  where not exists (select 1 from cw.obligation_instance i
+                     where i.agreement_id = p_agreement_id
+                       and i.template_id  = d.template_id
+                       and i.occurrence   = d.occurrence);`,
+    repl: `  ;`,
+    expect: 'registration is idempotent — a re-run adds nothing' },
+
+  // The gap report suppressed: a clause declaring nothing simply registers
+  // nothing, silently — the coverage metric reads as complete when it is blind.
+  { suite: 'obligations.test.mjs',
+    name: 'an uncovered clause registers silence instead of a gap row',
+    find: `  where not exists (select 1 from cw.derive_obligations(p_agreement_id, horizon) x
+                     where x.clause_id = pk.clause_id and x.version = pk.version)`,
+    repl: `  where false and not exists (select 1 from cw.derive_obligations(p_agreement_id, horizon) x
+                     where x.clause_id = pk.clause_id and x.version = pk.version)`,
+    expect: 'an in-force clause declaring nothing is a visible gap' },
+
+  // The freeze on derivation output, update half only — the delete trigger is
+  // kept so this breaks rewriting ALONE, the 0006 anchoring lesson. The named
+  // test runs as the owner, whom no grant stops (D6).
+  { suite: 'obligations.test.mjs',
+    name: 'obligation instances become editable',
+    find: `    execute format('create trigger %I_frozen before update on cw.%I
+                    for each row execute function cw.obligation_frozen()', t, t);`,
+    repl: `    perform 1;`,
+    expect: 'the obligation record cannot be rewritten — not even by the owner' },
+
+  { suite: 'obligations.test.mjs',
+    name: 'every requester reads every deal’s obligations at the table',
+    find: `create policy read_scoped on cw.obligation_instance for select using (
+  cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator')
+  or (cw.app_role() = 'requester'
+      and cw.owns_agreement(obligation_instance.agreement_id)));`,
+    repl: `create policy read_scoped on cw.obligation_instance for select using (
+  cw.app_role() is not null);`,
+    expect: 'a requester reads their own deals at the table' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // The recorded acts (0037, OB-04) · states computed, acts recorded
+  // ════════════════════════════════════════════════════════════════════════
+
+  // The '' vs NULL lesson, restored exactly: `is not null` is satisfied by the
+  // empty string a form posts when the closer typed nothing.
+  { suite: 'obligations.test.mjs',
+    name: 'a satisfaction with an empty note is accepted',
+    find: `  constraint satisfaction_needs_note check
+    (act <> 'satisfied' or coalesce(btrim(note), '') <> ''),`,
+    repl: `  constraint satisfaction_needs_note check
+    (act <> 'satisfied' or note is not null),`,
+    expect: 'satisfying with an empty note is refused' },
+
+  { suite: 'obligations.test.mjs',
+    name: 'the actor on an obligation act is whatever the caller claims',
+    find: `  if cw.app_role() is not null then
+    new.acted_by := cw.app_actor();
+    new.acted_at := now();
+  end if;`,
+    repl: `  if false then end if;`,
+    expect: 'a satisfaction is a named act with the note on the record' },
+
+  { suite: 'obligations.test.mjs',
+    name: 'a closed obligation takes further decisions',
+    find: `  if exists (select 1 from cw.obligation_act a
+              where a.obligation_id = new.obligation_id
+                and a.act in ('satisfied','waived')) then`,
+    repl: `  if false then`,
+    expect: 'a decision is not revisited' },
+
+  // D-1 defeated from the arithmetic side: breach asserted about a duty that
+  // is not overdue, so the system's word outruns its facts.
+  { suite: 'obligations.test.mjs',
+    name: 'breach can be asserted ahead of the arithmetic',
+    find: `  if new.act = 'breach_asserted'
+     and (i.due_on is null or current_date <= i.due_on) then`,
+    repl: `  if false then`,
+    expect: 'breach is asserted only on an overdue fact (D-1)' },
+
+  // D-1 defeated from the authority side.
+  { suite: 'obligations.test.mjs',
+    name: 'anybody signed in asserts breach',
+    find: `  or (act = 'breach_asserted' and cw.app_role() = 'legal_admin'));`,
+    repl: `  or (act = 'breach_asserted' and cw.app_role() is not null));`,
+    expect: 'nobody but legal admin asserts breach' },
+
+  // Update half only; the delete trigger stays so this breaks rewriting alone.
+  { suite: 'obligations.test.mjs',
+    name: 'obligation acts become editable',
+    find: `create trigger obligation_act_frozen before update on cw.obligation_act
+  for each row execute function cw.obligation_act_frozen();`,
+    repl: `select 1;`,
+    expect: 'an act cannot be rewritten or deleted — not even by the owner' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Computed states and close eligibility (0038, OB-03)
+  // ════════════════════════════════════════════════════════════════════════
+  // No mutation for the `due_on is null then 'pending'` branch, deliberately:
+  // dropping it routes a null due date through two null comparisons into the
+  // same 'pending' else-arm, so the mutation cancels itself out and would
+  // report MISS for a behaviour that is intact. The branch is readability,
+  // not protection — the unprovable-redundancy rule (S110) applied.
+
+  { suite: 'obligations.test.mjs',
+    name: 'a recorded closure loses to the calendar',
+    find: `         when closed.act is not null then closed.act`,
+    repl: `         when false then closed.act`,
+    expect: 'a satisfied duty reads satisfied, with its closer' },
+
+  { suite: 'obligations.test.mjs',
+    name: 'the lead window never opens — nothing ever reads due',
+    find: `         when current_date >= i.due_on - i.lead_days then 'due'`,
+    repl: `         when false then 'due'`,
+    expect: 'an obligation inside its lead window reads due' },
+
+  { suite: 'obligations.test.mjs',
+    name: 'the close gate is pinned open',
+    find: `       (count(s.obligation_id) filter
+         (where s.survives and s.closed_as is null) = 0) as closeable`,
+    repl: `       true as closeable`,
+    expect: 'an unanchored survivor reads pending, and blocks close' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();

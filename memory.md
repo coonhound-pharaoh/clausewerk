@@ -3221,3 +3221,55 @@ under-describes the contents. What 1580c77 actually carries:
 Splitting was considered and rejected: the commit was already pushed, and rewriting shared,
 published history under a live second session trades a labelling defect for a real one.
 This entry is the correction instead.
+
+## S113 — Expiry is a predicate on the lookup, not a side effect of housekeeping — SETTLED 2026-07-28
+Audit finding A-3. `person_for` deleted expired rows and then selected by
+fingerprint, and the select carried NO expiry condition of its own. So whether
+an expired session was honoured rested entirely on the preceding DELETE — a
+statement whose own comment calls itself housekeeping, there to stop the table
+growing.
+
+Two statements, one of which quietly held the whole expiry guarantee while
+describing itself as tidying up. That sweep is an unindexed sequential scan on
+every single request, so moving it to a scheduled job is a change somebody will
+propose for good reasons — and it would have silently turned every expired
+session back on. Verified before the fix: with the sweep skipped, an expired row
+came back as a live session.
+
+`LIVE_SESSION_SQL` now carries `and expires_at > %s`. The sweep stays, as
+housekeeping, which is what it always said it was.
+
+WHY THE SQL IS A MODULE CONSTANT. The guarantee is only observable when the
+sweep has NOT run — with it, the row is gone either way and a test passes
+whether or not the predicate exists. So the tests execute that statement
+directly against a planted row, which is only honest if it is the same statement
+the doorway runs. One copy, named, and the mutation harness points at it.
+
+THIS IS THE B11 TRAP, MET A SECOND TIME AND AVOIDED ([[S107]]). Three things
+followed from taking it seriously, and each was caught by asking "would this
+fail if the guarantee were broken?" rather than "does this pass?":
+
+  1. The mutation KEEPS THE PLACEHOLDER COUNT and merely makes the predicate
+     never bite. The first attempt deleted the clause outright, which broke the
+     arity — every test failed on a driver error rather than on the guarantee,
+     proving the tests break rather than that they catch anything.
+  2. Two of the five tests go through `person_for`, so the sweep deletes the row
+     before the lookup sees it and they pass with the predicate neutered. They
+     are renamed `test_control_…` and labelled in the file. One of them had been
+     named as though it proved ordering it does not prove — shipping that would
+     have been the outage row all over again.
+  3. The mutation row "sessions never expire" is REPOINTED from the sweep to the
+     predicate, and its named test changed to the one that reads a planted row.
+     Left pointing at the sweep it would now score MISS, because the predicate
+     refuses the row regardless — which is precisely the point of the fix.
+     Verified by running that single mutation: caught, and not via a driver
+     error.
+
+The sweep inside `person_for` is now guarded by nothing, and that is recorded
+rather than papered over: its growth-control job is already covered by the
+sweep-on-issue row, and inventing a guarantee for it would be the thing
+[[S107]] and [[S104]] both refused to do.
+
+Boundary pinned deliberately: `>` not `>=`, so a session expiring exactly now is
+over. The two read alike and the wrong one keeps every session alive one extra
+second — invisible, and it only ever surfaces as an argument about clocks.

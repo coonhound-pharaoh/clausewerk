@@ -127,13 +127,32 @@ MUTATIONS = [
     # delete itself: the two expiry deletes are byte-identical, and a bare
     # pattern would match twice and mutate whichever came first.
     (
+        # REPOINTED 2026-07-28, and the move IS the fix for finding A-3. This row
+        # used to mutate away the DELETE in person_for, on the belief that the
+        # sweep was what stopped an expired session being honoured. It was — and
+        # that was the defect, because the sweep's own comment calls itself
+        # housekeeping, so the whole expiry guarantee rested on a statement
+        # somebody could reasonably move to a scheduled job.
+        #
+        # Expiry is now a predicate in LIVE_SESSION_SQL, so that is what this row
+        # guards. Mutating the sweep away would now score MISS: the predicate
+        # refuses the row regardless, which is exactly the point.
+        #
+        # The mutation KEEPS THE PLACEHOLDER COUNT and simply makes the predicate
+        # never bite. Deleting the clause outright would break the arity and every
+        # test would fail on a driver error instead of on the guarantee — proving
+        # the tests break, not that they catch anything.
+        #
+        # The named test is the one that reads a planted row the sweep has never
+        # touched. A test that goes through person_for cannot catch this, because
+        # the sweep deletes the row first; test_session_expiry.py labels those as
+        # controls for that reason.
         "sessions never expire",
         "doorway/sessions.py",
-        "            # Drop expired before lookup, so we never return a dead session.\n"
-        '            request.write("delete from cw.session where expires_at <= %s", (now,))',
-        "            # Drop expired before lookup, so we never return a dead session.\n"
-        "            pass",
-        "test_retirement.py::test_a_session_expires_and_re_sign_in_is_required",
+        '    "select person from cw.session where token_sha256 = %s and expires_at > %s")',
+        '    "select person from cw.session where token_sha256 = %s '
+        'and expires_at > %s - 1e12")',
+        "test_session_expiry.py::test_the_lookup_refuses_an_expired_row_with_no_sweep_involved",
     ),
     (
         "expired sessions pile up until each token is presented again",

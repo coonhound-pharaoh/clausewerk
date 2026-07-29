@@ -55,6 +55,33 @@ LOOKUP_ROLE = "viewer"
 LOOKUP_ACTOR = "__signin__"
 
 
+# THE EXPIRY CONTROL. Named, so it can be pointed at and tested.
+#
+# `and expires_at > %s` is the whole of finding A-3. Before it, whether an
+# expired session was honoured depended ENTIRELY on the DELETE that runs just
+# above this query in person_for — and that DELETE's stated purpose, in its own
+# comment, is housekeeping: sweeping abandoned rows so the table does not grow.
+#
+# Two statements, one of which quietly held the entire expiry guarantee while
+# describing itself as tidying up. Someone moving that sweep to a scheduled job
+# for perfectly good performance reasons — it is an unindexed sequential scan on
+# every request — would silently turn every expired session back on, and no test
+# would have noticed. Verified before the fix: with the sweep skipped, an
+# expired row came back as a live session.
+#
+# Now the sweep is housekeeping and this is the control, which is what each of
+# them already claimed to be.
+#
+# WHY THIS IS A MODULE CONSTANT rather than an inline string. The guarantee is
+# only observable when the sweep has NOT run — with it, the row is gone either
+# way and a test passes whether or not the predicate is here. So the test
+# executes THIS statement directly against an expired row, which is only honest
+# if it is the same statement the doorway uses. One copy, named, and the
+# mutation harness points at it.
+LIVE_SESSION_SQL = (
+    "select person from cw.session where token_sha256 = %s and expires_at > %s")
+
+
 def fingerprint(token: str) -> str:
     """What gets STORED for a session key. Never the key itself.
 
@@ -160,11 +187,9 @@ class Sessions:
         now = self._now()
         
         with self._db.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:
-            # Drop expired before lookup, so we never return a dead session.
+            # HOUSEKEEPING, not the control. See LIVE_SESSION_SQL.
             request.write("delete from cw.session where expires_at <= %s", (now,))
-            row = request.one(
-                "select person from cw.session where token_sha256 = %s",
-                (fingerprint(token),))
+            row = request.one(LIVE_SESSION_SQL, (fingerprint(token), now))
             return row[0] if row else None
 
     def end(self, token: str) -> None:
