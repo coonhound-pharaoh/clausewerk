@@ -179,12 +179,25 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if self._is_document():
+            # The selector travels WITH the document. A document POST names its
+            # deal in the query string (?agreement=…) because its body IS the
+            # document — there is no JSON record to carry the name. This branch
+            # dropped the query until NC-09, so every upload arrived addressed
+            # to nobody and the recording act refused it; only the app-level
+            # tests passed, because they hand the query to App.handle directly.
+            # The query is parsed BEFORE the body so a malformed one is refused
+            # unread, the same order the size check argues for.
+            selector, refused = self._query(parsed.query)
+            if refused is not None:
+                self._respond(refused)
+                return
             upload, refused = self._read_document()
             if refused is not None:
                 self._respond(refused)
                 return
             self._respond(self.app.handle("POST", self._endpoint(parsed.path),
-                                          token=self._token(), upload=upload))
+                                          token=self._token(), query=selector,
+                                          upload=upload))
             return
 
         body, refused = self._read_body()

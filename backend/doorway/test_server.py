@@ -596,8 +596,27 @@ def test_a_document_arrives_as_bytes_and_reaches_the_app_unchanged():
     assert arrived.filename == "round-3.docx"
     assert app.seen[-1]["body"] is None, (
         "a document arrived as a record as well as a document")
-    # Nothing consumes an upload yet, so the ordinary 404 is the honest answer.
+    # The stub consumes nothing, so its ordinary 404 is the honest answer.
     assert status == 404 and body.get("error") != "refused"
+
+
+def test_a_documents_deal_selector_travels_with_it():
+    """A document POST names its deal in the query string, because its body
+    IS the document — there is no JSON record to carry the name. This branch
+    DROPPED the query until NC-09: every upload arrived addressed to nobody,
+    the recording act refused it, and only the app-level tests passed,
+    because they hand the query to App.handle directly. The wire is the
+    thing this test watches."""
+    app = Records(Response(404, {"error": "no such endpoint"}))
+
+    with stub_serving(app) as base:
+        post_bytes(base, "/api/negotiations/redline?agreement=AG-9&noise=x",
+                   b"PK\x03\x04 markup", DOCX_TYPE, filename="r1.docx")
+
+    assert app.seen[-1]["query"] == {"agreement": "AG-9"}, (
+        f"the document's selector did not survive the wire: "
+        f"{app.seen[-1]['query']!r}. QUERY_KEYS filtering must still apply "
+        "('noise' dropped), but the named keys must arrive.")
 
 
 def test_a_document_over_the_limit_is_refused_unread():

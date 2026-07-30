@@ -825,7 +825,20 @@ live from the first round.*
 *Serves plan WP-2 (uploading a received redline). The thin recording act, once NC-07 owns the
 transport.*
 
-**Gate.** NC-07 delivered.
+> **BUILT — 2026-07-29.** NC-07's transport answered the open question: a module
+> (`redlines.py`, `POST /negotiations/redline`), not a `writes.WRITES` entry — a
+> Write carries a record, never bytes. Bytes into `cw.received_document` (0047),
+> a `'received'` round appended in the same unit of work, pointing at the stored
+> row. The caller supplies bytes and `?agreement=`, nothing else: the SHA-256 is
+> the schema's GENERATED column, direction/run-id are structural, the round
+> number is derived, the actor is the connection's; `sent_on` records today,
+> deliberately, until backdating is asked for. **One live wire defect found and
+> fixed in-package:** `server.py`'s document branch dropped the query string, so
+> every upload arrived addressed to nobody — only app-level tests passed, because
+> they hand the query to `App.handle` directly. Now parsed before the body is
+> read, proved over real HTTP, and both this and the 'received' claim carry
+> doorway mutation rows (38 total). Suites: `test_redlines.py` (11),
+> `test_server.py` grew the wire test.
 
 **Prerequisites**
 

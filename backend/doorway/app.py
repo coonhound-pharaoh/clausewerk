@@ -39,7 +39,7 @@ from typing import Callable
 
 from doorway import (
     advisory, documents, executions, manifests, notifications, paper, reads,
-    runs, writes,
+    redlines, runs, writes,
 )
 from doorway.db import Database
 from doorway.identity import (
@@ -169,10 +169,10 @@ class App:
         upload: Upload | None = None,
     ) -> Response | Download:
         # A document that arrived over the wire, or None — which is every
-        # request except one. POST /paper/ingest below is the first consumer
-        # (RP-05); recording a received redline stays its own separate act
-        # (NC-09). An upload addressed to any other endpoint falls through to
-        # the ordinary 404 below, which is the truth.
+        # request except two: POST /paper/ingest (RP-05) and
+        # POST /negotiations/redline (NC-09), each its own separate act. An
+        # upload addressed to any other endpoint falls through to the
+        # ordinary 404 below, which is the truth.
 
         # What the browser named in the query string, already narrowed to the
         # keys server.py will carry (server.QUERY_KEYS). Its one consumer is
@@ -251,6 +251,16 @@ class App:
         # selectable view, which is the schema's guarantee, not this file's.
         if key == "POST /paper/ingest":
             answered = paper.ingest(self._db, caller, upload, selector)
+            return Response(answered.status, answered.body)
+
+        # The counterparty's markup onto the record (NC-09): bytes into
+        # cw.received_document, a 'received' round appended in the same unit
+        # of work. Not a Write because a Write carries a record, never bytes —
+        # the record-shaped way in (POST /negotiations/rounds) already exists
+        # for a document stored elsewhere; this is the act for the document
+        # itself.
+        if key == "POST /negotiations/redline":
+            answered = redlines.record(self._db, caller, upload, selector)
             return Response(answered.status, answered.body)
 
         if key == "POST /notifications/tick":

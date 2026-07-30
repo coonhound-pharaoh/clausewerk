@@ -3598,3 +3598,37 @@ the clock makes a determinism test a coin flip.
 
 reads.py queue: NC-08 done; NC-13 is next in that queue (Gate D-6/D-4
 context applies), then NC-15, NC-16. writes.py queue: NC-09 is next.
+
+## S123 — NC-09 built: recording a received redline — 2026-07-29
+
+A module (redlines.py, POST /negotiations/redline), settling the package's
+open question the way NC-07's transport implied: a Write carries a record,
+never bytes. One unit of work: bytes into cw.received_document (0047), a
+'received' round appended pointing at the stored row —
+storage_uri = cw://received-document/{id}, document_sha256 = the GENERATED
+column's value. The caller supplies bytes and ?agreement=, nothing else:
+sha from the schema, direction 'received' and run_id null structurally,
+round_no derived (cw.round_is_next still adjudicates races), actor from
+the connection, sent_on = today deliberately until backdating is asked
+for. The negotiation lookup runs under the caller's own read rules, so
+"not your deal" and "no negotiation" are answered identically (409),
+which is also what the screen shows.
+
+**A live wire defect found and fixed in-package (the app-level-tests-lie
+shape, worth remembering):** server.py's document branch never parsed the
+query string — GET passed query=selector, the document POST did not — so
+every real upload arrived addressed to nobody and paper.ingest's
+?agreement= could never work over HTTP. Nothing caught it because the
+end-to-end tests call App.handle directly with the query. Fixed (query
+parsed BEFORE the body, so a malformed one is refused unread), proved by
+a test that speaks HTTP (test_a_documents_deal_selector_travels_with_it),
+and guarded by a mutation row. Lesson: a transport guarantee needs at
+least one test on the transport.
+
+Two doorway mutation rows (38 total, 38/38): the 'received' claim (an
+'issued' lie passes the schema's own check — provenance is this act's to
+tell), and the selector surviving the wire.
+
+writes.py was NOT touched — the queue's next claimant is now NC-20
+(Gate D-5). Gates open next: NC-18 (supplier decompose — largely built by
+RP-05 already), OB-06, OB-07, NC-10; NC-13 next in reads.py.

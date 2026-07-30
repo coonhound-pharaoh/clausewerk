@@ -284,6 +284,33 @@ MUTATIONS = [
         "test_reads.py::test_the_negotiation_reads_take_no_parameters_and_add_no_scoping",
     ),
 
+    # ── A received redline is received, and its selector survives the wire ──
+    (
+        # NC-09. 'issued' with a null run id passes the schema's
+        # only_our_rounds_have_a_run check, so nothing below this module
+        # refuses the lie — the direction is this act's own claim about
+        # provenance, and the named test is what watches it.
+        "a received redline is recorded as a round we issued",
+        "doorway/redlines.py",
+        "0) + 1, 'received',",
+        "0) + 1, 'issued',",
+        "test_redlines.py::"
+        "test_a_recorded_redline_is_a_received_round_pointing_at_the_stored_bytes",
+    ),
+    (
+        # The regression NC-09 found live: the document branch handed
+        # App.handle no query at all, so every upload arrived addressed to
+        # nobody and the app-level tests never noticed — they pass the query
+        # directly. The named test speaks HTTP.
+        "a document's deal selector is dropped at the door",
+        "doorway/server.py",
+        "                                          token=self._token(), query=selector,\n"
+        "                                          upload=upload))",
+        "                                          token=self._token(),\n"
+        "                                          upload=upload))",
+        "test_server.py::test_a_documents_deal_selector_travels_with_it",
+    ),
+
     # ── Attribution is structural ────────────────────────────────────────────
     (
         "a deal can be opened in somebody else's name",
