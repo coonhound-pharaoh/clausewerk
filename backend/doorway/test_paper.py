@@ -70,9 +70,13 @@ def vendor_docx(paragraphs: list[str]) -> bytes:
                 f'<w:document xmlns:w="{W}"><w:body>{body}</w:body></w:document>')
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("[Content_Types].xml", CONTENT_TYPES)
-        z.writestr("_rels/.rels", RELS)
-        z.writestr("word/document.xml", document)
+        # ZipInfo, not a bare name: writestr(name, …) stamps the wall clock
+        # into the member header, so two identical documents built in
+        # different clock seconds hash differently — and the determinism
+        # test below compares exactly those hashes. ZipInfo pins the stamp.
+        z.writestr(zipfile.ZipInfo("[Content_Types].xml"), CONTENT_TYPES)
+        z.writestr(zipfile.ZipInfo("_rels/.rels"), RELS)
+        z.writestr(zipfile.ZipInfo("word/document.xml"), document)
     return buf.getvalue()
 
 

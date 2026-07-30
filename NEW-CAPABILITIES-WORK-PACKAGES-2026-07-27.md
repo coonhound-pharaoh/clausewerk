@@ -768,6 +768,18 @@ decides the largest document the system will accept.
 *Serves plan WP-2: Legal and the Auditor can see the full history; the position-revival view is
 live from the first round.*
 
+> **BUILT — 2026-07-29.** Four READS entries, no migration, no new file:
+> `GET /negotiations/rounds` (cw.negotiation_round, 0011's own read policy),
+> `GET /negotiations/positions` (cw.position_current), `GET /negotiations/revivals`
+> (cw.position_revival), `GET /negotiations/drift` (cw.renewal_drift) — the three
+> views self-scoping since `0027`. No parameters and no WHERE added, asserted by a
+> named test and one doorway mutation row (36 total). Six-role outcome table in
+> `test_reads.py`. **The administrator's read gap is reported, not closed:** honest
+> refusal on the three views (0027's stated non-decision), and on the rounds table
+> an inert 0013 grant that FILTERS to zero rows — the open-questions §9 shape —
+> pinned by `test_the_administrator_is_answered_no_rounds_while_a_round_exists`
+> so it can only move deliberately. Both boundaries are the owner's to settle.
+
 **Gate.** The connection work's files are clean in `git status`. First in the `reads.py` queue.
 
 **Prerequisites**

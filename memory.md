@@ -3556,3 +3556,45 @@ Verification: received-documents.test.mjs (15), test_paper.py grew three;
 five new SQL mutation rows (261 total) and one doorway row (35) — all caught
 by the tests that name them. Gates now open: NC-08, NC-09, NC-18, OB-06;
 OB-13 waits only on DocuSign credentials.
+
+## S122 — NC-08 built: the negotiation record is readable from the doorway — 2026-07-29
+
+Four READS entries and nothing else — no migration, no new file, no server.py
+touch (app.py dispatches any key in reads.READS): GET /negotiations/rounds
+(cw.negotiation_round, 0011's own read policy), /negotiations/positions
+(cw.position_current), /negotiations/revivals (cw.position_revival),
+/negotiations/drift (cw.renewal_drift). The three views scope themselves
+since 0027, so the endpoints add no parameters and no WHERE — that absence
+is asserted by a named test and guarded by a new doorway mutation row
+(36 total, 36/36 caught). Row-scoping against real rows stays proved in
+db/test/negotiation.test.mjs per the run-reads precedent; the doorway suite
+adds the six-role outcome table (24 entries).
+
+**The administrator's boundary is REPORTED, not settled, in two different
+shapes — worth keeping straight because they render differently:**
+
+- **The three views: honest refusal.** No grant at all (0027 left the
+  boundary to the owner on purpose, the 0025→0026 pattern). If Mike settles
+  it the way he settled the run views ("an alarm you can't investigate…"),
+  the fix is a migration granting + admitting the role, and the outcome
+  table moves with it.
+- **cw.negotiation_round: the §9 shape, live.** 0013:324 grants the table,
+  no policy admits the role, so RLS FILTERS: the administrator is answered
+  200-with-zero-rows while rounds exist. Pinned by
+  test_the_administrator_is_answered_no_rounds_while_a_round_exists so it
+  can only move deliberately. The two precedents cut opposite ways — runs
+  (0026) widened the policy; holds (U13, 0024) revoked the inert grant —
+  so this is Mike's call, raised in the session report, not blocking.
+
+**One flaky test trued in passing, the fixture-clock shape:** test_paper's
+vendor_docx built its zip with writestr(name, …), which stamps the WALL
+CLOCK into each member header — so test_the_same_document_files_the_same
+_tickets (ingest twice, expect one sha256) only passed when both archives
+landed in the same clock second. It failed honestly during NC-08's verify
+run, on rows NC-08 never touched. Fixed by pinning the stamp
+(zipfile.ZipInfo), which is what the determinism the test asserts actually
+requires. Lesson beside S121's stale-fixture note: a fixture that embeds
+the clock makes a determinism test a coin flip.
+
+reads.py queue: NC-08 done; NC-13 is next in that queue (Gate D-6/D-4
+context applies), then NC-15, NC-16. writes.py queue: NC-09 is next.

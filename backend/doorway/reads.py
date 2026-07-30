@@ -518,6 +518,66 @@ READS: dict[str, Read] = {
           from cw.ticket_route order by created_at""",
         rule="cw.ticket_route grant — legal_reviewer, legal_admin, auditor",
     ),
+
+    # ── The negotiation record (NC-08, migrations 0011 + 0027) ──────────────
+    #
+    # NO PARAMETERS, ON ANY OF THE FOUR, for the reason the reading room and
+    # the run reads gave: the scoping is "these deals, this person", and it
+    # comes from the identity already bound to the connection. A
+    # negotiation_id parameter is a caller choosing what it may see. Nothing
+    # here adds a WHERE either — the three views scope themselves in their own
+    # WHERE clauses since 0027, the rounds read sits on the table's own read
+    # policy, and both absences are asserted by name in test_reads.py.
+    #
+    # THE ADMINISTRATOR, STATED RATHER THAN DISCOVERED. The role holds no
+    # grant on the three views — an honest refusal — and 0027 records leaving
+    # that boundary to the owner on purpose. On cw.negotiation_round the role
+    # holds 0013's grant but no policy admits it, so the database FILTERS
+    # instead of refusing and the answer is always zero rows: the same shape
+    # docs/open-questions.md §9 wrote up on legal holds, where it shipped.
+    # Reported by a named test in test_reads.py; not closed here, because
+    # widening a role's read is an owner decision and never a read package's.
+    "GET /negotiations/rounds": Read(
+        sql="""select negotiation_id, round_no, direction, document_sha256,
+                 storage_uri, sent_on, actor, run_id, recorded_at
+          from cw.negotiation_round order by negotiation_id, round_no""",
+        rule="cw.negotiation_round read_scoped policy (0011) — Legal and the "
+             "Auditor in full, a requester the rounds of deals they own, no "
+             "viewer grant",
+    ),
+
+    "GET /negotiations/positions": Read(
+        sql="""select position_id, negotiation_id, category_key, our_clause_id,
+                 our_version, their_text_ref, round_raised, opened_from, state,
+                 current_rung, round_last_moved, moved_by
+          from cw.position_current order by negotiation_id, position_id""",
+        rule="cw.position_current scopes itself in its own WHERE clause (0027), "
+             "in the same words as cw.negotiation's read policy — a view does "
+             "not inherit the policy on the table underneath it",
+    ),
+
+    # The same argument reopening, made visible — live from the first round,
+    # which is the point of the record. An empty answer means no settled point
+    # is being renegotiated, which is good news and must render as "none".
+    "GET /negotiations/revivals": Read(
+        sql="""select position_id, negotiation_id, category_key, times_held,
+                 first_held_round, last_round
+          from cw.position_revival order by negotiation_id, position_id""",
+        rule="cw.position_revival scopes itself before the grouping (0027), so "
+             "the counts are counts of rows this caller may see",
+    ),
+
+    # Reporting, never a rewrite: what the positions this renewal opened from
+    # are carrying, and how far the library has moved since. U1's control —
+    # it must stay in front of whoever opens the renewal.
+    "GET /negotiations/drift": Read(
+        sql="""select negotiation_id, agreement_id, baseline, clause_id,
+                 executed_version, successor_version, superseded_reason,
+                 current_state
+          from cw.renewal_drift order by negotiation_id, clause_id""",
+        rule="cw.renewal_drift scopes itself in its own WHERE clause (0027); "
+             "the drift report rewrites nothing",
+    ),
 }
 
 

@@ -272,6 +272,17 @@ MUTATIONS = [
         "          from cw.agreement where requester = current_setting('cw.actor')\n          order by agreement_id",
         "test_writes.py::test_the_deals_endpoint_does_not_scope_rows_itself",
     ),
+    (
+        # NC-08's copy of the same guarantee, on the negotiation record. The
+        # views scope themselves (0027); a WHERE added here is a second copy
+        # of the permission model, and the copy is the vulnerability.
+        "a negotiation read scopes rows in the API instead of the database",
+        "doorway/reads.py",
+        "          from cw.position_current order by negotiation_id, position_id",
+        "          from cw.position_current where moved_by = current_setting('cw.actor')"
+        " order by negotiation_id, position_id",
+        "test_reads.py::test_the_negotiation_reads_take_no_parameters_and_add_no_scoping",
+    ),
 
     # ── Attribution is structural ────────────────────────────────────────────
     (
