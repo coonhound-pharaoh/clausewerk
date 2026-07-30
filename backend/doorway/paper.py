@@ -22,15 +22,20 @@ manifest classifier is fronted; whichever classifier runs, its output lands in
 the same quarantine and changes nothing downstream — the trust boundary does
 not move for a smarter guesser.
 
+THE DOCUMENT IS KEPT, since U15 (2026-07-29, migration 0047). This module
+originally parsed and released the bytes, because where document bytes live
+was an open owner decision (NC-07) and answering it on the side would have
+settled it quietly. The owner has now answered — in the database, one
+gigabyte — so the received bytes land in cw.received_document inside the
+same unit of work as the tickets, and the report carries the document_id
+alongside the SHA-256. A refused ingest stores nothing: a receipt for a
+rejected delivery would be a record of something that did not happen.
+
 WHAT THIS DELIBERATELY DOES NOT DO:
 
   · Judge severity. Whether a vendor clause falls below the company's floor is
     the reviewer's call, made at the desk with the ladder in front of them —
     a keyword count claiming to measure risk would be false confidence.
-  · Store the document. The bytes are parsed and released; the report carries
-    the SHA-256 so the paper can be identified again. Where document bytes
-    live is an open owner decision (NC-07), and this module does not answer it
-    on the side.
   · Touch the library. A supplier ticket is unreachable from any selectable
     view (NC-18's guarantee, enforced in the schema, tested there).
 """
@@ -137,6 +142,16 @@ def ingest(db: Database, caller: Caller, upload, query: dict) -> Answer:
                               f"than one ingest may file ({MAX_UNITS}); split "
                               "the document"})
 
+            # The paper itself is kept, not released — U15 (0047). It lands
+            # beside the tickets in one unit of work, so a refusal anywhere
+            # in this block unwinds the receipt too.
+            stored = request.rows(
+                "insert into cw.received_document "
+                "  (agreement_id, bytes, content_type, filename) "
+                "values (%s, %s, %s, %s) returning document_id",
+                (agreement_id, upload.body, upload.content_type,
+                 upload.filename))[0]
+
             tickets = []
             for key, paragraph in classified:
                 row = request.rows(
@@ -165,6 +180,7 @@ def ingest(db: Database, caller: Caller, upload, query: dict) -> Answer:
 
     return Answer(200, {
         "agreement_id": agreement_id,
+        "document_id": stored["document_id"],
         "document_sha256": sha,
         "filename": upload.filename,
         "paragraphs": len(paragraphs),

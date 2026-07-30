@@ -581,12 +581,15 @@ lost):** when deployment is planned, raise the S3 move alongside the rest of
 the hardening list (TLS, encrypted disks, backups). It becomes worth doing
 when the database's size or backup time says so, and not before.
 
-**For whoever builds NC-07:** the 1 GB limit effectively decides the transport
-question toward the genuine binary/multipart inbound path — base64 inside a
-JSON body inflates by a third and would push gigabyte payloads through the
-JSON parser. That is engineering follow-through, not a new owner question.
-The size limit and the storage choice land as `cw.governance_setting` rows in
-the NC-07 package itself, per the house rule.
+**BUILT the same day, migration `0047`:** `cw.received_document` — bytes in
+the database, append-only, the sha256 and byte count computed by the schema
+itself; both U15 values on the record as `cw.governance_setting` rows
+(`document_storage`, `max_document_bytes`); the ceiling enforced unread at
+the front door (`server.py`) and again where the bytes land
+(`cw.bind_received_document`), with a test holding the two numbers equal.
+The transport had already arrived with RP-05, which is why no multipart work
+appears here — `server.py`'s binary inbound path was the shape the 1 GB
+limit implied, and it existed. `paper.ingest` now keeps what it receives.
 
 ## 10. Smaller gaps — deferred
 

@@ -183,6 +183,46 @@ def test_the_report_carries_references_and_the_hash_not_a_judgment(seeded, db):
         "a keyword count claiming to measure risk would be false confidence")
 
 
+def test_the_ingested_document_is_stored(seeded, db):
+    """The paper is kept, not released — U15 (0047)."""
+    answered = paper.ingest(db, LEGAL, upload_of([ABOUT_DATA]),
+                            {"agreement": "AG-100"})
+    assert answered.status == 200, answered.body
+    with db.as_person(LEAH, "legal_admin") as request:
+        rows = request.rows(
+            "select agreement_id, sha256, filename "
+            "from cw.received_document where document_id = %s",
+            (answered.body["document_id"],))
+    assert rows, "the vendor's paper is kept, not released (U15)"
+    assert rows[0]["agreement_id"] == "AG-100"
+    assert rows[0]["sha256"] == answered.body["document_sha256"], (
+        "the database's fingerprint of what it stored is the report's "
+        "fingerprint of what arrived — the same bytes, provably")
+    assert rows[0]["filename"] == "vendor-msa.docx"
+
+
+def test_a_refused_ingest_stores_no_document(seeded, db):
+    """A receipt for a rejected delivery is a record of something that did
+    not happen. The auditor is refused; nothing lands."""
+    auditor = Caller(person="aud@clausewerk", role="auditor")
+    answered = paper.ingest(db, auditor, upload_of([ABOUT_DATA]),
+                            {"agreement": "AG-100"})
+    assert answered.refused
+    with db.as_person(LEAH, "legal_admin") as request:
+        assert request.rows("select 1 from cw.received_document") == []
+
+
+def test_the_ceiling_here_matches_the_recorded_decision(seeded, db):
+    """U15's number lives twice — the front door constant and the governance
+    row — and this assertion is what keeps them the same number."""
+    from doorway import server
+    with db.as_person(LEAH, "legal_admin") as request:
+        rows = request.rows("select value from cw.governance_setting "
+                            "where key = 'max_document_bytes'")
+    assert rows, "0047 put the ceiling on the record"
+    assert int(rows[0]["value"]) == server.MAX_DOCUMENT_BYTES
+
+
 def test_no_agreement_named_is_a_400_not_a_crash(seeded, db):
     answered = paper.ingest(db, LEGAL, upload_of([ABOUT_DATA]), {})
     assert answered.status == 400

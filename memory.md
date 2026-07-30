@@ -3519,3 +3519,40 @@ OB-06 and OB-13's gate is now only Gate C hygiene plus, for OB-13, DocuSign
 credentials. **The S3 move is carried to launch on the NC-24/OB-14 pattern**
 — whoever plans deployment must raise it beside TLS, encrypted disks and
 backups.
+
+## S121 — NC-07 built: the system keeps a received document (0047) — 2026-07-29
+U15 settled at midday and NC-07 was built against it the same afternoon.
+Migration 0047: cw.received_document — bytes IN the database per U15,
+append-only (evidence takes no edits or deletions, not even the owner's),
+sha256 and byte_count as GENERATED columns (the schema's own arithmetic over
+the stored bytes — a fingerprint that cannot be recorded wrongly), stored by
+the three working roles, read by everyone but the viewer, FK to the deal.
+Both U15 values are governance rows: document_storage='database',
+max_document_bytes=1073741824 (kind owner_decision, decided_by owner).
+
+**The ceiling is enforced at two doors and pinned together.** server.py
+refuses an oversized upload UNREAD from its content-length header
+(MAX_DOCUMENT_BYTES, now 1 GB); cw.bind_received_document consults the
+governance row again where the bytes land, and REFUSES when the row is
+missing (the redaction-guard shape — a limit compared against NULL waves
+through). test_the_ceiling_here_matches_the_recorded_decision holds constant
+and row equal so they cannot drift silently.
+
+**paper.ingest keeps what it receives.** The parse-and-release behaviour was
+NC-07's placeholder, not a principle; the bytes now land beside the tickets
+in one unit of work (a refused ingest still stores nothing), and the report
+carries document_id beside the sha. The transport needed no work at all —
+RP-05 had already built the binary inbound path, so NC-07's delivery was the
+store, the settled ceiling, and the guards.
+
+**One stale test trued, worth remembering the shape of:** RP-05 legitimately
+widened QUERY_KEYS with 'agreement', and test_server's whitelist test had
+used 'agreement' as its EXAMPLE of a non-whitelisted key. The fix keeps the
+test's point (a genuinely foreign key still never reaches the app) rather
+than deleting the assertion. Fixture-choice lesson: an example chosen from
+live vocabulary goes stale the day the vocabulary grows.
+
+Verification: received-documents.test.mjs (15), test_paper.py grew three;
+five new SQL mutation rows (261 total) and one doorway row (35) — all caught
+by the tests that name them. Gates now open: NC-08, NC-09, NC-18, OB-06;
+OB-13 waits only on DocuSign credentials.

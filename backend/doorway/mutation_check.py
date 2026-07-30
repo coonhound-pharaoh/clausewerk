@@ -459,6 +459,18 @@ MUTATIONS = [
         '    except psycopg.Error as error:\n        try:\n            return Answer(status=200, body={"rows": run(db, caller, key, body)})\n        except psycopg.Error:\n            pass\n        refused: Refused = classify(error)',
         "test_writes.py::test_no_refusal_is_ever_caught_and_tried_again",
     ),
+
+    # ── The vendor's paper is kept, not released (U15, 0047) ─────────────────
+    # Break the store and the ingest still answers 200 with a document_id —
+    # a receipt for bytes that went nowhere, which is exactly the regression
+    # U15 closed. The truthy dict short-circuits the insert away.
+    (
+        "the vendor's document is released instead of stored (U15 regression)",
+        "doorway/paper.py",
+        "            stored = request.rows(",
+        '            stored = {"document_id": 0} or request.rows(',
+        "test_paper.py::test_the_ingested_document_is_stored",
+    ),
 ]
 
 

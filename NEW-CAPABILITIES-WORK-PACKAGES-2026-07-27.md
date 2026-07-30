@@ -700,15 +700,18 @@ complete.
 *Serves plan WP-2 and WP-4. Created at integration: an unowned capability that three packages were
 pointing at as a gate.*
 
-> **The owner decision this package was gated on is SETTLED — 2026-07-29, U15
-> ([open-questions §13](docs/open-questions.md)).** Bytes are stored **in the
-> database**, limit **1 GB per file**, with a planned move to object storage
-> (S3) at launch — the schema's `storage_uri` + `document_sha256` make that a
-> migration, not a redesign. The 1 GB limit effectively selects candidate
-> shape (b) below: base64-in-JSON inflates by a third and would push gigabyte
-> payloads through the JSON parser. Both settled values land as
-> `cw.governance_setting` rows in this package. Only the Gate C working-tree
-> condition remains.
+> **BUILT — 2026-07-29, migration `0047`, the same day U15 settled the owner
+> decision it was gated on ([open-questions §13](docs/open-questions.md)).**
+> Bytes are stored **in the database** (`cw.received_document` — append-only,
+> sha256 and byte_count computed by the schema itself), limit **1 GB per
+> file**, with a planned move to object storage (S3) at launch. Both settled
+> values are `cw.governance_setting` rows; the transport had already arrived
+> with RP-05 (the binary inbound path in `server.py`), so this package's
+> delivery was the store, the settled ceiling at both doors, and the guards.
+> `paper.ingest` now keeps what it receives. Suites:
+> `received-documents.test.mjs`, `test_paper.py`; five SQL mutation rows and
+> one doorway row. **The NC-08/09/18 and OB-06/13 gates on this package are
+> open.**
 
 **Gate.** The connection work's files are clean in `git status` — specifically `server.py`, which
 this package owns for the duration. Plus an owner decision on how a document arrives, which

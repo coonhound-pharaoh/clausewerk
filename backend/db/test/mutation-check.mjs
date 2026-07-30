@@ -2745,6 +2745,40 @@ grant usage, select on sequence cw.notification_outbox_outbox_id_seq to cw_legal
     find: `  where r.escalated and r.category_owner = p_person`,
     repl: `  where false`,
     expect: 'the named owner is told about work nobody took — review_escalation reaches cw.waiting_for' },
+
+  // ── The received-document store (0047, NC-07, U15) ────────────────────────
+  { suite: 'received-documents.test.mjs',
+    name: 'received documents editable (evidence regression)',
+    find: `create trigger received_document_frozen before update on cw.received_document
+  for each row execute function cw.received_document_frozen();`,
+    repl: `select 1;`,
+    expect: 'a received document takes no edits' },
+
+  { suite: 'received-documents.test.mjs',
+    name: 'received documents deletable',
+    find: `create trigger received_document_no_delete before delete on cw.received_document
+  for each row execute function cw.received_document_frozen();`,
+    repl: `select 1;`,
+    expect: 'a received document takes no deletions' },
+
+  { suite: 'received-documents.test.mjs',
+    name: 'the ceiling is never consulted where the bytes land',
+    find: `  if octet_length(new.bytes) > ceiling then`,
+    repl: `  if false then`,
+    expect: 'a document over the recorded ceiling is refused with both numbers' },
+
+  // The redaction-guard shape: a limit compared against NULL waves through.
+  { suite: 'received-documents.test.mjs',
+    name: 'a missing ceiling fails open',
+    find: `  if ceiling is null then`,
+    repl: `  if false then`,
+    expect: 'a MISSING ceiling refuses rather than waving through' },
+
+  { suite: 'received-documents.test.mjs',
+    name: 'the receiver becomes whoever the body claimed',
+    find: `  new.received_by := cw.app_actor();`,
+    repl: `  new.received_by := coalesce(new.received_by, cw.app_actor());`,
+    expect: 'the recorder is the connection, whatever the insert claimed' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();

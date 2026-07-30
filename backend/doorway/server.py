@@ -91,17 +91,21 @@ MAX_BODY = 1_000_000
 
 # THE LARGEST DOCUMENT THE SYSTEM WILL ACCEPT, and it is a PRODUCT FACT, not a
 # technical detail: it decides which real contracts can be filed and which are
-# turned away at the door. It sits here, one greppable line beside MAX_BODY, so
-# the owner can see it and change it in one place.
+# turned away at the door.
 #
-# THE OWNER QUESTION, STILL OPEN: how big may a received redline be? Ten
-# megabytes is a working placeholder chosen to be comfortably larger than any
-# negotiated contract in Word and far smaller than anything that would hurt the
-# service — it is NOT an answer. When the owner names a number, this line is the
-# only thing that changes. If the limit later has to be changed without a
-# deploy, it becomes a governance setting; it is a constant today because there
-# is no such setting and inventing one would settle the question quietly.
-MAX_DOCUMENT_BYTES = 10_000_000
+# THE OWNER ANSWERED: one gigabyte (U15, 2026-07-29 — docs/open-questions.md
+# §13). "Any size" as a requirement, made honest as a ceiling no real contract
+# reaches: a 300-page scanned contract runs 100–300 MB. The ceiling exists so
+# one upload cannot exhaust the service, not as a claim about typical size.
+#
+# The number lives twice, deliberately and tied together: here, where an
+# oversized upload is refused UNREAD from its content-length header, and as
+# the governance row `max_document_bytes` (0047), which
+# cw.bind_received_document consults again where the bytes land.
+# test_paper.py::test_the_ceiling_here_matches_the_recorded_decision holds the
+# two equal, so they cannot drift apart silently. Change one, change both —
+# a new migration for the row, this line beside it.
+MAX_DOCUMENT_BYTES = 1_073_741_824
 
 # One incomplete client must not own one server thread forever. This covers
 # request headers and bodies as well as a client that stops reading a response.
