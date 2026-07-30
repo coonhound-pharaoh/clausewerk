@@ -700,6 +700,16 @@ complete.
 *Serves plan WP-2 and WP-4. Created at integration: an unowned capability that three packages were
 pointing at as a gate.*
 
+> **The owner decision this package was gated on is SETTLED — 2026-07-29, U15
+> ([open-questions §13](docs/open-questions.md)).** Bytes are stored **in the
+> database**, limit **1 GB per file**, with a planned move to object storage
+> (S3) at launch — the schema's `storage_uri` + `document_sha256` make that a
+> migration, not a redesign. The 1 GB limit effectively selects candidate
+> shape (b) below: base64-in-JSON inflates by a third and would push gigabyte
+> payloads through the JSON parser. Both settled values land as
+> `cw.governance_setting` rows in this package. Only the Gate C working-tree
+> condition remains.
+
 **Gate.** The connection work's files are clean in `git status` — specifically `server.py`, which
 this package owns for the duration. Plus an owner decision on how a document arrives, which
 decides the largest document the system will accept.

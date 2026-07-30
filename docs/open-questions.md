@@ -552,6 +552,42 @@ openness-by-default is the house rule, that rule is a candidate to change too,
 and it is a deliberate decision rather than a tidy-up: it would widen who sees
 every assembled contract in the company. Not touched.
 
+## 13. Where received documents live — **SETTLED 2026-07-29 (U15)** ✅
+
+The owner decision NC-07 was gated on: where the bytes of a received document
+(a counterparty redline, vendor paper, a signed envelope back from DocuSign,
+obligation evidence) are stored, and the largest document the system accepts.
+
+**SETTLED: in the database, 1 GB per file, with a planned move of the raw
+bytes to cloud object storage (S3 or equivalent) at launch.** The owner's
+reasoning, confirmed 2026-07-29: *"Right now we need to build the system
+out"* — and 1 GB is, for contracts, any size in practice (a 300-page scanned
+contract runs 100–300 MB).
+
+Why in-database first, stated rather than assumed:
+
+- **One system, one backup, one security model.** The row-level rules that
+  guard every other record guard the document bytes with no second mechanism.
+- **Disposal stays honest.** Under U12's two-act disposal, a redact or purge
+  of in-database bytes actually deletes them. External storage is exactly the
+  case `cw.redaction_state.external_bytes_pending` exists to admit — that
+  residual is deferred to launch, not accepted now.
+- **The later move is a migration, not a redesign.** The schema already
+  carries `storage_uri` and `document_sha256` (`0011:66-67`); the SHA-256
+  proves the file unaltered wherever the bytes sit.
+
+**Carried to launch (the NC-24 / OB-14 pattern — written down so it is not
+lost):** when deployment is planned, raise the S3 move alongside the rest of
+the hardening list (TLS, encrypted disks, backups). It becomes worth doing
+when the database's size or backup time says so, and not before.
+
+**For whoever builds NC-07:** the 1 GB limit effectively decides the transport
+question toward the genuine binary/multipart inbound path — base64 inside a
+JSON body inflates by a third and would push gigabyte payloads through the
+JSON parser. That is engineering follow-through, not a new owner question.
+The size limit and the storage choice land as `cw.governance_setting` rows in
+the NC-07 package itself, per the house rule.
+
 ## 10. Smaller gaps — deferred
 
 | Gap | Where |
