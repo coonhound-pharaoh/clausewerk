@@ -490,17 +490,19 @@ def test_a_download_names_its_file_and_its_length():
 
 
 def test_a_query_string_reaches_the_app_and_is_consumed_by_nothing():
-    """The seam, and only the seam. `?run=` arrives; anything not on the
-    whitelist does not; and the reply is the ordinary 404 it always was,
-    because nothing in this package reads what arrived."""
+    """The seam, and only the seam. Whitelisted keys (`?run=`, and since RP-05
+    `?agreement=`) arrive; anything not on the whitelist does not; and the
+    reply is the ordinary 404 it always was, because nothing in this package
+    reads what arrived."""
     app = Records(Response(404, {"error": "no such endpoint"}))
 
     with stub_serving(app) as base:
         status, body = Client(base).call(
-            "GET", "/api/nothing-here?run=RUN-1&agreement=AG-1")
+            "GET", "/api/nothing-here?run=RUN-1&agreement=AG-1&noise=dropped")
 
-    assert app.seen[-1]["query"] == {"run": "RUN-1"}, app.seen[-1]
-    assert "agreement" not in app.seen[-1]["query"], (
+    assert app.seen[-1]["query"] == {"run": "RUN-1", "agreement": "AG-1"}, \
+        app.seen[-1]
+    assert "noise" not in app.seen[-1]["query"], (
         "the browser named a parameter that is not on QUERY_KEYS and it "
         "reached the app anyway")
     assert status == 404 and body.get("error") != "refused"

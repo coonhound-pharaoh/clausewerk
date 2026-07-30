@@ -448,6 +448,76 @@ READS: dict[str, Read] = {
         rule="cw.notification_gap grant — administrator, auditor and "
              "legal_admin; everyone else is refused, not shown an empty list",
     ),
+
+    # ── Reporting (RP-01, migration 0043) ───────────────────────────────────
+    # Management surfaces over the whole record, so the grant is the control:
+    # legal_admin and auditor, nobody else — including the administrator, who
+    # runs the machine and does not read contract operations. Every figure is
+    # derived fresh; there is no aggregate store to drift.
+    "GET /reports/velocity": Read(
+        sql="""select * from cw.report_velocity order by opened_on desc, agreement_id""",
+        rule="cw.report_velocity grant — legal_admin and auditor only; the view "
+             "reads with owner rights across every deal, so the grant is the "
+             "whole control (the cw.retention_due precedent)",
+    ),
+
+    "GET /reports/contested": Read(
+        sql="""select * from cw.report_clause_contest
+          order by contests desc, category_key""",
+        rule="cw.report_clause_contest grant — legal_admin and auditor only",
+    ),
+
+    "GET /reports/queue": Read(
+        sql="""select * from cw.report_queue_state""",
+        rule="cw.report_queue_state grant — legal_admin and auditor only",
+    ),
+
+    # A workload signal for staffing, never a performance score — the view's
+    # own comment says so and the screen must keep saying it.
+    "GET /reports/reviewers": Read(
+        sql="""select * from cw.report_reviewer_throughput
+          order by decided desc, reviewer""",
+        rule="cw.report_reviewer_throughput grant — legal_admin and auditor only",
+    ),
+
+    "GET /reports/exposure": Read(
+        sql="""select * from cw.report_risk_exposure
+          order by category_key, severity""",
+        rule="cw.report_risk_exposure grant — legal_admin and auditor only",
+    ),
+
+    # ── Policy-shift exposure (RP-04, migration 0046) ───────────────────────
+    "GET /reports/policy-shift": Read(
+        sql="""select * from cw.policy_shift_exposure
+          order by clause_id, agreement_id""",
+        rule="cw.policy_shift_exposure grant — legal_admin and auditor only. "
+             "The worklist an amendment campaign starts from, never the "
+             "amendments: a report must not become a second way for language "
+             "to reach an agreement",
+    ),
+
+    # ── The vendor friction scorecard (RP-03, migration 0045) ───────────────
+    # Readable by requesters ON PURPOSE: the whole point is that intake sees a
+    # vendor's history before committing to them. Counts per vendor name, a
+    # labelled estimate beside them, no contract content and no deal ids.
+    "GET /vendors/friction": Read(
+        sql="""select * from cw.vendor_friction
+          order by friction_per_deal desc, counterparty""",
+        rule="cw.vendor_friction grant — requester, legal_reviewer, "
+             "legal_admin, auditor. The cost column is labelled an estimate "
+             "IN THE ROW; a screen may not drop the label",
+    ),
+
+    # ── Review routing (RP-02, migration 0044) ──────────────────────────────
+    # Where each pending ticket stands: claimed by whom, owned by whom,
+    # escalated or not. The route is derived at read time from cw.ladder, so
+    # there is no stored assignment to go stale.
+    "GET /tickets/route": Read(
+        sql="""select ticket_id, category_key, severity, created_at, claimed_by,
+                 category_owner, escalated
+          from cw.ticket_route order by created_at""",
+        rule="cw.ticket_route grant — legal_reviewer, legal_admin, auditor",
+    ),
 }
 
 

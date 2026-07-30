@@ -52,6 +52,7 @@ const PANES = {
   'my-deals':  (me) => <MyDealsPane me={me} />,
   'intake':    () => <NotBuiltYet what="The intake interview is not built." lands="a later package" />,
   'negotiate': () => <NotBuiltYet what="The negotiate inbox is not built." lands="a later package" />,
+  'vendors':   () => <FrictionPane />,
   'my-record': (me) => <MyRecordPane me={me} />,
 
   // Legal reviewer
@@ -59,6 +60,7 @@ const PANES = {
   'tickets':      (me) => <TicketsPane me={me} />,
   'approvals':    (me) => <OverridesPane me={me} />,
   'negotiations': () => <NotBuiltYet what="Negotiation rounds are not built." lands="a later package" />,
+  'routing':      (me) => <RoutePane me={me} />,
   'holds':        (me) => <HoldsPane me={me} />,
 
   // Legal admin
@@ -66,6 +68,10 @@ const PANES = {
   'ladders':    () => <LaddersPane />,
   'governance': () => <NotBuiltYet what="Owner decisions are not editable here yet." lands="WP-U13" />,
   'retention':  () => <NotBuiltYet what="Holds and retention are not built." lands="WP-U13" />,
+
+  // Legal admin and auditor share this one; the grant behind its endpoints is
+  // the control, and a refusal renders as the database's sentence.
+  'reporting':  () => <ReportingPane />,
 
   // Auditor
   'the-record':     () => <TheRecordPane />,

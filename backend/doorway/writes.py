@@ -239,6 +239,34 @@ WRITES: dict[str, Write] = {
         ),
     ),
 
+    # ── Review routing (RP-02) ──────────────────────────────────────────────
+    # Claiming is coordination, not adjudication: "I am looking at this". The
+    # claimer is the session, never the body; the schema refuses a claim on a
+    # decided ticket and a second claim on a claimed one (the partial unique
+    # index), so a race between two reviewers resolves in the database with
+    # one winner and one honest refusal.
+    "POST /tickets/claim": Write(
+        sql="""insert into cw.ticket_claim (ticket_id)
+       values (%(ticket_id)s)
+       returning claim_id, ticket_id, person, claimed_at""",
+        rule="cw.ticket_claim reviewers_claim policy — legal_reviewer and "
+             "legal_admin; person is bound to cw.app_actor() by trigger",
+        fields=(Field("ticket_id"),),
+    ),
+
+    # Release is not restricted to the claimer: a colleague releasing an
+    # absent colleague's claim is the openness default doing its job, and
+    # released_by names who did it. Releasing an unclaimed ticket changes
+    # nothing and says so (finding D1: zero rows is a refusal, never silence).
+    "POST /tickets/claim/release": Write(
+        sql="""update cw.ticket_claim set released_by = current_setting('cw.actor')
+       where ticket_id = %(ticket_id)s and released_at is null
+       returning claim_id, ticket_id, person, released_by, released_at""",
+        rule="cw.ticket_claim reviewers_release policy; the release columns "
+             "are set by trigger, whatever this statement proposes",
+        fields=(Field("ticket_id"),),
+    ),
+
     # Verifying and rejecting are TWO endpoints, not one with a `state` field,
     # and that is not a style preference.
     #

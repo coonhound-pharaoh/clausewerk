@@ -98,13 +98,15 @@ def test_the_read_count_moves_only_on_purpose():
     Asserted so the number moves deliberately. An endpoint appearing without
     anybody noticing is how a surface grows past what was reviewed.
     """
-    assert len(READS) == 36, (
+    assert len(READS) == 44, (
         f"{len(READS)} reads are registered; 25 ported, 4 added for the reading "
         "room and the library boards, 3 for assembly runs, 1 for the metrics "
-        "board that shows the measurement beside the AI estimate (NC-25), and "
+        "board that shows the measurement beside the AI estimate (NC-25), "
         "3 for notifications (OB-08/09): the waiting-on-you panel, the outbox, "
-        "and the unreachable-person gap. If that changed deliberately, move "
-        "this number with it."
+        "and the unreachable-person gap, and 8 for reporting and routing "
+        "(RP-01…RP-04): five report views, the policy-shift worklist, the "
+        "vendor friction scorecard, and the ticket route. If that changed "
+        "deliberately, move this number with it."
     )
 
 

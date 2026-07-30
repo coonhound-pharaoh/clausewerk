@@ -38,8 +38,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 from doorway import (
-    advisory, documents, executions, manifests, notifications, reads, runs,
-    writes,
+    advisory, documents, executions, manifests, notifications, paper, reads,
+    runs, writes,
 )
 from doorway.db import Database
 from doorway.identity import (
@@ -169,11 +169,10 @@ class App:
         upload: Upload | None = None,
     ) -> Response | Download:
         # A document that arrived over the wire, or None — which is every
-        # request today. NO ENDPOINT CONSUMES IT YET: recording a received
-        # redline is its own act (NC-09), and this package deliberately stops
-        # at the doorway. An upload addressed to an endpoint that does not take
-        # one falls through to the ordinary 404 below, which is the truth.
-        _ = upload
+        # request except one. POST /paper/ingest below is the first consumer
+        # (RP-05); recording a received redline stays its own separate act
+        # (NC-09). An upload addressed to any other endpoint falls through to
+        # the ordinary 404 below, which is the truth.
 
         # What the browser named in the query string, already narrowed to the
         # keys server.py will carry (server.QUERY_KEYS). Its one consumer is
@@ -245,6 +244,15 @@ class App:
         # three acts, one of them off-premises. Its authority is the schema's
         # (cw.assert_may_run_notifications), and every send lands between
         # transactions, never inside one (B2).
+        # Vendor paper in, quarantined tickets and a deviation report out
+        # (RP-05). Not a Write for the reason POST /runs is not: it parses a
+        # document, classifies deterministically, files many tickets and
+        # reports the gaps — and the tickets it files are unreachable from any
+        # selectable view, which is the schema's guarantee, not this file's.
+        if key == "POST /paper/ingest":
+            answered = paper.ingest(self._db, caller, upload, selector)
+            return Response(answered.status, answered.body)
+
         if key == "POST /notifications/tick":
             answered = notifications.tick(self._db, caller, self._email)
             return Response(answered.status, answered.body)

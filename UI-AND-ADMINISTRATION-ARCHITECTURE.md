@@ -54,10 +54,10 @@ door; the role on your connection decides which one you get.
 
 | Role | Workspace | What it opens on | Its tabs |
 |---|---|---|---|
-| **Requester** | *My deals* | Their engagements only, each with its pipeline stage, plus what's waiting on them vs. on others | my deals · intake · negotiate · my record |
-| **Legal reviewer** | *Review desk* | Everything waiting on Legal judgement, oldest first: tickets, override requests, concession approvals | review desk · tickets · approvals · negotiations · holds |
-| **Legal admin** | *The library* | The vault (today's Ledger), plus ladders & rules, owner decisions, holds & retention — and everything a reviewer sees | the library · ladders & rules · governance · holds & retention · review desk |
-| **Auditor** | *The record* | The full chain, verified status, quality and origin-mix measures, and the history of who was granted what | the record · quality · origin mix · access history |
+| **Requester** | *My deals* | Their engagements only, each with its pipeline stage, plus what's waiting on them vs. on others | my deals · intake · negotiate · vendors · my record |
+| **Legal reviewer** | *Review desk* | Everything waiting on Legal judgement, oldest first: tickets, override requests, concession approvals | review desk · tickets · routing · approvals · negotiations · holds |
+| **Legal admin** | *The library* | The vault (today's Ledger), plus ladders & rules, owner decisions, holds & retention — and everything a reviewer sees | the library · ladders & rules · governance · holds & retention · review desk · routing · reporting |
+| **Auditor** | *The record* | The full chain, verified status, quality and origin-mix measures, and the history of who was granted what | the record · quality · origin mix · access history · reporting |
 | **Viewer** | *Reading room* | Just the agreements shared with them — built for the socialisation audience ADR-0008 created this role for | reading room |
 | **Administrator** | *Administration* | People & access — see §4 | people & access · settings · system health · watchers & notices |
 

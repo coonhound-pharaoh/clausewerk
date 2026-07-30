@@ -2715,6 +2715,36 @@ grant usage, select on sequence cw.notification_outbox_outbox_id_seq to cw_legal
                      and a.removed_at is null);`,
     repl: `  and false;`,
     expect: 'a person with work waiting and no address is a visible gap' },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Review routing (0044, RP-02)
+  // ════════════════════════════════════════════════════════════════════════
+  // NOTE for future editors: 0044 re-creates cw.waiting_for and deliberately
+  // repeats 0041's arms verbatim. The harness mutates EVERY file containing a
+  // `find` string, so the 0041-era derivation guards above sabotage both
+  // copies and stay honest. If either copy is ever reworded, repoint those
+  // guards in the same commit — this is exactly how B10 and S110 went red.
+
+  { suite: 'routing.test.mjs',
+    name: 'the claimer becomes whoever the body claimed',
+    find: `    new.person := cw.app_actor();`,
+    repl: `    null;`,
+    expect: 'a claim names the connection, whatever the insert claimed' },
+
+  { suite: 'routing.test.mjs',
+    name: 'two reviewers hold the same ticket at once',
+    find: `create unique index ticket_claim_live
+  on cw.ticket_claim (ticket_id) where released_at is null;`,
+    repl: `select 1;`,
+    expect: 'a race has one winner: the second claim is refused' },
+
+  // The escalation goes quiet: the named owner is never told about work
+  // nobody took, and the queue's oldest tickets wait on nobody in particular.
+  { suite: 'routing.test.mjs',
+    name: 'the escalation never reaches the named owner',
+    find: `  where r.escalated and r.category_owner = p_person`,
+    repl: `  where false`,
+    expect: 'the named owner is told about work nobody took — review_escalation reaches cw.waiting_for' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();

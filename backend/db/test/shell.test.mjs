@@ -63,11 +63,13 @@ const stripComments = (s) =>
 // imported from shell.jsx: a check that reads its expectation from the thing it
 // is checking agrees with itself no matter what either of them says.
 const SPEC = {
-  requester:      ['my deals', 'intake', 'negotiate', 'my record'],
-  legal_reviewer: ['review desk', 'tickets', 'approvals', 'negotiations', 'holds'],
+  requester:      ['my deals', 'intake', 'negotiate', 'vendors', 'my record'],
+  legal_reviewer: ['review desk', 'tickets', 'routing', 'approvals',
+                   'negotiations', 'holds'],
   legal_admin:    ['the library', 'ladders & rules', 'governance',
-                   'holds & retention', 'review desk'],
-  auditor:        ['the record', 'quality', 'origin mix', 'access history'],
+                   'holds & retention', 'review desk', 'routing', 'reporting'],
+  auditor:        ['the record', 'quality', 'origin mix', 'access history',
+                   'reporting'],
   viewer:         ['reading room'],
   administrator:  ['people & access', 'settings', 'system health', 'watchers & notices'],
 };
@@ -118,7 +120,11 @@ await test('no role can reach another role\'s tab', async () => {
   // when the key is in the acting role's own set. The check here is that no two
   // roles share a key by ACCIDENT — the two that are shared are shared on
   // purpose, and naming them makes an accidental third visible.
-  const deliberatelyShared = new Set(['review-desk']);
+  // review-desk: an admin covers the desk. routing: the admin escalation path
+  // and the reviewer claim path are one board. reporting: the auditor examines
+  // the same figures the admin manages by — one surface, so they cannot
+  // disagree (RP-01/RP-02).
+  const deliberatelyShared = new Set(['review-desk', 'routing', 'reporting']);
   const seen = new Map();
   for (const [role, ws] of Object.entries(WORKSPACES)) {
     for (const t of ws.tabs) {

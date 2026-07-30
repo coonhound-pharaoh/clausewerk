@@ -111,7 +111,7 @@ REQUEST_TIMEOUT_SECONDS = 30
 # spirit as reads.READS: one greppable line, so adding a second key is a visible
 # act rather than a condition buried in a handler. Anything else the browser
 # sends is dropped before App.handle is called.
-QUERY_KEYS = ("run",)
+QUERY_KEYS = ("run", "agreement")
 MAX_QUERY_FIELDS = 20
 
 MIME = {

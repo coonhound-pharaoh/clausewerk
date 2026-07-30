@@ -27,6 +27,7 @@ const WORKSPACES = {
       { key: 'my-deals',  label: 'my deals' },
       { key: 'intake',    label: 'intake' },
       { key: 'negotiate', label: 'negotiate' },
+      { key: 'vendors',   label: 'vendors' },
       { key: 'my-record', label: 'my record' },
     ],
   },
@@ -36,6 +37,7 @@ const WORKSPACES = {
     tabs: [
       { key: 'review-desk',  label: 'review desk' },
       { key: 'tickets',      label: 'tickets' },
+      { key: 'routing',      label: 'routing' },
       { key: 'approvals',    label: 'approvals' },
       { key: 'negotiations', label: 'negotiations' },
       { key: 'holds',        label: 'holds' },
@@ -50,6 +52,8 @@ const WORKSPACES = {
       { key: 'governance',  label: 'governance' },
       { key: 'retention',   label: 'holds & retention' },
       { key: 'review-desk', label: 'review desk' },
+      { key: 'routing',     label: 'routing' },
+      { key: 'reporting',   label: 'reporting' },
     ],
   },
   auditor: {
@@ -60,6 +64,7 @@ const WORKSPACES = {
       { key: 'quality',        label: 'quality' },
       { key: 'origin-mix',     label: 'origin mix' },
       { key: 'access-history', label: 'access history' },
+      { key: 'reporting',      label: 'reporting' },
     ],
   },
   viewer: {

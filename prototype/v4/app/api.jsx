@@ -157,6 +157,20 @@ const API = (() => {
     readingRoom:        () => call('GET', '/reading-room'),
     readingRoomClauses: () => call('GET', '/reading-room/clauses'),
 
+    // ── Reporting (RP-01…RP-04) ─────────────────────────────────────────
+    // Management surfaces. The GRANT is the control: legal_admin and the
+    // auditor get rows, everyone else gets the database's refusal, rendered
+    // as the sentence it is. The friction scorecard is the exception — a
+    // requester reads it at intake, on purpose.
+    reportVelocity:    () => call('GET', '/reports/velocity'),
+    reportContested:   () => call('GET', '/reports/contested'),
+    reportQueue:       () => call('GET', '/reports/queue'),
+    reportReviewers:   () => call('GET', '/reports/reviewers'),
+    reportExposure:    () => call('GET', '/reports/exposure'),
+    reportPolicyShift: () => call('GET', '/reports/policy-shift'),
+    vendorFriction:    () => call('GET', '/vendors/friction'),
+    ticketRoute:       () => call('GET', '/tickets/route'),
+
     // ── The library and the ladders (WP-U13) ────────────────────────────
     library:          () => call('GET', '/library'),
     ladders:          () => call('GET', '/ladders'),
@@ -195,6 +209,8 @@ const API = (() => {
     openHold:      (b) => call('POST', '/holds', b),
     openTicket:    (b) => call('POST', '/tickets', b),
     verifyTicket:  (b) => call('POST', '/tickets/verify', b),
+    claimTicket:   (b) => call('POST', '/tickets/claim', b),
+    releaseClaim:  (b) => call('POST', '/tickets/claim/release', b),
     rejectTicket:  (b) => call('POST', '/tickets/reject', b),
     createAccount: (b) => call('POST', '/accounts', b),
     revokeAccount: (b) => call('POST', '/accounts/revoke', b),

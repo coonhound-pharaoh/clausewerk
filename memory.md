@@ -3412,3 +3412,110 @@ Verification after a machine crash mid-gate (Docker restarted): 28/28 suites,
 Immediate-on-occurrence sends are the one deliberate deferral: the governed
 list is stored and the machinery ready, but the event paths that consult it
 (above all OB-13's envelope adapter) arrive with their own packages.
+
+## S118 — Reporting, routing, friction, policy-shift and vendor-paper ingestion (RP-01…RP-05) — 2026-07-29
+The reporting plan approved by Mike on 2026-07-29 is built, backend first, as
+four migrations (0043–0046), one new doorway module, eight reads, two writes
+and three prototype panes. The load-bearing decisions:
+
+**No aggregator store.** Every report figure is a view derived fresh from the
+tables the audit trail already guards. The proposal's "materialized view or
+read replica" is deferred until a view is measurably slow — a stored aggregate
+is a second source of truth able to drift invisibly. Grants are the whole
+access control (views run with owner rights — the cw.retention_due precedent):
+reports answer legal_admin and auditor only; the administrator runs the
+machine and reads none of it.
+
+**Routing (0044) is a claim table plus a predicate, not an assignment
+column.** cw.review_ticket stays untouched; cw.ticket_claim is coordination in
+the watcher-list shape (one live claim per ticket is a unique index — a race
+between two reviewers resolves in the database). The route is derived at read
+time from cw.ladder's owner, so reassigning a ladder reroutes every open
+ticket with no sweep; escalation is an age predicate against the
+review_escalation_days setting, never a timer job (the A-3 lesson).
+cw.waiting_for grew a 'review_escalation' arm — 0044 re-creates the function
+repeating 0041's arms VERBATIM, and the mutation harness sabotages every file
+containing a guard string, so the 0041-era derivation guards stay honest; a
+note in mutation-check.mjs says so for the next editor.
+
+**The friction scorecard (0045) groups counterparty names verbatim** — no
+vendor master table smuggled in through a report; who may merge two names is
+a governance question nobody has decided. The dollar figure is an estimate and
+the ROW says so (counts_are='measured', cost_is='estimate…'), multiplying
+counts by three visible operational settings — the NC-25 labelled-estimate
+rule. Readable by requesters on purpose: intake is the point.
+
+**Policy-shift exposure (0046) is the worklist, never the amendments.** The
+proposal asked for auto-generated draft amendments ready to bulk-approve;
+there is no amendment-assembly machinery, and a report that writes language
+toward an agreement would be a second, weaker path past the trust boundary.
+Deliberately narrowed to the exposure list (outdated version / missing
+always-include category, per live agreement, computed against the CURRENT
+library at read time).
+
+**Vendor-paper ingestion (paper.py) ships the deterministic classifier
+first** (ADR-0005): a paragraph matches a category by the category's own
+label words; every classified paragraph lands as a review_ticket
+reason='supplier-paper', badge VENDOR LANGUAGE, text quarantined in
+proposed_text (NC-18's shape). It judges NO severity — whether vendor wording
+is under the floor is the reviewer's call at the desk. Bytes are parsed and
+released; the report carries the SHA-256; where documents live stays NC-07's
+open owner decision. First consumer of App.handle's upload parameter;
+QUERY_KEYS grew 'agreement'.
+
+**Tripwires moved with reasons:** read-count pin 36 → 44, operational-settings
+pin five → nine, shell tab SPEC + architecture §3 updated together,
+deliberatelyShared grew 'routing' and 'reporting'. Three new mutation guards
+(claimer binding, live-claim uniqueness, escalation reaching the owner) —
+256/256 caught.
+
+## S119 — Microservices declined; scaling is more copies, not more services — 2026-07-29
+An outside recommendation (Gemini, 2026-07-29) proposed a five-layer
+microservices architecture with an LLM/RAG core. Mike reviewed the reasoning
+and closed the question — recorded here so it is not relitigated.
+
+**Why declined.** Microservices solve an organizational problem (many teams
+shipping independently), not a performance one. With one small team they cost
+every seam and pay nothing. Worse, our entire permission model is enforced in
+one place — the database, row by row, with no privileged connection reachable
+from a request (db.py). Splitting into services talking over APIs multiplies
+the seams where that enforcement can be forgotten; it would make security
+harder to scale, not easier.
+
+**How Clausewerk actually scales.** The doorway keeps nothing in memory
+between requests — each request signs in fresh and does its work in one
+transaction — so horizontal scaling is "run more identical copies behind a
+splitter," no code change. The database is PostgreSQL; vertical growth is a
+bigger machine long before any redesign. Neither is load-tested yet
+(pre-launch, placeholder content); when near real usage, measure instead of
+debating.
+
+**Also declined from the same proposal:** an LLM authoring risk analysis and
+negotiation playbooks (reverses the trust boundary — the model never authors
+contract language, UIA §1) and a vector database (infrastructure ahead of any
+feature needing it). Encryption at rest / in transit is a deployment-time
+hardening item, not an architecture change.
+
+## S120 — U15: received documents live in the database, 1 GB, S3 at launch — 2026-07-29
+NC-07's owner decision is settled (2026-07-29): received-document bytes
+(counterparty redlines, vendor paper, signed envelopes back from DocuSign,
+obligation evidence) are stored **in the database**, ceiling **1 GB per
+file**, with a **planned move of raw bytes to S3-class object storage at
+launch**. Full record: `docs/open-questions.md` §13; a settled note sits on
+the NC-07 package itself.
+
+Why this shape: one system / one backup / one row-level-security model; U12's
+redact-and-purge actually deletes in-database bytes (the
+external_bytes_pending residual is deferred to launch, not accepted now); and
+`storage_uri` + `document_sha256` (0011) make the launch move a migration,
+not a redesign. The owner's framing: build the system out now; 1 GB is any
+contract in practice.
+
+Consequences for the builders: NC-07's transport question is effectively
+decided toward the true binary/multipart inbound path (base64-in-JSON
+inflates a gigabyte past the JSON parser's dignity); the two settled values
+land as cw.governance_setting rows in the NC-07 package per the house rule;
+OB-06 and OB-13's gate is now only Gate C hygiene plus, for OB-13, DocuSign
+credentials. **The S3 move is carried to launch on the NC-24/OB-14 pattern**
+— whoever plans deployment must raise it beside TLS, encrypted disks and
+backups.

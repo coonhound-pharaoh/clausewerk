@@ -61,6 +61,8 @@ BODIES: dict[str, dict] = {
         "category_key": "data", "severity": "high", "reason_code": "gap",
         "provenance_badge": "vendor_paper", "proposed_text": "some proposed words",
     },
+    "POST /tickets/claim": {"ticket_id": 1},
+    "POST /tickets/claim/release": {"ticket_id": 1},
     "POST /tickets/verify": {
         "ticket_id": 1, "approved_text": "the approved words", "new_clause_id": "C-9",
         "title": "A Title", "rationale": "why this clause exists",
