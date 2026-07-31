@@ -70,6 +70,7 @@ MAX_ANALYSIS_UNITS = 200
 # Four calls mean one request can consume at most four provider timeouts and
 # matches the process-wide in-flight ceiling in advisory.py.
 MAX_ADVISORY_JUDGMENTS_PER_REQUEST = 4
+MAX_CONCESSIONS_PER_REQUEST = 50
 ADVISORY_LIMIT_REASON = (
     "the per-request advisory judgment limit was reached; no model call was made")
 
@@ -480,11 +481,14 @@ def assess_concessions(db: Database, caller: Caller, query: dict) -> Answer:
                    where c.agreement_id = %s
                      and not exists (select 1 from cw.risk_assessment ra
                                       where ra.concession_id = c.concession_id)
-                   order by c.concession_id""", (agreement_id,))
+                   order by c.concession_id limit %s""",
+                (agreement_id, MAX_CONCESSIONS_PER_REQUEST + 1))
     except psycopg.Error as error:
         refused: Refused = classify(error)
         return Answer(refused.status, refused.as_body())
 
+    concessions_deferred = max(0, len(settled) - MAX_CONCESSIONS_PER_REQUEST)
+    settled = settled[:MAX_CONCESSIONS_PER_REQUEST]
     assessed = []
     in_progress = 0
     judgments_requested = 0
@@ -563,5 +567,6 @@ def assess_concessions(db: Database, caller: Caller, query: dict) -> Answer:
         "agreement_id": agreement_id,
         "concessions_assessed": len(assessed),
         "assessment_in_progress": in_progress,
+        "concessions_deferred": concessions_deferred,
         "risk_assessments": assessed,
     })

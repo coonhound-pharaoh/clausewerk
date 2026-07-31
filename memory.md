@@ -4363,3 +4363,14 @@ despite the endpoint's idempotency promise. An expiring per-concession claim now
 coordinates the outside call without holding a pooled connection. A live claim
 is reported as `assessment_in_progress`; completion appends the outcome and
 releases its matching token in one transaction.
+
+## S193 — Retrospective sweeps bound database fan-out — 2026-07-31
+
+The four-call provider ceiling did not bound retrospective database work. One
+request still selected every unassessed concession and opened one transaction
+per outcome, so a large agreement could keep a worker busy without bound even
+after external spend was capped. A sweep now reads at most 51 candidates,
+processes 50, and reports the excess as `concessions_deferred`; deferred rows
+remain unassessed and eligible for the next sweep. The fixture-free fan-out
+control now supplies 52 concessions and proves 50 outcomes, two deferrals, and
+only four provider calls.

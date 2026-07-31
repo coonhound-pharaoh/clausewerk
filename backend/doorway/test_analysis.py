@@ -394,7 +394,7 @@ def test_one_analysis_bounds_sequential_provider_calls(monkeypatch):
 
 def test_one_concession_sweep_bounds_sequential_provider_calls(monkeypatch):
     calls = []
-    total = analysis.MAX_ADVISORY_JUDGMENTS_PER_REQUEST + 2
+    total = analysis.MAX_CONCESSIONS_PER_REQUEST + 2
     concessions = [
         {"concession_id": index, "standard_body": "baseline",
          "conceded_body": "compared"}
@@ -440,7 +440,9 @@ def test_one_concession_sweep_bounds_sequential_provider_calls(monkeypatch):
 
     assert answered.status == 200
     assert len(calls) == analysis.MAX_ADVISORY_JUDGMENTS_PER_REQUEST
-    assert answered.body["concessions_assessed"] == total
+    assert answered.body["concessions_assessed"] == (
+        analysis.MAX_CONCESSIONS_PER_REQUEST)
+    assert answered.body["concessions_deferred"] == 2
     excess = answered.body["risk_assessments"][
         analysis.MAX_ADVISORY_JUDGMENTS_PER_REQUEST:]
     assert all(row["outcome"] == "absent" for row in excess)
