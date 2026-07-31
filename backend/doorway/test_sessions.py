@@ -6,6 +6,7 @@ and survives parallel traffic without crashing.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import threading
 import pytest
 
@@ -70,6 +71,30 @@ def test_repeated_sign_in_cannot_grow_one_persons_live_sessions_without_bound(
     assert len(sessions) == MAX_LIVE_SESSIONS_PER_PERSON
     assert newest is not None
     assert sessions.person_for(newest.token) == "rita@clausewerk"
+
+
+def test_concurrent_sign_in_keeps_one_persons_session_cap(db: Database):
+    sessions = Sessions(db, now=lambda: 0.0)
+    for _ in range(MAX_LIVE_SESSIONS_PER_PERSON - 1):
+        sessions.issue("rita@clausewerk", 3600.0)
+
+    workers = 12
+    start = threading.Barrier(workers)
+
+    def issue_together(_worker):
+        start.wait()
+        return sessions.issue("rita@clausewerk", 3600.0)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        issued = list(pool.map(issue_together, range(workers)))
+
+    with db.as_person("__signin__", "viewer") as request:
+        count = request.one(
+            "select count(*) from cw.session where person = %s",
+            ("rita@clausewerk",))[0]
+
+    assert count == MAX_LIVE_SESSIONS_PER_PERSON
+    assert sessions.person_for(issued[-1].token) == "rita@clausewerk"
 
 
 def test_the_store_survives_genuinely_parallel_traffic(db: Database):

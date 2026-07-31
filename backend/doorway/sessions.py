@@ -166,6 +166,12 @@ class Sessions:
         expires_at = now + length_seconds
 
         with self._db.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:
+            # Trimming and insertion are one per-person critical section. At
+            # READ COMMITTED, concurrent issuers could otherwise all trim the
+            # same old snapshot and then each add a token beyond the cap.
+            request.rows(
+                "select pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                (person,))
             # Sweep the dead before admitting the new. An expired session is
             # otherwise only removed when its exact token is presented again —
             # which for an abandoned browser is never — and sign-in is the one
@@ -174,9 +180,8 @@ class Sessions:
             request.write("delete from cw.session where expires_at <= %s", (now,))
             # Make room before inserting. The newest token below is never a
             # deletion candidate; among existing sessions, the longest-lived
-            # ones are retained. Concurrent requests can exceed the exact cap
-            # briefly by at most the bounded connection pool, and every later
-            # issuance trims the set again.
+            # ones are retained. The per-person transaction lock above makes
+            # the delete-and-insert pair atomic against another issuance.
             request.write(
                 "delete from cw.session where token_sha256 in ("
                 "select token_sha256 from cw.session where person = %s "

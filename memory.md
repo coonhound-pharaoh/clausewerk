@@ -4333,3 +4333,13 @@ CORS. A live server now accepts only `localhost` and `127.0.0.1`, and requires
 any supplied port to equal its actual listening port. An isolated regression
 proves an attacker hostname is rejected while the local authority remains
 valid.
+
+## S190 — Session issuance enforces its cap atomically — 2026-07-31
+
+The 20-live-session ceiling trimmed old rows and then inserted a new token under
+ordinary read-committed transactions. Concurrent unauthenticated sign-ins for
+one known account could all trim the same snapshot and then insert, leaving the
+account above the stated resource bound. Issuance now takes a transaction-scoped
+PostgreSQL advisory lock keyed by person before the trim-and-insert pair; other
+people remain independent. A 12-worker regression starts from 19 sessions and
+proves the final count is exactly 20 and the newest token works.
