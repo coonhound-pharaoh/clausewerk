@@ -28,6 +28,9 @@ from __future__ import annotations
 
 import http.client
 import json
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 
 import psycopg
@@ -173,6 +176,44 @@ def test_the_adapter_never_raises_at_its_caller(monkeypatch):
     monkeypatch.setattr(advisory, "ENDPOINT", "https://localhost:1/never")
     judgment = advisory.judge_semantic_difference(AI_TEXT, APPROVED)
     assert judgment.outcome == "absent"
+
+
+def test_risk_judgments_share_the_provider_concurrency_ceiling(monkeypatch):
+    class Reply(BytesIO):
+        def close(self):
+            pass
+
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+    response = json.dumps({
+        "model": "test-model",
+        "choices": [{"message": {"content": json.dumps(
+            {"score": 0.25, "basis": "test"})}}],
+    }).encode()
+
+    def slow_open(_request, timeout):
+        nonlocal active, peak
+        assert timeout == advisory.TIMEOUT_SECONDS
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.05)
+        with lock:
+            active -= 1
+        return Reply(response)
+
+    monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
+    monkeypatch.setattr(advisory.urllib.request, "urlopen", slow_open)
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        judgments = list(pool.map(
+            lambda _n: advisory.judge_risk_exposure(AI_TEXT, APPROVED),
+            range(12)))
+
+    assert all(j.outcome == "recorded" for j in judgments)
+    assert peak <= advisory.MAX_CONCURRENT_JUDGMENTS
+    assert peak > 1, "the test never exercised overlapping provider calls"
 
 
 # ── 2. The pipeline, end to end, with no model in the world ─────────────────

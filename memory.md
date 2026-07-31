@@ -3813,3 +3813,13 @@ and session handling, so a cached older client can keep making stale requests
 after an authorization or boundary fix is deployed. Static responses now carry
 the same no-store rule. The existing same-origin screen test records and checks
 the response header as well as the page bytes.
+
+## S136 — Every model judgment shares the concurrency ceiling — 2026-07-31
+
+The four-call semaphore wrapped only `semantic_difference` at its service
+caller. `judge_risk_exposure`, used by round and concession analysis, bypassed
+it, allowing concurrent analyses to park unbounded server threads on the model
+provider. The semaphore now wraps network access inside both outbound adapters,
+so no caller can omit it; the redundant outer semantic lock was removed. A
+12-worker regression observes the risk adapter and proves its provider-call
+peak never exceeds `MAX_CONCURRENT_JUDGMENTS` while still overlapping calls.

@@ -185,12 +185,13 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
     request.add_unredirected_header("Authorization", f"Bearer {key.strip()}")
 
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as reply:
-            raw = reply.read(MAX_RESPONSE_BYTES + 1)
-            if len(raw) > MAX_RESPONSE_BYTES:
-                return _absent("the model's reply was too large to accept",
-                               model=model, prompt=prompt, inputs=inputs)
-            payload = json.loads(raw.decode("utf-8"))
+        with _JUDGMENT_SLOTS:
+            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as reply:
+                raw = reply.read(MAX_RESPONSE_BYTES + 1)
+                if len(raw) > MAX_RESPONSE_BYTES:
+                    return _absent("the model's reply was too large to accept",
+                                   model=model, prompt=prompt, inputs=inputs)
+                payload = json.loads(raw.decode("utf-8"))
     except urllib.error.HTTPError as refused:
         # The provider's own status, not its body: a body can carry account
         # detail, and this string is written into an evidence row.
@@ -305,12 +306,13 @@ def judge_risk_exposure(baseline: str, compared: str) -> Judgment:
     request.add_unredirected_header("Authorization", f"Bearer {key.strip()}")
 
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as reply:
-            raw = reply.read(MAX_RESPONSE_BYTES + 1)
-            if len(raw) > MAX_RESPONSE_BYTES:
-                return _absent("the model's reply was too large to accept",
-                               model=model, prompt=prompt, inputs=inputs)
-            payload = json.loads(raw.decode("utf-8"))
+        with _JUDGMENT_SLOTS:
+            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as reply:
+                raw = reply.read(MAX_RESPONSE_BYTES + 1)
+                if len(raw) > MAX_RESPONSE_BYTES:
+                    return _absent("the model's reply was too large to accept",
+                                   model=model, prompt=prompt, inputs=inputs)
+                payload = json.loads(raw.decode("utf-8"))
     except urllib.error.HTTPError as refused:
         return _absent(f"the model provider refused the call (HTTP {refused.code})",
                        model=model, prompt=prompt, inputs=inputs)
@@ -454,8 +456,7 @@ def semantic_difference(db: Database, caller: Caller, body: dict | None) -> Answ
         # texts, and it says so in its own columns. If the ticket itself is gone
         # by then, the foreign key refuses the insert and the caller gets a
         # classified refusal rather than a row about nothing.
-        with _JUDGMENT_SLOTS:
-            judgment = judge_semantic_difference(baseline, compared)
+        judgment = judge_semantic_difference(baseline, compared)
 
         # ── The write, in its own short transaction ─────────────────────────
         #
