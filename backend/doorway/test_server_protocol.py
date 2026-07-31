@@ -253,6 +253,21 @@ def test_only_origin_form_request_targets_are_accepted():
         assert parsed is None, ambiguous
         assert refused is not None and refused.status == 400, ambiguous
 
+
+def test_request_targets_cannot_hide_path_separators_from_routing():
+    handler = handler_with_headers()
+
+    for ambiguous in (
+        r"/api\sign-in",
+        "/api%2fsign-in",
+        "/api%2Fsign-in",
+        "/api%5csign-in",
+        "/api%5Csign-in",
+    ):
+        parsed, refused = handler._parse_target(ambiguous)
+        assert parsed is None, ambiguous
+        assert refused is not None and refused.status == 400, ambiguous
+
     parsed, refused = handler._parse_target("/api/me?run=RUN-1")
     assert refused is None
     assert parsed is not None and parsed.path == "/api/me"

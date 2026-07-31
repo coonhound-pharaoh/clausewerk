@@ -299,6 +299,13 @@ class Handler(BaseHTTPRequestHandler):
         if (not parsed.path.startswith("/") or parsed.scheme or parsed.netloc
                 or parsed.fragment):
             return None, Response(400, {"error": "the request target is malformed"})
+        # Backslash is not a URI path separator, but Windows treats it as one
+        # after the static path is decoded. Encoded slash/backslash creates the
+        # same cross-hop ambiguity: a proxy may decode it before routing while
+        # this origin decides whether `/api/` is present on the encoded form.
+        # Refuse all three spellings before either API or static dispatch.
+        if "\\" in parsed.path or re.search(r"%(?:2[fF]|5[cC])", parsed.path):
+            return None, Response(400, {"error": "the request target is malformed"})
         return parsed, None
 
     def _query(self, raw: str) -> tuple[dict[str, str], Response | None]:

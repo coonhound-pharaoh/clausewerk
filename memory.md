@@ -3974,3 +3974,12 @@ HTTP hops may combine repeated fields, leaving them and the doorway to choose
 different filename claims. The parser now rejects commas in the disposition
 type while retaining commas inside a quoted filename. Fast protocol controls
 cover both shapes.
+
+## S152 — Request targets cannot hide routing separators — 2026-07-31
+
+Origin-form validation still accepted raw backslashes and percent-encoded slash
+or backslash. Proxies may decode or normalize these before routing, while the
+doorway chose API versus static handling on the encoded path; Windows also
+treats a decoded backslash as a filesystem separator. Target parsing now
+rejects all three separator-confusion forms before dispatch. Fast protocol
+tests cover raw and case-varied encoded spellings.
