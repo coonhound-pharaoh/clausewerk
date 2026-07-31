@@ -18,6 +18,7 @@ from engine.docx import (
     DOC_RELS,
     MAX_ATTRIBUTES_PER_ELEMENT,
     MAX_ARCHIVE_MEMBERS,
+    MAX_MEMBER_NAME_CHARS,
     MAX_ELEMENTS,
     RELS,
     STYLES,
@@ -645,6 +646,21 @@ def test_duplicate_document_parts_are_refused_as_ambiguous():
 
     with pytest.raises(NotADocx, match="duplicate member names"):
         parse_redlines(buf.getvalue())
+
+
+def test_an_overlong_archive_member_name_is_refused_without_echoing_it():
+    hostile_name = "x" * (MAX_MEMBER_NAME_CHARS + 1)
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+        z.writestr(hostile_name, b"")
+        z.writestr("word/document.xml",
+                   f'<w:document xmlns:w="{W}"><w:body/></w:document>')
+
+    with pytest.raises(NotADocx) as refused:
+        parse_redlines(buf.getvalue())
+
+    assert "metadata bomb" in str(refused.value)
+    assert hostile_name not in str(refused.value)
 
 
 def test_an_archive_with_excessive_empty_members_is_refused():

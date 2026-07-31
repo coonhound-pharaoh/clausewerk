@@ -4411,3 +4411,11 @@ a regular-expression replacement. URL delimiters could change the database
 path or query, while backslash replacement syntax could corrupt construction
 before the suite began. The fixture now percent-encodes the name as exactly one
 URL path segment and preserves the original connection authority and options.
+
+## S198 — DOCX member names have a metadata ceiling — 2026-07-31
+
+The DOCX reader bounded member count and decompressed bytes, but ZIP member
+names could still be tens of thousands of characters and duplicate refusal
+joined attacker-controlled names into its error. Each member name is now capped
+at 1,024 characters before duplicate details are collected, and the refusal
+does not echo the hostile name. A compact archive regression proves both facts.

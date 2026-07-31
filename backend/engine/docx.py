@@ -182,6 +182,7 @@ class NotADocx(ValueError):
 MAX_PART_BYTES = 16 * 1024 * 1024        # one part of the archive, decompressed
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024     # the whole archive, decompressed
 MAX_ARCHIVE_MEMBERS = 10_000              # central-directory entries
+MAX_MEMBER_NAME_CHARS = 1_024             # one central-directory name
 MAX_ELEMENT_DEPTH = 256                  # nested elements in document.xml
 MAX_ELEMENTS = 100_000                    # total elements in document.xml
 MAX_ATTRIBUTES_PER_ELEMENT = 1_024        # one tag's attribute map
@@ -266,6 +267,10 @@ def _document_xml(data: bytes) -> ET.Element:
             seen_names: set[str] = set()
             duplicates: set[str] = set()
             for member in members:
+                if len(member.filename) > MAX_MEMBER_NAME_CHARS:
+                    raise NotADocx(
+                        "the archive contains an overlong member name — "
+                        "refused as a metadata bomb")
                 if member.filename in seen_names:
                     duplicates.add(member.filename)
                 seen_names.add(member.filename)
