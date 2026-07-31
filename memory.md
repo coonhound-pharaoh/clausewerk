@@ -3925,3 +3925,13 @@ does not hold a pooled connection across the outside call, expires after a
 crashed worker, and permits immediate retry after a recorded failure. SMTP is
 still necessarily at-least-once if a process dies after remote acceptance but
 before its local commit; the lease closes overlapping live-worker duplicates.
+
+## S147 — Requesters cannot file received bytes against foreign deals — 2026-07-31
+
+Migration 0047's document INSERT policy checked only that the caller held one
+of the three working roles. That let a requester connection attach arbitrary
+bytes to an agreement owned by somebody else, despite the doorway's ordinary
+visibility lookup. Migration 0055 retains portfolio-wide storage for the two
+Legal roles and requires `cw.owns_agreement(agreement_id)` for requesters. The
+received-document schema test now carries a second deal and proves the foreign
+write is refused while own-deal storage still succeeds.

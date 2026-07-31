@@ -59,7 +59,8 @@ const LEAH = 'leah@cw';      // legal admin
 await db.exec(`
   select set_config('cw.actor','owner@clausewerk',false);
   insert into cw.agreement (agreement_id,counterparty,requester) values
-    ('AG-701','Vendor Co','${RITA}');
+    ('AG-701','Vendor Co','${RITA}'),
+    ('AG-702','Other Vendor','someone-else@cw');
 `);
 
 // The vendor's bytes, and what our own arithmetic says about them.
@@ -91,6 +92,12 @@ await test('the recorder is the connection, whatever the insert claimed', async 
   const d = await one(`select received_by from cw.received_document
                         where document_id = 2`);
   eq(d.received_by, LEAH, 'received_by is the session, never the body');
+});
+
+await test('a requester cannot attach bytes to somebody else\u2019s deal', async () => {
+  await mustNotWrite('requester', `
+    insert into cw.received_document (agreement_id, bytes)
+    values ('AG-702', $1)`, [PAPER], RITA);
 });
 
 await test('storing is a recorded act', async () => {
