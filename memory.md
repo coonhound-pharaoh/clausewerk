@@ -3956,3 +3956,12 @@ foreign requester to withdraw an unsettled concession or settle an approved
 one. Migration 0057 keeps portfolio-wide Legal authority and scopes every
 requester child action through the parent concession's agreement. Governance
 tests prove a foreign withdrawal leaves no immutable action record.
+
+## S150 — Content-Type cannot carry combined media types — 2026-07-31
+
+The HTTP boundary rejected repeated Content-Type fields but accepted a single
+comma-combined value. An intermediary may split or select that value while the
+doorway treated the whole thing as a document media type, changing which body
+parser and endpoint path receives the bytes. The transport now rejects commas
+in the media-type portion before reading the body while retaining commas inside
+quoted parameters. Fast protocol tests cover both cases.

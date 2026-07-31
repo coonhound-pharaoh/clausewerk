@@ -429,7 +429,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def _content_type_is_ambiguous(self) -> bool:
         """Two media-type fields must never choose two different request paths."""
-        return len(self.headers.get_all("content-type", [])) > 1
+        values = self.headers.get_all("content-type", [])
+        if len(values) > 1:
+            return True
+        # A recipient may combine repeated fields into one comma-separated
+        # value. Content-Type is not a list-valued field, and choosing the first
+        # or treating the whole string as a document can route the same bytes
+        # through different handlers at different HTTP hops. A comma in a
+        # quoted parameter is harmless to routing; only the media-type portion
+        # before the first semicolon decides JSON versus document.
+        return bool(values and "," in values[0].split(";", 1)[0])
 
     def _is_document(self) -> bool:
         """Is this POST carrying a document rather than a record?

@@ -70,6 +70,27 @@ def test_duplicate_content_types_are_refused_as_ambiguous():
     assert handler.rfile.tell() == 0
 
 
+def test_comma_combined_content_types_are_refused_as_ambiguous():
+    handler = handler_with_headers(
+        ("Host", "localhost"),
+        ("Content-Type", "application/json, application/octet-stream"),
+        ("Content-Length", "2"),
+        body=b"{}",
+    )
+    handler.path = "/api/sign-in"
+    answered = []
+    handler._respond = answered.append
+
+    handler.do_POST()
+
+    assert answered[0].status == 400
+    assert handler.rfile.tell() == 0
+
+    quoted = handler_with_headers(
+        ("Content-Type", 'multipart/form-data; boundary="part,one"'))
+    assert not quoted._content_type_is_ambiguous()
+
+
 def test_http_11_requires_one_unambiguous_host():
     for headers in (
         (),
