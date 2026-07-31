@@ -4384,3 +4384,14 @@ phase escaped to the server's generic 500 instead of retaining its database
 meaning. Both phases now use the same classifier as the surrounding work.
 Fixture-free controls inject insufficient privilege into each transaction and
 prove a 403 with no channel call.
+
+## S195 — Every channel exception has recordable failure detail — 2026-07-31
+
+The notification tick caught every channel exception but called `str(error)`
+inside that handler and copied the result directly into PostgreSQL. An exception
+whose string conversion raised escaped the promised failure path; a detail with
+NUL or a lone surrogate made the outbox insert fail instead of recording the
+delivery outcome. Failure capture now tolerates broken string conversion,
+substitutes the exception type when detail is absent or unrepresentable, and
+bounds the result to 500 characters. Live controls prove both hostile exception
+shapes still produce a sent-to-outbox `failed` outcome.

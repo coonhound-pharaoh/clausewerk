@@ -294,6 +294,30 @@ def test_a_channel_failure_is_an_outcome_not_an_exception(seeded: Database):
     assert [(r["outcome"], r["failure"]) for r in rows] == [("failed", "mailbox full")]
 
 
+@pytest.mark.parametrize("raised", [
+    RuntimeError("unrecordable\x00detail"),
+    type("Unstringable", (Exception,), {
+        "__str__": lambda self: (_ for _ in ()).throw(RuntimeError("broken"))
+    })(),
+])
+def test_unrecordable_channel_errors_still_become_failed_outcomes(
+        seeded: Database, raised):
+    set_address(seeded, LEAH, "leah@example.com")
+
+    def broken(_address, _subject, _body):
+        raise raised
+
+    answered = notifications.tick(
+        seeded, Caller(ADMIN, "administrator"), broken)
+
+    assert answered.status == 200
+    assert answered.body["failed"] == 1
+    [row] = outbox(seeded)
+    assert row["outcome"] == "failed"
+    assert row["failure"]
+    assert "\x00" not in row["failure"]
+
+
 def test_a_failed_delivery_may_be_retried_the_same_day(seeded: Database):
     set_address(seeded, LEAH, "leah@example.com")
 

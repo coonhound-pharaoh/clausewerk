@@ -120,6 +120,18 @@ class Answered:
     body: dict
 
 
+def _channel_failure(error: Exception) -> str:
+    """A bounded, PostgreSQL-representable account of any channel exception."""
+    try:
+        detail = str(error)
+    except Exception:
+        detail = ""
+    if (not detail or "\x00" in detail
+            or any(0xD800 <= ord(char) <= 0xDFFF for char in detail)):
+        detail = f"{type(error).__name__} supplied no recordable detail"
+    return detail[:500]
+
+
 def _digest(waiting: list[dict]) -> tuple[str, str, str]:
     """Subject, body, and the refs JSON — references and dates, nothing else."""
     lines = []
@@ -224,7 +236,7 @@ def tick(db: Database, caller: Caller, channel: Channel,
             channel(address_rows[0]["address"], subject, body)
         except Exception as error:  # the channel is an outside party; any
             # failure is an outcome to record, never an exception to leak
-            outcome, failure = "failed", str(error)[:500]
+            outcome, failure = "failed", _channel_failure(error)
 
         try:
             with db.as_person(caller.person, caller.role) as request:
