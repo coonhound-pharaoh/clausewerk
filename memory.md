@@ -4161,3 +4161,11 @@ argument received advice. The matcher now accepts a position only when exactly
 one open candidate exists; multiple candidates use the existing quarantined
 no-match escalation. A real-schema regression opens a second position in the
 same category and proves neither position is selected.
+
+## S172 — Execution signatory fan-out is bounded — 2026-07-31
+
+The execution endpoint accepted an unbounded signatory array inside the HTTP
+byte ceiling and inserted one immutable `executed_signatory` row per entry as
+part of an irreversible filing. It now refuses more than 100 signatories before
+opening a database transaction. A 101-entry synthetic filing calls the boundary
+without a database and proves the early 400.

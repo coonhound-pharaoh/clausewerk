@@ -24,6 +24,7 @@ import json
 
 import pytest
 
+from doorway import executions
 from doorway.test_runs import (  # noqa: F401 — `library` and `running` are fixtures
     ADMIN, DANA, DEAL, LEGAL_ADMIN, REVIEWER, SAM, TUNDE, Client, as_person,
     library, manifest, running,
@@ -157,6 +158,17 @@ def test_a_filing_that_names_nobody_is_refused(library):
                                      filing(run_id, signatories=wrong))
         assert status == 400, f"{wrong!r} answered {status}: {body}"
         assert body["kind"] == "rejected"
+
+
+def test_signatory_row_fan_out_is_bounded_before_database_work():
+    one = filing("RUN-BOUNDARY")["signatories"][0]
+    body = filing(
+        "RUN-BOUNDARY",
+        signatories=[one] * (executions.MAX_SIGNATORIES + 1))
+
+    answered = executions.execute(None, None, body)
+
+    assert answered.status == 400
 
 
 # ── Gate 1 · the deal binding ───────────────────────────────────────────────

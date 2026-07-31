@@ -114,6 +114,7 @@ REQUIRED = ("agreement_id", "run_id", "executed_on", "effective_on", "filename",
             "byte_size", "sha256", "storage_uri", "signed_on")
 
 SIGNATORY_FIELDS = ("name", "party", "method", "signed_on")
+MAX_SIGNATORIES = 100
 
 
 @dataclass(frozen=True)
@@ -165,6 +166,9 @@ def execute(db: Database, caller: Caller, body: dict) -> Answer:
     if not isinstance(signatories, list) or not signatories:
         return _rejected(
             "an execution names who signed it; this one names nobody (signatories)")
+    if len(signatories) > MAX_SIGNATORIES:
+        return _rejected(
+            f"an execution may name at most {MAX_SIGNATORIES} signatories")
     for index, who in enumerate(signatories):
         if not isinstance(who, dict):
             return _rejected(f"signatory {index} is not a signatory")
