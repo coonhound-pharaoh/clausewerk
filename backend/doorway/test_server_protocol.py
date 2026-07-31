@@ -101,6 +101,24 @@ def test_comma_combined_content_dispositions_are_refused_as_ambiguous():
     assert not quoted._content_disposition_is_ambiguous()
 
 
+def test_control_characters_in_document_filename_are_refused_unread():
+    handler = handler_with_headers(
+        ("Host", "localhost"),
+        ("Content-Type", "application/octet-stream"),
+        ("Content-Disposition", 'attachment; filename="bad\x00name.docx"'),
+        ("Content-Length", "4"),
+        body=b"data",
+    )
+    handler.path = "/api/supplier-paper?agreement=AG-1"
+    answered = []
+    handler._respond = answered.append
+
+    handler.do_POST()
+
+    assert answered[0].status == 400
+    assert handler.rfile.tell() == 0
+
+
 def test_http_11_requires_one_unambiguous_host():
     for headers in (
         (),

@@ -4073,3 +4073,12 @@ ordinary words like `supplier` and `ship`, opening false immutable tickets and
 potentially hiding a baseline gap. Classification now tokenizes alphabetic
 words and matches exact tokens, preserving standalone short acronyms. Synthetic
 controls prove both the false-positive refusal and the standalone-key match.
+
+## S163 — Malformed upload filenames are refused unread — 2026-07-31
+
+The HTTP header parser accepts quoted filenames containing NUL and other
+control characters, but PostgreSQL text cannot store NUL. The doorway therefore
+read a whole document before a malformed provenance name failed at the database
+boundary. Upload routing now rejects control characters and lone surrogates in
+the parsed filename before reading the body, while retaining ordinary Unicode
+filenames. A protocol regression proves the body remains unread.

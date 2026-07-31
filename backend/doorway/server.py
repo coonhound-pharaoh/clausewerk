@@ -237,6 +237,11 @@ class Handler(BaseHTTPRequestHandler):
                 "error": "content disposition is ambiguous"}))
             return
 
+        if self._upload_filename_is_malformed():
+            self._respond(Response(400, {
+                "error": "document filename is malformed"}))
+            return
+
         if self._is_document():
             endpoint = self._endpoint(parsed.path)
             if endpoint not in DOCUMENT_ENDPOINTS:
@@ -544,6 +549,22 @@ class Handler(BaseHTTPRequestHandler):
             header="content-disposition", unquote=True) or []
         return sum(1 for name, _value in parameters
                    if name.casefold() == "filename") > 1
+
+    def _upload_filename_is_malformed(self) -> bool:
+        """Refuse provenance text that HTTP or PostgreSQL cannot represent.
+
+        A quoted header value can carry NUL and other control characters even
+        though they are not legal field-value data. Letting one through reads
+        the entire upload before PostgreSQL rejects the filename, turning a
+        malformed request into a database failure instead of a caller error.
+        Unicode filenames remain valid; only controls and lone surrogates are
+        unrepresentable here.
+        """
+        filename = self._upload_filename()
+        return filename is not None and any(
+            ord(char) < 32 or ord(char) == 127
+            or 0xD800 <= ord(char) <= 0xDFFF
+            for char in filename)
 
     def _static_relative(self, path: str) -> tuple[str | None, Response | None]:
         """Decode one static path without accepting malformed percent escapes."""
