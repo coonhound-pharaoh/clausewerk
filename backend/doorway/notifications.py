@@ -24,10 +24,10 @@ text, negotiation positions or document content, so it cannot leak what it
 was never handed. The wording of the digest itself is content: placeholder,
 and never tested for its words.
 
-IDEMPOTENT BY THE OUTBOX. One SENT digest per person per day is a unique
-index (0042); the tick consults the outbox before sending and the index would
-refuse a race it lost anyway. A failed delivery is recorded as failed and may
-be retried by the next tick.
+IDEMPOTENT BY CLAIM THEN OUTBOX. Before talking to the channel, a tick takes an
+atomic, expiring delivery claim (0054). Concurrent ticks therefore cannot both
+send. The append-only outbox remains the record of sent and failed attempts;
+failures release the claim and may be retried by the next tick.
 
 WHO RUNS IT. An external scheduler (OS cron, deployment timer) POSTs
 /notifications/tick on an Administrator's session. There is no thread, no
@@ -46,6 +46,7 @@ from __future__ import annotations
 import json
 import os
 import smtplib
+import uuid
 from dataclasses import dataclass
 from datetime import date
 from email.message import EmailMessage
@@ -145,7 +146,7 @@ def tick(db: Database, caller: Caller, channel: Channel,
         refused = classify(error)
         return Answered(refused.status, refused.as_body())
 
-    digested = sent = failed = already = unreachable = 0
+    digested = sent = failed = already = in_progress = unreachable = 0
 
     for person in people:
         # Read everything this person's attempt needs, then LEAVE the
@@ -180,6 +181,25 @@ def tick(db: Database, caller: Caller, channel: Channel,
             unreachable += 1
             continue
 
+        # Claim before the outside call. The upsert may replace only an expired
+        # lease, and RETURNING is empty for a live competing claim. No database
+        # connection remains checked out while the channel runs (B2).
+        claim_token = uuid.uuid4()
+        with db.as_person(caller.person, caller.role) as request:
+            claimed = request.rows(
+                "insert into cw.notification_delivery_claim "
+                "  (person, channel, sent_on, kind, claim_token, expires_at) "
+                "values (%s, 'email', %s, 'digest', %s, now() + interval '5 minutes') "
+                "on conflict (person, channel, sent_on, kind) do update "
+                "set claim_token = excluded.claim_token, claimed_at = now(), "
+                "    expires_at = excluded.expires_at "
+                "where cw.notification_delivery_claim.expires_at <= now() "
+                "returning claim_token",
+                (person["person"], day, claim_token))
+        if not claimed:
+            in_progress += 1
+            continue
+
         subject, body, refs = _digest(waiting)
         outcome, failure = "sent", None
         try:
@@ -195,6 +215,11 @@ def tick(db: Database, caller: Caller, channel: Channel,
                     "  (person, channel, sent_on, kind, refs, outcome, failure) "
                     "values (%s, 'email', %s, 'digest', %s, %s, %s)",
                     (person["person"], day, refs, outcome, failure))
+                request.write_one(
+                    "delete from cw.notification_delivery_claim "
+                    "where person = %s and channel = 'email' and sent_on = %s "
+                    "  and kind = 'digest' and claim_token = %s",
+                    (person["person"], day, claim_token))
         except psycopg.Error as error:
             refused = classify(error)
             return Answered(refused.status, refused.as_body())
@@ -210,5 +235,6 @@ def tick(db: Database, caller: Caller, channel: Channel,
         "sent": sent,
         "failed": failed,
         "already_sent_today": already,
+        "delivery_in_progress": in_progress,
         "unreachable": unreachable,
     })

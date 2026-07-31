@@ -3913,3 +3913,15 @@ The guard now validates printable ASCII authority syntax through `urlparse`,
 forces port parsing, and excludes user information and all path/query/fragment
 components. Protocol cases cover five additional invalid forms plus bracketed
 IPv6 as a valid control.
+
+## S146 — Notification delivery is claimed before the external send — 2026-07-31
+
+The sent-outbox unique index protected the database record but not the external
+side effect: concurrent ticks could both observe no sent row, both send, and
+only then collide while recording the outcome. Migration 0054 adds an
+Administrator-only five-minute coordination lease, acquired atomically before
+SMTP and released in the same transaction that appends the outcome. The lease
+does not hold a pooled connection across the outside call, expires after a
+crashed worker, and permits immediate retry after a recorded failure. SMTP is
+still necessarily at-least-once if a process dies after remote acceptance but
+before its local commit; the lease closes overlapping live-worker duplicates.

@@ -125,6 +125,24 @@ await test('one sent digest per person per day is an index, not a promise', asyn
     [], ADMIN);
 });
 
+await test('only the administrator may coordinate delivery claims', async () => {
+  await mustNotWrite('legal_admin', `
+    insert into cw.notification_delivery_claim
+      (person,channel,sent_on,kind,claim_token,expires_at)
+    values ('${LEAH}','email',current_date,'digest',
+            '00000000-0000-0000-0000-000000000001',now() + interval '5 minutes')`);
+  await mustWrite('administrator', `
+    insert into cw.notification_delivery_claim
+      (person,channel,sent_on,kind,claim_token,expires_at)
+    values ('${LEAH}','email',current_date,'digest',
+            '00000000-0000-0000-0000-000000000001',now() + interval '5 minutes')`,
+    [], ADMIN);
+  await mustWrite('administrator', `
+    delete from cw.notification_delivery_claim
+     where person='${LEAH}' and channel='email'
+       and sent_on=current_date and kind='digest'`, [], ADMIN);
+});
+
 await test('the outbox is append-only — not even the owner edits a delivery', async () => {
   await throws(() => db.exec(`update cw.notification_outbox set outcome='sent'
     where outcome='failed'`), 'append-only');

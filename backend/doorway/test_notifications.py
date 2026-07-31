@@ -23,6 +23,9 @@ Requires the compose PostgreSQL, like every doorway suite:
 from __future__ import annotations
 
 from datetime import date
+from concurrent.futures import ThreadPoolExecutor
+import threading
+import time
 
 import psycopg
 import pytest
@@ -157,6 +160,32 @@ def test_one_digest_a_day(seeded: Database):
     assert again.body["already_sent_today"] >= 1
     assert again.body["sent"] == 0
     assert len(sends) == 1, "the second tick must not have sent a second copy"
+
+
+def test_concurrent_ticks_share_one_delivery_claim(seeded: Database):
+    set_address(seeded, LEAH, "leah@example.com")
+    starts = threading.Barrier(2)
+    sends: list[str] = []
+    sends_lock = threading.Lock()
+
+    def slow_channel(address: str, subject: str, body: str) -> None:
+        with sends_lock:
+            sends.append(address)
+        time.sleep(0.15)
+
+    def run_tick():
+        starts.wait()
+        return notifications.tick(
+            seeded, Caller(ADMIN, "administrator"), slow_channel)
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        answers = list(workers.map(lambda _: run_tick(), range(2)))
+
+    assert all(answer.status == 200 for answer in answers)
+    assert len(sends) == 1, "overlapping ticks must not both reach the channel"
+    assert sum(answer.body["sent"] for answer in answers) == 1
+    assert sum(answer.body["delivery_in_progress"] for answer in answers) == 1
+    assert [row["outcome"] for row in outbox(seeded)] == ["sent"]
 
 
 def test_a_channel_failure_is_an_outcome_not_an_exception(seeded: Database):
