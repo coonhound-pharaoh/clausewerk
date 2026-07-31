@@ -342,6 +342,106 @@ def test_a_prospective_assessment_database_refusal_is_not_a_500(
     assert "assessment write denied" in answered.body["reason"]
 
 
+def test_one_analysis_bounds_sequential_provider_calls(monkeypatch):
+    calls = []
+    stored = []
+
+    def stubbed(baseline, compared):
+        calls.append((baseline, compared))
+        return analysis.advisory.Judgment(
+            score=0.25, basis="placeholder", absent_reason=None,
+            model="stub", model_version="stub-1", prompt="p", inputs=[])
+
+    class Request:
+        def rows(self, _sql, values):
+            stored.append(values)
+            return [{"assessment_id": len(stored),
+                     "analysis_id": values["analysis_id"],
+                     "outcome": values["outcome"],
+                     "transfer_estimate": values["score"],
+                     "basis": values["basis"],
+                     "absent_reason": values["reason"]}]
+
+    class Context:
+        def __enter__(self):
+            return Request()
+
+        def __exit__(self, *_args):
+            return False
+
+    class StubDatabase:
+        def as_person(self, *_args):
+            return Context()
+
+    monkeypatch.setattr(analysis.advisory, "judge_risk_exposure", stubbed)
+    total = analysis.MAX_ADVISORY_JUDGMENTS_PER_REQUEST + 2
+    analysed = [
+        {"analysis_id": index, "matched_position": 1,
+         "_baseline": "baseline", "_compared": "compared"}
+        for index in range(total)
+    ]
+
+    recorded = analysis._record_prospective(
+        StubDatabase(), OWNING_REQUESTER, analysed)
+
+    assert len(calls) == analysis.MAX_ADVISORY_JUDGMENTS_PER_REQUEST
+    assert len(recorded) == total
+    assert all(row["outcome"] == "absent"
+               for row in recorded[analysis.MAX_ADVISORY_JUDGMENTS_PER_REQUEST:])
+    assert all("limit" in row["absent_reason"]
+               for row in recorded[analysis.MAX_ADVISORY_JUDGMENTS_PER_REQUEST:])
+
+
+def test_one_concession_sweep_bounds_sequential_provider_calls(monkeypatch):
+    calls = []
+    total = analysis.MAX_ADVISORY_JUDGMENTS_PER_REQUEST + 2
+    concessions = [
+        {"concession_id": index, "standard_body": "baseline",
+         "conceded_body": "compared"}
+        for index in range(total)
+    ]
+
+    def stubbed(baseline, compared):
+        calls.append((baseline, compared))
+        return analysis.advisory.Judgment(
+            score=0.25, basis="placeholder", absent_reason=None,
+            model="stub", model_version="stub-1", prompt="p", inputs=[])
+
+    class Request:
+        def rows(self, sql, values):
+            if "from cw.concession c" in sql:
+                return concessions
+            return [{"assessment_id": values["concession_id"] + 1,
+                     "concession_id": values["concession_id"],
+                     "outcome": values["outcome"],
+                     "transfer_estimate": values["score"],
+                     "basis": values["basis"],
+                     "absent_reason": values["reason"]}]
+
+    class Context:
+        def __enter__(self):
+            return Request()
+
+        def __exit__(self, *_args):
+            return False
+
+    class StubDatabase:
+        def as_person(self, *_args):
+            return Context()
+
+    monkeypatch.setattr(analysis.advisory, "judge_risk_exposure", stubbed)
+    answered = analysis.assess_concessions(
+        StubDatabase(), OWNING_REQUESTER, {"agreement": "AG-A1"})
+
+    assert answered.status == 200
+    assert len(calls) == analysis.MAX_ADVISORY_JUDGMENTS_PER_REQUEST
+    assert answered.body["concessions_assessed"] == total
+    excess = answered.body["risk_assessments"][
+        analysis.MAX_ADVISORY_JUDGMENTS_PER_REQUEST:]
+    assert all(row["outcome"] == "absent" for row in excess)
+    assert all("limit" in row["absent_reason"] for row in excess)
+
+
 def test_a_reachable_model_lands_a_recorded_estimate(seeded, db, monkeypatch):
     """The judge is stubbed at the seam — the mechanism is what is pinned,
     never any estimate's value as a truth about contracts."""

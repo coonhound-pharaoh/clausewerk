@@ -4301,3 +4301,14 @@ after the analysis itself had already landed. Both callers now classify that
 database refusal into the normal explicit response. A regression injects an
 insufficient-privilege failure after analysis and proves the endpoint answers
 403 with the database's reason instead of crashing.
+
+## S187 — One request makes at most four advisory judgments — 2026-07-31
+
+The 200-unit analysis ceiling bounded database fan-out but not external work:
+each matched unit could make a separate provider call sequentially, so one
+request could consume 200 billable calls and about 4,000 seconds of provider
+timeouts. Prospective and retrospective assessment now make at most four model
+calls per request. Every remaining item still receives an append-only `absent`
+assessment whose reason says the request limit prevented a model call. A
+fixture-free regression supplies six eligible analyses, proves only four calls
+reach the provider seam, and proves all six outcomes remain on the record.

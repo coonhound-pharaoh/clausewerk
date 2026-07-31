@@ -64,6 +64,13 @@ OPEN_STATES = ("open", "held", "escalated", "conceded")
 # external judgment. Bound invocation fan-out independently of DOCX byte size
 # and of the per-ingest supplier-paper ceiling.
 MAX_ANALYSIS_UNITS = 200
+# A unit cap bounds deterministic database work; it does not bound provider
+# latency or spend because judgments are made sequentially after that work.
+# Four calls mean one request can consume at most four provider timeouts and
+# matches the process-wide in-flight ceiling in advisory.py.
+MAX_ADVISORY_JUDGMENTS_PER_REQUEST = 4
+ADVISORY_LIMIT_REASON = (
+    "the per-request advisory judgment limit was reached; no model call was made")
 
 
 @dataclass(frozen=True)
@@ -206,18 +213,25 @@ def _positions_of(request, negotiation_id: int) -> list[dict]:
 
 def _record_prospective(db: Database, caller: Caller, analysed: list[dict]) -> list[dict]:
     recorded = []
+    judgments_requested = 0
     for row in analysed:
         if not row.get("matched_position"):
             continue
         baseline = (row.get("_baseline") or "").strip()
         compared = (row.get("_compared") or "").strip()
-        if baseline and compared:
+        if (baseline and compared
+                and judgments_requested < MAX_ADVISORY_JUDGMENTS_PER_REQUEST):
+            judgments_requested += 1
             judgment = advisory.judge_risk_exposure(baseline, compared)
             outcome = "absent" if judgment.score is None else "recorded"
             values = dict(score=judgment.score, basis=judgment.basis,
                           reason=judgment.absent_reason,
                           model=judgment.model,
                           model_version=judgment.model_version)
+        elif baseline and compared:
+            outcome = "absent"
+            values = dict(score=None, basis=None, reason=ADVISORY_LIMIT_REASON,
+                          model="none", model_version="none")
         else:
             outcome = "absent"
             values = dict(score=None, basis=None,
@@ -471,16 +485,23 @@ def assess_concessions(db: Database, caller: Caller, query: dict) -> Answer:
         return Answer(refused.status, refused.as_body())
 
     assessed = []
+    judgments_requested = 0
     for concession in settled:
         baseline = (concession["standard_body"] or "").strip()
         compared = (concession["conceded_body"] or "").strip()
-        if baseline and compared:
+        if (baseline and compared
+                and judgments_requested < MAX_ADVISORY_JUDGMENTS_PER_REQUEST):
+            judgments_requested += 1
             judgment = advisory.judge_risk_exposure(baseline, compared)
             outcome = "absent" if judgment.score is None else "recorded"
             values = dict(score=judgment.score, basis=judgment.basis,
                           reason=judgment.absent_reason,
                           model=judgment.model,
                           model_version=judgment.model_version)
+        elif baseline and compared:
+            outcome = "absent"
+            values = dict(score=None, basis=None, reason=ADVISORY_LIMIT_REASON,
+                          model="none", model_version="none")
         else:
             # A concession with no conceded rung, or a rung whose wording is
             # not on the ladder: nothing comparable exists, and the record
