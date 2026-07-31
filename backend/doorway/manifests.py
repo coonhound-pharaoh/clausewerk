@@ -53,6 +53,7 @@ import psycopg
 from doorway.db import Database
 from doorway.identity import Caller
 from doorway.refusals import Refused, classify
+from doorway.writes import WrongShape, refuse_structured
 from engine.manifest import CategoryMap, UnknownCategory, check_manifest
 from engine.model import Manifest, Risk
 
@@ -87,6 +88,12 @@ def manifest_from(body: dict) -> Manifest:
     if not isinstance(body, dict):
         raise Malformed("a manifest is expected")
 
+    try:
+        refuse_structured("vendor", body.get("vendor"))
+        refuse_structured("source", body.get("source"))
+    except WrongShape as wrong:
+        raise Malformed(str(wrong)) from wrong
+
     vendor = str(body.get("vendor") or "").strip()
     if not vendor:
         raise Malformed("a manifest names the vendor it was assembled for")
@@ -102,6 +109,11 @@ def manifest_from(body: dict) -> Manifest:
     for index, entry in enumerate(raw):
         if not isinstance(entry, dict):
             raise Malformed(f"risk {index} is not a risk")
+        try:
+            for field in ("category", "severity", "justification"):
+                refuse_structured(f"risk {index} {field}", entry.get(field))
+        except WrongShape as wrong:
+            raise Malformed(str(wrong)) from wrong
         category = str(entry.get("category") or "").strip()
         if not category:
             raise Malformed(f"risk {index} names no category")

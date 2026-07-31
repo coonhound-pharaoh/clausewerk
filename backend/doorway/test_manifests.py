@@ -115,6 +115,26 @@ def test_manifest_risk_fan_out_is_bounded_before_normalization():
         manifest_from(oversized)
 
 
+@pytest.mark.parametrize(("location", "wrong"), [
+    ("vendor", {"nested": "vendor"}),
+    ("source", ["llm"]),
+    ("category", ["Data Privacy"]),
+    ("severity", True),
+    ("justification", {"nested": "reason"}),
+])
+def test_structured_manifest_text_is_not_stringified(location, wrong):
+    from doorway.manifests import Malformed, manifest_from
+
+    body = manifest("Data Privacy")
+    if location in ("vendor", "source"):
+        body[location] = wrong
+    else:
+        body["risks"][0][location] = wrong
+
+    with pytest.raises(Malformed):
+        manifest_from(body)
+
+
 def chain(client: Client) -> list[dict]:
     status, body = client.call("GET", "/api/record")
     assert status == 200, body

@@ -4188,3 +4188,13 @@ constraints as late service/database failures. Every required filing field and
 the four optional plain fields now pass through the shared plain-value guard
 before signatory processing or database work. Representative required and
 optional malformed shapes prove clean 400 responses.
+
+## S175 — Structured manifest text is not stringified — 2026-07-31
+
+Manifest normalization called `str()` on vendor, source, and risk text fields.
+Objects, arrays, and booleans therefore became plausible-looking strings: a
+structured category was misreported as an unknown library category, while a
+structured severity could be silently coerced and recorded. Those declared text
+fields now use the shared plain-value guard before normalization and engine
+classification. Five synthetic shapes prove malformed structure stays a 400
+boundary error rather than becoming content.
