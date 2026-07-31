@@ -3946,3 +3946,13 @@ requester read policy and an agreement anchor exactly matching that run; this
 also preserves requester-created legacy runs whose anchor is null. The override
 schema suite now carries two requesters, agreements and runs, and refuses both a
 foreign-run request and a deliberately mismatched run/agreement pair.
+
+## S149 — Requester concession actions stay on owned deals — 2026-07-31
+
+The parent concession rejected foreign requester writes, but its approval,
+settlement and withdrawal children used role-only INSERT policies. Their
+workflow triggers did not make ownership a general invariant, allowing a
+foreign requester to withdraw an unsettled concession or settle an approved
+one. Migration 0057 keeps portfolio-wide Legal authority and scopes every
+requester child action through the parent concession's agreement. Governance
+tests prove a foreign withdrawal leaves no immutable action record.

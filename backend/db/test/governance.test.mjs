@@ -116,6 +116,16 @@ await test('a requester cannot record a concession on another buyer’s deal', a
   eq(c.n, 1, 'the foreign requester must leave no immutable commercial record');
 });
 
+await test('a requester cannot withdraw another buyer\u2019s concession', async () => {
+  await mustNotWrite('requester', `
+    insert into cw.concession_withdrawal (concession_id,withdrawn_by,reason)
+    values (${C1},'forged@clausewerk','foreign withdrawal')`,
+    [], 'somebody.else@clausewerk');
+  const w = await one(`select count(*)::int n from cw.concession_withdrawal
+                        where concession_id=${C1}`);
+  eq(w.n, 0, 'the foreign requester must leave the proposal active');
+});
+
 await test('a deal with no assigned attorney cannot settle anything', async () => {
   // Fail closed. An unassigned deal is a configuration gap, and the honest
   // behaviour is to refuse and say so — not to quietly need one fewer approval.
