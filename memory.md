@@ -4037,3 +4037,12 @@ can contain very large paragraphs, multiplying memory and provider load across
 concurrent judgments. Each adapter now records an absence before encoding or
 network access when the pair exceeds 200,000 characters. Parameterized tests
 prove neither provider path is called for oversized input.
+
+## S159 — Provider judgment text must be database-representable — 2026-07-31
+
+JSON accepts escaped NUL and lone surrogate code points, but PostgreSQL text
+does not. Both model adapters previously accepted those values in reported
+model provenance or judgment basis, causing the later evidence insert to fail
+instead of recording an absence. The adapters now reject unrepresentable text
+before returning a judgment. Tests cover NUL and lone-surrogate provenance in
+both adapters plus an unrepresentable basis.

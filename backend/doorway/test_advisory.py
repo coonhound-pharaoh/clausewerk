@@ -260,6 +260,53 @@ def test_the_adapters_refuse_oversized_inputs_before_calling_provider(
     assert "too large" in judgment.absent_reason
 
 
+@pytest.mark.parametrize("judge", [
+    advisory.judge_semantic_difference,
+    advisory.judge_risk_exposure,
+])
+@pytest.mark.parametrize("bad_model", ["model\x00name", "model\ud800name"])
+def test_the_adapters_refuse_unrepresentable_model_provenance(
+    monkeypatch, judge, bad_model
+):
+    class Reply(BytesIO):
+        def close(self):
+            pass
+
+    response = json.dumps({
+        "model": bad_model,
+        "choices": [{"message": {"content": json.dumps(
+            {"score": 0.25, "basis": "test"})}}],
+    }).encode()
+    monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
+    monkeypatch.setattr(advisory.urllib.request, "urlopen",
+                        lambda request, timeout: Reply(response))
+
+    judgment = judge(AI_TEXT, APPROVED)
+
+    assert judgment.outcome == "absent"
+    assert "provenance" in judgment.absent_reason
+
+
+def test_the_adapter_refuses_unrepresentable_basis(monkeypatch):
+    class Reply(BytesIO):
+        def close(self):
+            pass
+
+    response = json.dumps({
+        "model": "test-model",
+        "choices": [{"message": {"content": json.dumps(
+            {"score": 0.25, "basis": "bad\x00basis"})}}],
+    }).encode()
+    monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
+    monkeypatch.setattr(advisory.urllib.request, "urlopen",
+                        lambda request, timeout: Reply(response))
+
+    judgment = advisory.judge_semantic_difference(AI_TEXT, APPROVED)
+
+    assert judgment.outcome == "absent"
+    assert judgment.score is None
+
+
 def test_the_adapter_refuses_excessively_nested_provider_json(monkeypatch):
     monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
     nested = BytesIO(b"[" * 2_000 + b"]" * 2_000)

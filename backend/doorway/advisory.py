@@ -143,6 +143,12 @@ def _absent(reason: str, *, model: str, prompt: str, inputs: list,
                     prompt=prompt, inputs=inputs)
 
 
+def _representable_text(value: str) -> bool:
+    """Whether PostgreSQL/UTF-8 can carry provider text into evidence."""
+    return "\x00" not in value and not any(
+        0xD800 <= ord(char) <= 0xDFFF for char in value)
+
+
 def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
     """Ask the model how much the meaning moved between two texts.
 
@@ -222,7 +228,8 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
     reported_model = payload.get("model")
     if reported_model is None:
         version = model
-    elif not isinstance(reported_model, str) or not reported_model.strip():
+    elif (not isinstance(reported_model, str) or not reported_model.strip()
+          or not _representable_text(reported_model)):
         return _absent("the model answered without usable model provenance",
                        model=model, prompt=prompt, inputs=inputs)
     else:
@@ -235,7 +242,8 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
             raise TypeError("score is not a JSON number")
         score = float(raw_score)
         basis = answered.get("basis")
-        if basis is not None and not isinstance(basis, str):
+        if (basis is not None
+                and (not isinstance(basis, str) or not _representable_text(basis))):
             raise TypeError("basis is not text")
     except (KeyError, IndexError, TypeError, ValueError, RecursionError):
         return _absent("the model answered, but not with a judgment in the "
@@ -350,7 +358,8 @@ def judge_risk_exposure(baseline: str, compared: str) -> Judgment:
     reported_model = payload.get("model")
     if reported_model is None:
         version = model
-    elif not isinstance(reported_model, str) or not reported_model.strip():
+    elif (not isinstance(reported_model, str) or not reported_model.strip()
+          or not _representable_text(reported_model)):
         return _absent("the model answered without usable model provenance",
                        model=model, prompt=prompt, inputs=inputs)
     else:
@@ -363,7 +372,8 @@ def judge_risk_exposure(baseline: str, compared: str) -> Judgment:
             raise TypeError("score is not a JSON number")
         score = float(raw_score)
         basis = answered.get("basis")
-        if basis is not None and not isinstance(basis, str):
+        if (basis is not None
+                and (not isinstance(basis, str) or not _representable_text(basis))):
             raise TypeError("basis is not text")
     except (KeyError, IndexError, TypeError, ValueError, RecursionError):
         return _absent("the model answered, but not with a judgment in the "
