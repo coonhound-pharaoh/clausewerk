@@ -509,6 +509,13 @@ class Handler(BaseHTTPRequestHandler):
             return True
         if not values:
             return False
+        # Content-Disposition is one disposition, not a comma-list. Some hops
+        # combine repeated fields, and accepting that spelling would let them
+        # disagree with this parser about which filename was claimed. A comma
+        # inside a quoted parameter is data and does not affect the disposition
+        # type, so only inspect the portion before the first semicolon here.
+        if "," in values[0].split(";", 1)[0]:
+            return True
         parsed = Message()
         parsed["content-disposition"] = values[0]
         parameters = parsed.get_params(

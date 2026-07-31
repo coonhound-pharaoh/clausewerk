@@ -3965,3 +3965,12 @@ doorway treated the whole thing as a document media type, changing which body
 parser and endpoint path receives the bytes. The transport now rejects commas
 in the media-type portion before reading the body while retaining commas inside
 quoted parameters. Fast protocol tests cover both cases.
+
+## S151 — Content-Disposition cannot carry combined dispositions — 2026-07-31
+
+The upload boundary rejected repeated Content-Disposition fields and repeated
+filename parameters, but a single comma-combined disposition type still passed.
+HTTP hops may combine repeated fields, leaving them and the doorway to choose
+different filename claims. The parser now rejects commas in the disposition
+type while retaining commas inside a quoted filename. Fast protocol controls
+cover both shapes.

@@ -91,6 +91,16 @@ def test_comma_combined_content_types_are_refused_as_ambiguous():
     assert not quoted._content_type_is_ambiguous()
 
 
+def test_comma_combined_content_dispositions_are_refused_as_ambiguous():
+    handler = handler_with_headers(
+        ("Content-Disposition", 'attachment, inline; filename="paper.docx"'))
+    assert handler._content_disposition_is_ambiguous()
+
+    quoted = handler_with_headers(
+        ("Content-Disposition", 'attachment; filename="paper, final.docx"'))
+    assert not quoted._content_disposition_is_ambiguous()
+
+
 def test_http_11_requires_one_unambiguous_host():
     for headers in (
         (),
