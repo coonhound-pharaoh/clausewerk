@@ -363,7 +363,11 @@ def test_nothing_outside_the_screens_directory_is_served(running):
             assert b"psycopg" not in served and b"# Memory" not in served, (
                 f"{attempt} served a file from outside the screens directory")
         except urllib.error.HTTPError as refused:
-            assert refused.code in (403, 404), (
+            # The request-target parser now closes raw and encoded dot
+            # segments before static routing, so 400 is the preferred answer.
+            # Keep 403/404 in the contract as defence-in-depth outcomes from
+            # the resolved-path boundary and an absent target respectively.
+            assert refused.code in (400, 403, 404), (
                 f"{attempt} answered {refused.code}")
 
 

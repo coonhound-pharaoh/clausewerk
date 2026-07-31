@@ -4082,3 +4082,12 @@ read a whole document before a malformed provenance name failed at the database
 boundary. Upload routing now rejects control characters and lone surrogates in
 the parsed filename before reading the body, while retaining ordinary Unicode
 filenames. A protocol regression proves the body remains unread.
+
+## S164 — Traversal test accepts the earlier parser refusal — 2026-07-31
+
+The live-server traversal regression still required a 403 or 404 after request
+target hardening moved raw and encoded dot-segment rejection ahead of static
+file routing. The server correctly answered 400, but the stale assertion made
+the broad security rail fail despite the traversal remaining closed. The test
+now accepts 400 at the parser boundary as well as the static boundary's 403 or
+404, and retains its content-leak assertion if any request is served.
