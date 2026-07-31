@@ -3599,6 +3599,37 @@ the clock makes a determinism test a coin flip.
 reads.py queue: NC-08 done; NC-13 is next in that queue (Gate D-6/D-4
 context applies), then NC-15, NC-16. writes.py queue: NC-09 is next.
 
+## S124 — The ungated sweep, day one: NC-13, NC-10, OB-07 — 2026-07-30
+
+Mike asked for ALL currently-ungated open work. The gate audit at start:
+ungated = NC-13, NC-16 (narrow fence in lieu of D-7), NC-10, OB-06, OB-07,
+NC-18 (gap over RP-05), NC-17 (on its stated two-layer matcher reading —
+flagged, not blocking, per the warn-don't-gate rule), NC-19, NC-26. Gated
+and skipped: NC-12/14 (D-2, counsel), NC-15 (D-6 re-put), NC-20..23 (D-5),
+NC-24, OB-13 (credentials), OB-14 (deployment), OB-11/15 (paused shell).
+
+**NC-13 (0048):** edit_similarity_threshold ships EMPTY (owner-decision
+true, decided FALSE — U4 cited as precedent, not stamped as the ruling;
+putting the owner's name on a key they never saw would be words in their
+mouth). Three cuts (cw.edit_quality, _by_category, _by_agreement), readers
+mirror cw.review_quality exactly; requester refused outright IS the
+per-contract fencing. below_threshold NULL-never-zero when unset. SQL
+mutation row proves the shipped emptiness. edit-quality.test.mjs (9).
+
+**NC-10:** docs/guides/pipeline.md; its example bodies ARE the fixtures
+(test_pipeline_guide.py parses the markdown and executes, 7 tests). The
+coupling caught its own first draft: manifest categories match LABELS, not
+keys. No mutation row — nothing new guarded (both MISS and SKIP are fatal).
+
+**OB-07:** reads/acts as READS/WRITES entries, not a module — single
+statements, the OB-09 precedent, collision risk gone (one session, clean
+tree). Four reads (book w/ source clause adjacent, gaps, unowned, close
+eligibility), three acts (satisfy, reassign, waive-against-approval).
+Breach assertion got NO endpoint deliberately (D-1: consequential claim,
+a button is a knowing decision). test_obligations.py (29); BODIES in
+test_writes.py grew three entries — the structural sweep failed loudly
+until it did, which is that fixture doing its job.
+
 ## S123 — NC-09 built: recording a received redline — 2026-07-29
 
 A module (redlines.py, POST /negotiations/redline), settling the package's

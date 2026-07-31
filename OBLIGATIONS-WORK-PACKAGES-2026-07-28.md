@@ -126,6 +126,21 @@ transport shape exists to specify against.
 
 *Serves OA §7. Prereq: OB-03 + OB-04. Owns only its new files.*
 
+> **BUILT — 2026-07-30**, with one deliberate shape change from this outline:
+> the reads and acts are entries in `reads.READS` and `writes.WRITES` rather
+> than a module — every one is a single statement, which is those files' whole
+> admission rule, and OB-09/10 set the precedent when the collision risk this
+> outline guarded against had passed (one session, clean tree, checked at
+> start). Four reads: the obligation book (source clause always adjacent),
+> coverage gaps, the unowned-defect surface, close eligibility. Three acts:
+> satisfy (note mandatory), reassign (a person, never an inbox), waive (only
+> against an approved override naming the obligation). Waiver request/decide
+> ride the existing override endpoints; **asserting breach got no endpoint,
+> deliberately** — D-1 made it a consequential claim, and a button for it is a
+> decision to take knowingly when a screen needs one. Suite:
+> `test_obligations.py` (29). No new mutation rows: every guarantee lives in
+> the schema and is already checked there.
+
 - New doorway module (`obligations.py` + `test_obligations.py`): reads (my obligations, an
   agreement's obligations with source clause always adjacent, coverage gaps, close eligibility)
   and the act writes (satisfy-attestation, reassign, waiver request/decide via the override

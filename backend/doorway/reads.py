@@ -214,6 +214,31 @@ READS: dict[str, Read] = {
         rule="cw.review_quality — the unedited-approval rate, measured and shown",
     ),
 
+    # ── The edit-quality cuts (NC-13, migration 0048) ───────────────────────
+    # The retained-language figure (0029's edit_similarity), three ways. The
+    # threshold column is Legal's number or null; below_threshold is null —
+    # never zero — when no threshold is set, and the screen must keep the two
+    # sentences apart. No alarm fires anywhere: the figure is for a person
+    # and a regulator, never a gate.
+    "GET /quality/edit": Read(
+        sql="""select * from cw.edit_quality""",
+        rule="cw.edit_quality grant — legal_reviewer, legal_admin, auditor; "
+             "the same readers cw.review_quality has had since 0008",
+    ),
+
+    "GET /quality/edit/by-category": Read(
+        sql="""select * from cw.edit_quality_by_category order by category_key""",
+        rule="cw.edit_quality_by_category grant — the review_quality readers",
+    ),
+
+    "GET /quality/edit/by-agreement": Read(
+        sql="""select * from cw.edit_quality_by_agreement
+          order by agreement_id nulls last""",
+        rule="cw.edit_quality_by_agreement grant — the review_quality readers. "
+             "The null-agreement row is tickets opened outside any deal, kept "
+             "visible; nulls last, never filtered",
+    ),
+
     # The measurement and the estimate, side by side and labelled as what each
     # one is (NC-25). The two label columns come from the view rather than from
     # an interface that has to remember them: the one way this feature does harm
@@ -517,6 +542,54 @@ READS: dict[str, Read] = {
                  category_owner, escalated
           from cw.ticket_route order by created_at""",
         rule="cw.ticket_route grant — legal_reviewer, legal_admin, auditor",
+    ),
+
+    # ── Obligations (OB-07, migrations 0036-0039) ───────────────────────────
+    # The state view is deliberately UNscoped per person: colleagues cover for
+    # each other (open-questions §12, settled), so every working role sees the
+    # whole obligation book and a workspace filters what the policy already
+    # returned — the audit-console pattern. Confidential deals arrive later as
+    # an explicit marking, and that capability's view is where narrowing will
+    # live. No viewer grant anywhere below.
+    "GET /obligations": Read(
+        sql="""select obligation_id, agreement_id, clause_id, version, kind,
+                 obliged, summary, occurrence, due_on, evidence, lead_days,
+                 survives, entitlement, owner_person, closed_as, closed_by,
+                 closed_at, breach_asserted_by, state
+          from cw.obligation_state
+          order by due_on nulls last, obligation_id""",
+        rule="cw.obligation_state grant (0038) — every working role plus the "
+             "auditor and administrator, no viewer. The source clause "
+             "(clause_id, version) is always adjacent: an obligation answers "
+             "to the wording that created it. pending/due/overdue are "
+             "computed on every read; overdue is arithmetic, never breach "
+             "(D-1)",
+    ),
+
+    "GET /obligations/gaps": Read(
+        sql="""select agreement_id, clause_id, version, registered_at
+          from cw.obligation_coverage_gap
+          order by agreement_id, clause_id, version""",
+        rule="cw.obligation_coverage_gap read_scoped policy (0036) — an "
+             "in-force clause declaring no obligations is reported, never "
+             "guessed at; during development every gap is expected (content "
+             "is placeholder)",
+    ),
+
+    "GET /obligations/unowned": Read(
+        sql="""select obligation_id, agreement_id, kind, due_on
+          from cw.obligation_unowned
+          order by due_on nulls last, obligation_id""",
+        rule="cw.obligation_unowned grant (0037) — absence of an owner "
+             "rendered as a gap, never as calm",
+    ),
+
+    "GET /agreements/closeable": Read(
+        sql="""select agreement_id, surviving_open, closeable
+          from cw.agreement_close_eligibility order by agreement_id""",
+        rule="cw.agreement_close_eligibility grant (0038) — nobody marks a "
+             "deal closed; the record says whether it is, and an unanchored "
+             "survivor blocks (fail-closed)",
     ),
 
     # ── The negotiation record (NC-08, migrations 0011 + 0027) ──────────────

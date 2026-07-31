@@ -128,6 +128,13 @@ BODIES: dict[str, dict] = {
         "person": "leah@clausewerk", "address": "leah@example.com",
     },
     "POST /notifications/addresses/remove": {"person": "leah@clausewerk"},
+    "POST /obligations/satisfy": {"obligation_id": 1, "note": "done; receipt"},
+    "POST /obligations/reassign": {
+        "obligation_id": 1, "new_owner": "ben@clausewerk",
+    },
+    "POST /obligations/waive": {
+        "obligation_id": 1, "note": "vendor in liquidation", "override_ref": 1,
+    },
 }
 
 

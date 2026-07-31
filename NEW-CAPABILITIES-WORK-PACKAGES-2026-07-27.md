@@ -875,6 +875,16 @@ transport.*
 
 *Serves plan WP-1 (Input Module — AI Pipeline Connection).*
 
+> **BUILT — 2026-07-30.** `docs/guides/pipeline.md`: authentication, both
+> request contracts as the code defines them, the deliberate source asymmetry,
+> and the three refusal kinds. The guide's example bodies ARE the fixtures —
+> `test_pipeline_guide.py` (7) parses them out of the markdown and executes
+> them, so the page cannot drift silently. One correction surfaced by exactly
+> that coupling: a risk's `category` matches the library's **labels**, not the
+> keys — the first guide draft said keys and its own test refused it. The
+> llm/fallback pair test passes; no endpoint, no SQL, no mutation row (nothing
+> new guarded), and the identity residue is stated, not solved.
+
 **Gate.** The connection work's files are clean in `git status`, and POST /runs' request contract is
 frozen — this package documents that contract to an external caller and must not document a moving
 target.
@@ -1036,6 +1046,17 @@ a clean reversal.
 ## NC-13 — Customer thresholds for the edit-quality metric, and its read surface
 
 *Serves plan WP-6 (Customer Thresholds).*
+
+> **BUILT — 2026-07-30, migration `0048`.** The threshold row
+> (`edit_similarity_threshold`) ships **EMPTY**, owner-decision true, decided
+> false — U4 is cited as the precedent, not stamped as the ruling, because the
+> owner never saw this key. A SQL mutation row proves the emptiness is a check,
+> not discipline. Three cuts of 0029's figure (`cw.edit_quality`,
+> `_by_category`, `_by_agreement`) with `cw.review_quality`'s exact readers —
+> both Legal roles and the Auditor; a requester is refused outright, which IS
+> the per-contract fencing. `below_threshold` is NULL, never zero, when no
+> threshold is set. Three reads in `reads.py`; suites: `edit-quality.test.mjs`
+> (9), 262/262 SQL mutations caught.
 
 **Gate.** NC-11 (the figure must exist before anything reports on it), plus the connection work's
 files being clean in `git status` for the `reads.py` edit only. Second in the `reads.py` queue,

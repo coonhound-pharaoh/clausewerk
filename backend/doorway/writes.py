@@ -657,6 +657,57 @@ WRITES: dict[str, Write] = {
         ),
     ),
 
+    # ── Obligation acts (OB-07, over 0037/0039) ─────────────────────────────
+    #
+    # Three acts, three endpoints, one statement each. Every guard is the
+    # schema's: satisfaction and waiver need a non-empty note (the '' lesson,
+    # 0037/0039 constraints), a closed obligation takes no further act, a
+    # waiver without an approved override naming exactly this obligation is
+    # refused (proposal-is-not-approval), and the actor is bound from the
+    # connection by trigger whatever this statement proposes.
+    #
+    # REQUESTING and DECIDING a waiver are the existing override endpoints —
+    # the request names the obligation as a finding (`obligation:<id>`), so no
+    # second approval machine appears here (0039's whole argument).
+    #
+    # ASSERTING BREACH HAS NO ENDPOINT, deliberately. D-1 made it a
+    # consequential legal claim a legal admin records with a reason, about an
+    # obligation the arithmetic already calls overdue. Giving that claim a
+    # button is a decision to take knowingly when a screen needs it — not a
+    # completeness itch to scratch here.
+    "POST /obligations/satisfy": Write(
+        sql="""insert into cw.obligation_act (obligation_id, act, note)
+       values (%(obligation_id)s, 'satisfied', %(note)s)
+       returning act_id, obligation_id, act, acted_by, acted_at""",
+        rule="cw.obligation_act record_act policy — Legal, or the requester on "
+             "their own deal; satisfaction_needs_note refuses a blank note, "
+             "and the '' a form posts when nobody typed is blank",
+        fields=(Field("obligation_id"), Field("note")),
+    ),
+
+    "POST /obligations/reassign": Write(
+        sql="""insert into cw.obligation_act (obligation_id, act, new_owner, note)
+       values (%(obligation_id)s, 'reassigned', %(new_owner)s, %(note)s)
+       returning act_id, obligation_id, act, new_owner, acted_by""",
+        rule="cw.obligation_act record_act policy; reassignment names a "
+             "PERSON, never a team inbox (0037's constraint), and the current "
+             "owner is the last reassignment, read through "
+             "cw.obligation_owner()",
+        fields=(Field("obligation_id"), Field("new_owner"),
+                Field("note", required=False)),
+    ),
+
+    "POST /obligations/waive": Write(
+        sql="""insert into cw.obligation_act (obligation_id, act, note, override_ref)
+       values (%(obligation_id)s, 'waived', %(note)s, %(override_ref)s)
+       returning act_id, obligation_id, act, acted_by""",
+        rule="cw.obligation_act_guard() (0039) — only an approved override "
+             "naming exactly this obligation authorises the act; a proposal "
+             "is not an approval. Recording is Legal's hands only "
+             "(record_act policy)",
+        fields=(Field("obligation_id"), Field("note"), Field("override_ref")),
+    ),
+
     # ── Stewardship ─────────────────────────────────────────────────────────
     "POST /checkpoints": Write(
         sql="""select cw.audit_checkpoint_take() as checkpoint_id""",

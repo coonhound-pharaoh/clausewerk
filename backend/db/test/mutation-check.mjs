@@ -2779,6 +2779,16 @@ grant usage, select on sequence cw.notification_outbox_outbox_id_seq to cw_legal
     find: `  new.received_by := cw.app_actor();`,
     repl: `  new.received_by := coalesce(new.received_by, cw.app_actor());`,
     expect: 'the recorder is the connection, whatever the insert claimed' },
+
+  // ── The edit-quality threshold (0048, NC-13) ──
+  // The one boundary this package converts from discipline into a check: the
+  // system never chooses the number. A shipped default is exactly the breach
+  // an earlier plan made once, which is why the test exists.
+  { suite: 'edit-quality.test.mjs',
+    name: 'the threshold ships with a number in it',
+    find: `  ('edit_similarity_threshold', '', 'owner_decision', true, false,`,
+    repl: `  ('edit_similarity_threshold', '0.85', 'owner_decision', true, false,`,
+    expect: 'the threshold row ships with an EMPTY value and owner-decision true' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();
