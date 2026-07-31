@@ -199,6 +199,19 @@ def test_structured_execution_fields_are_boundary_errors(field, wrong):
     assert answered.status == 400
 
 
+@pytest.mark.parametrize(("field", "wrong"), [
+    ("executed_on", 20260731),
+    ("filename", 42),
+    ("byte_size", "24000"),
+    ("term_end", 20270801),
+])
+def test_wrong_execution_scalar_types_are_boundary_errors(field, wrong):
+    answered = executions.execute(
+        None, None, filing("RUN-BOUNDARY", **{field: wrong}))
+
+    assert answered.status == 400
+
+
 # ── Gate 1 · the deal binding ───────────────────────────────────────────────
 
 

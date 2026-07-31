@@ -116,6 +116,8 @@ REQUIRED = ("agreement_id", "run_id", "executed_on", "effective_on", "filename",
 SIGNATORY_FIELDS = ("name", "party", "method", "signed_on")
 OPTIONAL_PLAIN_FIELDS = ("term_end", "agreement_kind", "parent_agreement_id",
                          "signature_evidence")
+TEXT_FIELDS = tuple(field for field in REQUIRED if field != "byte_size") \
+    + OPTIONAL_PLAIN_FIELDS
 MAX_SIGNATORIES = 100
 
 
@@ -171,6 +173,14 @@ def execute(db: Database, caller: Caller, body: dict) -> Answer:
     except WrongShape as wrong:
         return _rejected(str(wrong))
 
+    for field in TEXT_FIELDS:
+        if field in body and body[field] is not None \
+                and not isinstance(body[field], str):
+            return _rejected(f"{field} must be text")
+    if (not isinstance(body.get("byte_size"), int)
+            or isinstance(body.get("byte_size"), bool)):
+        return _rejected("byte_size must be an integer")
+
     signatories = body.get("signatories")
     if not isinstance(signatories, list) or not signatories:
         return _rejected(
@@ -196,8 +206,8 @@ def execute(db: Database, caller: Caller, body: dict) -> Answer:
     # no row, so a malformed request would come back as a not-found and never be
     # reported as malformed at all. The classification floor in refusals.py
     # cannot help — the value never reaches the driver. One rule, imported.
-    agreement_id = str(body["agreement_id"]).strip()
-    run_id = str(body["run_id"]).strip()
+    agreement_id = body["agreement_id"].strip()
+    run_id = body["run_id"].strip()
 
     try:
         with db.as_person(caller.person, caller.role) as request:

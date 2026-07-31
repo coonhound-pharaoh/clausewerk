@@ -4207,3 +4207,12 @@ and answered with a misleading inactive-account 403 after database work instead
 of a malformed-request 400. Sign-in now requires a nonblank string before any
 identity query. Four direct boundary cases run with no database and prove the
 early refusal.
+
+## S177 — Execution scalar types are checked before filing — 2026-07-31
+
+Rejecting structured fields still left wrong scalar types: numeric dates and
+filenames reached text/date columns late, while string byte sizes relied on
+driver or database coercion during an irreversible filing. All declared text
+fields now require strings when present, and `byte_size` requires a non-boolean
+integer before signatory processing or database work. Representative required
+and optional scalar mismatches prove clean 400 responses.
