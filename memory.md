@@ -4122,3 +4122,13 @@ live session table. Issuance now retains at most 19 existing sessions for that
 person before adding the new token, bounding the steady-state set at 20 per
 finite account. The session rail issues 27 tokens and proves both the ceiling
 and newest-token usability.
+
+## S168 — Manifest risk fan-out is bounded — 2026-07-31
+
+The HTTP byte limit still allowed a compact manifest to carry thousands of
+risk objects. Every accepted risk crosses category validation and resolution
+and can become a permanent decision row, so array fan-out amplified one request
+into unbounded deterministic work and database writes within the byte ceiling.
+The shared manifest boundary now refuses more than 200 risks before entry
+normalization, covering both pre-flight and run endpoints. A 201-risk synthetic
+manifest proves the early refusal.

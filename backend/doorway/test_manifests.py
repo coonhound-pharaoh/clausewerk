@@ -106,6 +106,15 @@ def manifest(*categories: str) -> dict:
     }
 
 
+def test_manifest_risk_fan_out_is_bounded_before_normalization():
+    from doorway.manifests import MAX_RISKS, Malformed, manifest_from
+
+    oversized = manifest(*(["Data Privacy"] * (MAX_RISKS + 1)))
+
+    with pytest.raises(Malformed, match=str(MAX_RISKS)):
+        manifest_from(oversized)
+
+
 def chain(client: Client) -> list[dict]:
     status, body = client.call("GET", "/api/record")
     assert status == 200, body

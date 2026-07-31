@@ -72,6 +72,9 @@ class Malformed(Exception):
 # One copy, imported by runs.py, because the pre-flight and the enforcement must
 # refuse identically — a second literal here is a rule with two copies.
 DROPPED_WITHOUT_REASON = "the engine dropped this category"
+# A transport byte ceiling does not bound list fan-out. Each accepted risk is
+# compared with the library and can become a permanent run_decision row.
+MAX_RISKS = 200
 
 
 def manifest_from(body: dict) -> Manifest:
@@ -91,6 +94,9 @@ def manifest_from(body: dict) -> Manifest:
     raw = body.get("risks")
     if not isinstance(raw, list) or not raw:
         raise Malformed("a manifest carries at least one risk")
+    if len(raw) > MAX_RISKS:
+        raise Malformed(
+            f"a manifest carries at most {MAX_RISKS} risks; split the work")
 
     risks = []
     for index, entry in enumerate(raw):
