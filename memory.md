@@ -3845,3 +3845,14 @@ path. Invalid configuration returns a channel that fails when used, allowing
 the notification tick to record the failure through its existing outbox path.
 Five focused cases cover malformed URLs, protocol confusion and embedded
 credentials.
+
+## S139 — JSON booleans are refused from plain write fields — 2026-07-31
+
+Every generic write field is text or a numeric/date identifier; none declares
+a boolean. The central shape guard rejected objects and lists but allowed JSON
+`true` and `false`. PostgreSQL treats booleans as a distinct bound type, so a
+boolean ticket or agreement identifier reached the driver and became a late
+database error rather than a 400 caller mistake. `refuse_structured` now rejects
+booleans centrally. A table-wide test covers both values in every plain field,
+and the endpoint-level test proves the result is a shaped 400 rather than a
+service failure.

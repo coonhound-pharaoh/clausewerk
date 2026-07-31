@@ -965,6 +965,19 @@ def test_a_structured_value_is_refused_and_the_field_is_named(key, bad):
             WRITES[key].bind(body)
 
 
+@pytest.mark.parametrize("key", sorted(WRITES))
+@pytest.mark.parametrize("bad", [True, False])
+def test_a_boolean_is_refused_from_every_plain_field(key, bad):
+    """JSON booleans are not numeric IDs or text and PostgreSQL treats them
+    as their own type; letting one through turns a request typo into a late
+    database error instead of a boundary rejection."""
+    for spec in _plain_fields(key):
+        body = dict(BODIES[key])
+        body[spec.name] = bad
+        with pytest.raises(WrongShape, match="boolean"):
+            WRITES[key].bind(body)
+
+
 def test_the_one_json_field_still_takes_a_structure():
     """The guard must not break the field whose whole job is to carry one."""
     findings = [f for f in WRITES["POST /overrides"].fields if f.as_json]
@@ -974,7 +987,7 @@ def test_the_one_json_field_still_takes_a_structure():
     WRITES["POST /overrides"].bind(body)
 
 
-@pytest.mark.parametrize("bad", [{"nested": [1, 2]}, [1, 2]])
+@pytest.mark.parametrize("bad", [{"nested": [1, 2]}, [1, 2], True])
 def test_the_endpoint_answers_a_refusal_and_not_a_service_failure(
     people, db: Database, bad
 ):

@@ -106,7 +106,7 @@ class Missing(Exception):
 
 
 class WrongShape(Exception):
-    """A field that arrived as an object or a list where a plain value belongs."""
+    """A field that arrived as an object, list or boolean where a plain value belongs."""
 
 
 def refuse_structured(name: str, value: Any) -> Any:
@@ -128,6 +128,8 @@ def refuse_structured(name: str, value: Any) -> Any:
     Empty cases are covered deliberately: `str({})` is "{}" and `str([])` is
     "[]", so neither is caught by the blankness check below.
     """
+    if isinstance(value, bool):
+        raise WrongShape(f"{name} takes a plain value, not a boolean")
     if isinstance(value, (dict, list)):
         raise WrongShape(f"{name} takes a plain value, not an object or a list")
     return value
