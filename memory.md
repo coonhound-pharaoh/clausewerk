@@ -4178,3 +4178,13 @@ parameters. Objects and lists then failed adaptation as a service/database error
 instead of a malformed request; optional structured titles bypassed even the
 presence loop. Required signatory fields and title now use the shared plain-value
 guard before database work. Four synthetic shapes prove clean 400 responses.
+
+## S174 — Structured execution fields are boundary errors — 2026-07-31
+
+Most top-level execution fields were checked only for presence. Objects, lists,
+and booleans in dates, filename, byte size, hashes, storage references, or the
+optional agreement metadata therefore reached psycopg or immutable schema
+constraints as late service/database failures. Every required filing field and
+the four optional plain fields now pass through the shared plain-value guard
+before signatory processing or database work. Representative required and
+optional malformed shapes prove clean 400 responses.

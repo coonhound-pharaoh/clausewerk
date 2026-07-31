@@ -186,6 +186,19 @@ def test_structured_signatory_fields_are_boundary_errors(field, wrong):
     assert answered.status == 400
 
 
+@pytest.mark.parametrize(("field", "wrong"), [
+    ("filename", {"nested": "name"}),
+    ("byte_size", True),
+    ("storage_uri", ["not", "a", "uri"]),
+    ("signature_evidence", {"nested": "envelope"}),
+])
+def test_structured_execution_fields_are_boundary_errors(field, wrong):
+    answered = executions.execute(
+        None, None, filing("RUN-BOUNDARY", **{field: wrong}))
+
+    assert answered.status == 400
+
+
 # ── Gate 1 · the deal binding ───────────────────────────────────────────────
 
 

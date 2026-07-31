@@ -114,6 +114,8 @@ REQUIRED = ("agreement_id", "run_id", "executed_on", "effective_on", "filename",
             "byte_size", "sha256", "storage_uri", "signed_on")
 
 SIGNATORY_FIELDS = ("name", "party", "method", "signed_on")
+OPTIONAL_PLAIN_FIELDS = ("term_end", "agreement_kind", "parent_agreement_id",
+                         "signature_evidence")
 MAX_SIGNATORIES = 100
 
 
@@ -162,6 +164,13 @@ def execute(db: Database, caller: Caller, body: dict) -> Answer:
             "home until the document store exists. File the document hash and "
             "the signatories now, and attach the certificate afterwards")
 
+    try:
+        for field in (*REQUIRED, *OPTIONAL_PLAIN_FIELDS):
+            if field in body:
+                refuse_structured(field, body[field])
+    except WrongShape as wrong:
+        return _rejected(str(wrong))
+
     signatories = body.get("signatories")
     if not isinstance(signatories, list) or not signatories:
         return _rejected(
@@ -187,12 +196,6 @@ def execute(db: Database, caller: Caller, body: dict) -> Answer:
     # no row, so a malformed request would come back as a not-found and never be
     # reported as malformed at all. The classification floor in refusals.py
     # cannot help — the value never reaches the driver. One rule, imported.
-    try:
-        for field in ("agreement_id", "run_id"):
-            refuse_structured(field, body[field])
-    except WrongShape as wrong:
-        return _rejected(str(wrong))
-
     agreement_id = str(body["agreement_id"]).strip()
     run_id = str(body["run_id"]).strip()
 
