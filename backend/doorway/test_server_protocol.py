@@ -181,3 +181,21 @@ def test_malformed_absolute_request_target_is_a_400_not_a_crash():
     assert parsed is None
     assert refused is not None
     assert refused.status == 400
+
+
+def test_only_origin_form_request_targets_are_accepted():
+    handler = handler_with_headers()
+
+    for ambiguous in (
+        "http://example.test/api/me",
+        "//example.test/api/me",
+        "/api/me#different-resource",
+        "api/me",
+    ):
+        parsed, refused = handler._parse_target(ambiguous)
+        assert parsed is None, ambiguous
+        assert refused is not None and refused.status == 400, ambiguous
+
+    parsed, refused = handler._parse_target("/api/me?run=RUN-1")
+    assert refused is None
+    assert parsed is not None and parsed.path == "/api/me"

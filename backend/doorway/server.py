@@ -280,9 +280,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def _parse_target(self, target: str) -> tuple[ParseResult | None, Response | None]:
         try:
-            return urlparse(target), None
+            parsed = urlparse(target)
         except ValueError:
             return None, Response(400, {"error": "the request target is malformed"})
+        # This is an origin server, not a forward proxy. Accept only origin-form
+        # targets. Absolute/network-path forms and fragments let intermediaries
+        # disagree about the authority or resource while this server silently
+        # routes only the path.
+        if (not parsed.path.startswith("/") or parsed.scheme or parsed.netloc
+                or parsed.fragment):
+            return None, Response(400, {"error": "the request target is malformed"})
+        return parsed, None
 
     def _query(self, raw: str) -> tuple[dict[str, str], Response | None]:
         if re.search(r"%(?![0-9A-Fa-f]{2})", raw):

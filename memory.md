@@ -3884,3 +3884,12 @@ PostgreSQL text cannot contain NUL; either value produced a late response or
 driver failure instead of a caller-facing 400. The HTTP boundary now walks keys
 and values iteratively and rejects both forms before dispatch. Socket tests
 cover an escaped lone surrogate and escaped NUL.
+
+## S143 — The origin server accepts only origin-form targets — 2026-07-31
+
+`_parse_target` accepted proxy-style absolute URLs, network-path references and
+fragments, then routed only the parsed path. A proxy, cache and this service can
+interpret those forms with different authorities or resource identities. The
+doorway is an origin server and now requires a slash-prefixed origin-form target
+with no scheme, authority or fragment. Fast protocol tests reject four ambiguous
+forms and retain an ordinary path-plus-query control.
