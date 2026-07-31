@@ -4403,3 +4403,11 @@ owner-privileged `CREATE DATABASE` SQL. A name containing a quote could end the
 identifier and append another statement when the suite started. Creation and
 cleanup now compose the configured name with psycopg's identifier quoting; a
 fixture-free control proves hostile punctuation remains inside one identifier.
+
+## S197 — Test database names cannot rewrite connection URLs — 2026-07-31
+
+The test fixture also inserted `CW_TEST_DATABASE` raw into PostgreSQL URLs with
+a regular-expression replacement. URL delimiters could change the database
+path or query, while backslash replacement syntax could corrupt construction
+before the suite began. The fixture now percent-encodes the name as exactly one
+URL path segment and preserves the original connection authority and options.

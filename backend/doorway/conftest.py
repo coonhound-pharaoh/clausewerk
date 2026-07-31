@@ -34,7 +34,7 @@ come from the compose file's development defaults.
 from __future__ import annotations
 
 import os
-import re
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import psycopg
 import pytest
@@ -66,7 +66,10 @@ def _database_statement(command: str, name: str) -> sql.Composed:
 
 def _with_database(url: str, name: str) -> str:
     """The same connection details, pointed at a different database."""
-    return re.sub(r"/[^/?]+(\?|$)", f"/{name}\\1", url, count=1)
+    parsed = urlsplit(url)
+    return urlunsplit((parsed.scheme, parsed.netloc,
+                       "/" + quote(name, safe=""),
+                       parsed.query, parsed.fragment))
 
 
 OWNER_URL = os.environ.get(
