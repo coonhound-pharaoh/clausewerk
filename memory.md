@@ -4512,3 +4512,12 @@ clearing their busy state. Record calls, downloads, and sign-in now return the
 same status-zero unreachable shape when fetch rejects. The shell executes all
 three real transport paths with a rejecting fetch and proves each promise
 settles as a classified failure rather than throwing.
+
+## S209 — Unreadable 200 responses fail closed in the browser — 2026-07-31
+
+The API adapter replaced JSON parse failure with `null` and then treated an OK
+HTTP status as a successful response with zero rows. A truncated queue response
+could therefore render as “nothing is waiting” instead of “could not load.”
+Successful record and sign-in responses now require a readable JSON object;
+otherwise they return a classified invalid-response failure while preserving
+the HTTP status. The real adapter is tested with a 200 whose JSON parser throws.

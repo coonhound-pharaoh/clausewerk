@@ -28,6 +28,10 @@ const API = (() => {
     ok: false, status: 0, reason: 'the service could not be reached',
     unreachable: true,
   });
+  const unreadable = (status) => ({
+    ok: false, status, reason: 'the service returned an unreadable response',
+    invalidResponse: true,
+  });
 
   async function call(method, path, body) {
     let res;
@@ -41,8 +45,16 @@ const API = (() => {
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch { return unreachable(); }
-    let payload = null;
-    try { payload = await res.json(); } catch { payload = null; }
+    let payload;
+    try { payload = await res.json(); }
+    catch { return res.ok ? unreadable(res.status) : {
+      ok: false, status: res.status,
+      reason: `the request failed (${res.status})`,
+      expired: res.status === 401,
+    }; }
+
+    if (res.ok && (payload === null || typeof payload !== 'object'
+        || Array.isArray(payload))) return unreadable(res.status);
 
     if (res.ok) return { ok: true, rows: payload?.rows ?? [], body: payload };
 
@@ -107,7 +119,13 @@ const API = (() => {
           body: JSON.stringify({ person }),
         });
       } catch { return unreachable(); }
-      const payload = await res.json().catch(() => null);
+      let payload;
+      try { payload = await res.json(); }
+      catch { return res.ok ? unreadable(res.status) : {
+        ok: false, status: res.status, reason: 'sign-in failed',
+      }; }
+      if (res.ok && (payload === null || typeof payload !== 'object'
+          || Array.isArray(payload))) return unreadable(res.status);
       if (!res.ok) return { ok: false, reason: payload?.reason ?? 'sign-in failed' };
       token = payload.token;
       identity = {

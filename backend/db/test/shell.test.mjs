@@ -243,6 +243,41 @@ await test('network failures settle every API transport as an unreachable result
   }
 });
 
+await test('an unreadable successful response never becomes an empty success', async () => {
+  const context = {
+    fetch: async () => ({
+      ok: true, status: 200,
+      json: async () => { throw new SyntaxError('truncated JSON'); },
+    }),
+  };
+  const source = read('api.jsx').replace('const API =', 'globalThis.API =');
+  runInNewContext(source, context);
+
+  for (const result of await Promise.all([
+    context.API.me(), context.API.signIn('person@example.test'),
+  ])) {
+    assert(result.ok === false, 'unreadable JSON was reported as success');
+    assert(result.status === 200, 'the transport lost the actual response status');
+    assert(result.invalidResponse === true, 'the malformed response was not identified');
+  }
+});
+
+await test('an unreadable 401 still expires the browser session', async () => {
+  const context = {
+    fetch: async () => ({
+      ok: false, status: 401,
+      json: async () => { throw new SyntaxError('truncated JSON'); },
+    }),
+  };
+  const source = read('api.jsx').replace('const API =', 'globalThis.API =');
+  runInNewContext(source, context);
+
+  const result = await context.API.me();
+
+  assert(result.ok === false, 'an unreadable 401 was reported as success');
+  assert(result.expired === true, 'an unreadable 401 did not expire the session');
+});
+
 await test('no pane holds an array of example rows', async () => {
   // The shape canned data takes: a literal array of objects sitting in the
   // module, ready to render. Real rows arrive from usePane and are never
