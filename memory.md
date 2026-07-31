@@ -4261,3 +4261,13 @@ verbatim to stderr. ESC or carriage return could therefore manipulate a local
 operator terminal or forge log layout even though the request itself answered
 400. Logging now renders every control and DEL as a visible hex escape after
 formatting. A synthetic ESC/CR request line proves one control-free log line.
+
+## S183 — waiting_for binds non-admin callers to themselves — 2026-07-31
+
+`cw.waiting_for(person, role)` runs as `SECURITY DEFINER` and was executable by
+every signed role, but trusted both arguments. A requester could name another
+person or claim `legal_admin` and enumerate privileged queue references and due
+dates. The replacement function permits cross-person derivation only for the
+Administrator notification duty; every other application caller must supply
+their signed actor and actual role. Routing tests prove self access, two spoof
+refusals, and the Administrator's positive control.

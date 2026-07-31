@@ -164,6 +164,24 @@ await test('a fresh claim clears the escalation at once', async () => {
 
 console.log('\nthe derivation grows its routed source (OB-08 rule)');
 
+await test('waiting_for binds non-administrators to their signed identity', async () => {
+  await queryAs('requester',
+    `select * from cw.waiting_for('${OWNER_OF_DATA}','requester')`,
+    [], OWNER_OF_DATA);
+  await throws(() => queryAs('requester',
+    `select * from cw.waiting_for('somebody-else@cw','requester')`,
+    [], OWNER_OF_DATA), 'signed caller');
+  await throws(() => queryAs('requester',
+    `select * from cw.waiting_for('${OWNER_OF_DATA}','legal_admin')`,
+    [], OWNER_OF_DATA), 'signed caller');
+});
+
+await test('the administrator may derive another persons digest', async () => {
+  await queryAs('administrator',
+    `select * from cw.waiting_for('${OWNER_OF_DATA}','requester')`,
+    [], 'admin@cw');
+});
+
 await test('the named owner is told about work nobody took — review_escalation reaches cw.waiting_for', async () => {
   // Release Ravi's claim so ticket 1 is unclaimed and past the (zeroed) window.
   await db.exec(`reset role;
