@@ -39,6 +39,7 @@ code — the single-pipeline claim, asserted by test.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 
 import psycopg
@@ -82,8 +83,8 @@ def _score(text: str, terms: frozenset[str]) -> float:
     which is why every row names its matcher (§4's residue, recorded)."""
     if not terms:
         return 0.0
-    lowered = text.lower()
-    return round(sum(1 for term in terms if term in lowered) / len(terms), 4)
+    words = frozenset(re.findall(r"[a-z]+", text.lower()))
+    return round(sum(1 for term in terms if term in words) / len(terms), 4)
 
 
 def _rank(request, category_key: str, severity: str,

@@ -4142,3 +4142,12 @@ judgment, so file-byte and per-ingest limits did not bound one analysis call.
 Both entrances now refuse more than 200 units before writing analysis rows or
 calling a provider; the supplier query reads at most 201 to make the decision.
 A three-redline fixture with a lowered ceiling proves zero analysis rows land.
+
+## S170 — Analysis match scores use whole words — 2026-07-31
+
+Supplier-paper classification was corrected to exact word tokens, but round
+analysis still scored category terms as substrings. A short key such as `ip`
+therefore gained false score from ordinary words like `supplier` and `ship`,
+leaving the recorded confidence inconsistent with the classifier that selected
+the category. `_score` now uses the same alphabetic-token membership. Synthetic
+controls prove both the substring refusal and standalone acronym match.

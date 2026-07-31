@@ -147,6 +147,11 @@ def analysis_rows(db: Database) -> list[dict]:
             "select * from cw.round_analysis order by analysis_id")
 
 
+def test_match_score_uses_words_not_short_key_substrings():
+    assert analysis._score("Supplier will ship promptly.", frozenset({"ip"})) == 0
+    assert analysis._score("IP ownership changed.", frozenset({"ip"})) == 1
+
+
 def test_the_matched_path_names_position_score_instrument_and_retreat(seeded, db):
     answered = analysis.analyse(db, OWNING_REQUESTER, {"agreement": "AG-A1"})
     assert answered.status == 200, answered.body
