@@ -465,11 +465,34 @@ class Handler(BaseHTTPRequestHandler):
         # Cross-origin access is opt-in. The development sign-in does not prove
         # the user owns the named account, so a wildcard would let any website
         # acquire its own token from localhost and read the resulting records.
-        origin = os.environ.get("CW_ORIGIN")
+        origin = self._allowed_origin(os.environ.get("CW_ORIGIN"))
         if origin:
             self.send_header("access-control-allow-origin", origin)
+            self.send_header("vary", "Origin")
         self.send_header("access-control-allow-headers", "authorization, content-type")
         self.send_header("access-control-allow-methods", "GET, POST, OPTIONS")
+
+    @staticmethod
+    def _allowed_origin(configured: str | None) -> str | None:
+        """One exact browser origin, never a wildcard or header syntax."""
+        if not configured:
+            return None
+        try:
+            parsed = urlparse(configured)
+            # Accessing port also validates malformed/non-numeric port text.
+            _ = parsed.port
+        except ValueError:
+            return None
+        if (parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path
+                or parsed.params
+                or parsed.query
+                or parsed.fragment):
+            return None
+        return configured
 
     def _send_download(self, download: Download) -> None:
         """Bytes out, named, measured, and not touched on the way.

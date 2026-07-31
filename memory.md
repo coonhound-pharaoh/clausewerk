@@ -3794,3 +3794,13 @@ construction error therefore leaked connections even though no server was
 returned for the caller to close. Startup now closes the pool and re-raises the
 original error. A focused test forces socket binding to fail and verifies both
 the original error and the pool closure.
+
+## S134 — CORS configuration cannot become a wildcard — 2026-07-31
+
+`server.py` explained that wildcard cross-origin access would let any website
+obtain its own development token and read records, but emitted `CW_ORIGIN`
+without validation. `CW_ORIGIN=*` therefore did exactly what the comment ruled
+out. CORS now accepts only one absolute HTTP(S) origin without credentials,
+path, query or fragment, adds `Vary: Origin`, and grants no origin for invalid
+or wildcard settings. Transport tests cover one valid development origin and
+four unsafe shapes.

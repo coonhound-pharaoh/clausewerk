@@ -936,6 +936,32 @@ def test_authenticated_origin_cannot_be_embedded_for_clickjacking():
         with urllib.request.urlopen(base + "/api/me") as reply:
             assert reply.headers["x-frame-options"] == "DENY"
 
+
+def test_cors_allows_one_exact_configured_origin(monkeypatch):
+    monkeypatch.setenv("CW_ORIGIN", "http://127.0.0.1:5173")
+    app = Records(Response(200, {"ok": True}))
+
+    with stub_serving(app) as base:
+        with urllib.request.urlopen(base + "/api/me") as reply:
+            assert (reply.headers["access-control-allow-origin"]
+                    == "http://127.0.0.1:5173")
+            assert reply.headers["vary"] == "Origin"
+
+
+@pytest.mark.parametrize("configured", [
+    "*",
+    "http://127.0.0.1:5173/path",
+    "http://user:secret@127.0.0.1:5173",
+    "javascript:alert(1)",
+])
+def test_unsafe_cors_configuration_grants_no_origin(monkeypatch, configured):
+    monkeypatch.setenv("CW_ORIGIN", configured)
+    app = Records(Response(200, {"ok": True}))
+
+    with stub_serving(app) as base:
+        with urllib.request.urlopen(base + "/api/me") as reply:
+            assert "access-control-allow-origin" not in reply.headers
+
     download = Records(Download(200, b"contract", DOCX_TYPE, "contract.docx"))
     with stub_serving(download) as base:
         with urllib.request.urlopen(base + "/api/runs/contract") as reply:
