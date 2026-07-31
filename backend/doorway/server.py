@@ -451,6 +451,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("content-type", kind)
         self.send_header("content-length", str(len(content)))
+        # The shell carries the API contract and keeps a bearer token in
+        # memory. Do not let a browser or intermediary retain an older client
+        # after request or authorization behavior changes.
+        self.send_header("cache-control", "no-store")
         self.send_header("x-content-type-options", "nosniff")
         self.send_header("x-frame-options", "DENY")
         self.end_headers()

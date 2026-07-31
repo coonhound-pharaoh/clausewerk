@@ -3804,3 +3804,12 @@ out. CORS now accepts only one absolute HTTP(S) origin without credentials,
 path, query or fragment, adds `Vary: Origin`, and grants no origin for invalid
 or wildcard settings. Transport tests cover one valid development origin and
 four unsafe shapes.
+
+## S135 — The browser shell is not cached — 2026-07-31
+
+JSON and document responses already carried `Cache-Control: no-store`, but
+static HTML, JavaScript and styles did not. The shell contains the API contract
+and session handling, so a cached older client can keep making stale requests
+after an authorization or boundary fix is deployed. Static responses now carry
+the same no-store rule. The existing same-origin screen test records and checks
+the response header as well as the page bytes.

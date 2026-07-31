@@ -339,7 +339,9 @@ def test_revocation_bites_at_the_next_request(running, owner_url):
 def test_the_screens_are_served_from_the_same_origin(running):
     with urllib.request.urlopen(running + "/") as response:
         page = response.read().decode()
+        cache_control = response.headers["cache-control"]
     assert response.status == 200
+    assert cache_control == "no-store"
     assert "<title>Clausewerk" in page
     assert "./app/api.jsx" in page, "the shell's scripts are not being served"
 
