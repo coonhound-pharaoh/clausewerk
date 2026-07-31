@@ -91,6 +91,23 @@ def test_comma_combined_content_types_are_refused_as_ambiguous():
     assert not quoted._content_type_is_ambiguous()
 
 
+def test_control_characters_in_content_type_are_refused_unread():
+    handler = handler_with_headers(
+        ("Host", "localhost"),
+        ("Content-Type", "application/octet\x00-stream"),
+        ("Content-Length", "4"),
+        body=b"data",
+    )
+    handler.path = "/api/supplier-paper?agreement=AG-1"
+    answered = []
+    handler._respond = answered.append
+
+    handler.do_POST()
+
+    assert answered[0].status == 400
+    assert handler.rfile.tell() == 0
+
+
 def test_comma_combined_content_dispositions_are_refused_as_ambiguous():
     handler = handler_with_headers(
         ("Content-Disposition", 'attachment, inline; filename="paper.docx"'))

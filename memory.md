@@ -4233,3 +4233,12 @@ categories as missing library content and could silently coerce numeric
 severities rather than identify malformed model output. All five declared text
 locations now require strings when present, before normalization or engine
 classification. Five numeric controls prove the boundary refusal.
+
+## S180 — Malformed content types are refused unread — 2026-07-31
+
+Upload filenames rejected control characters, but the `Content-Type` header was
+also copied into received-document provenance and had no equivalent check. A
+quoted or raw NUL/control value therefore caused PostgreSQL text failure only
+after the whole upload was read. POST routing now rejects controls, DEL, and
+lone surrogates in the sole media-type field before body reads. A protocol
+regression proves a NUL-bearing type returns 400 with the body untouched.

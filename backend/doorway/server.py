@@ -232,6 +232,10 @@ class Handler(BaseHTTPRequestHandler):
             self._respond(Response(400, {"error": "content type is ambiguous"}))
             return
 
+        if self._content_type_is_malformed():
+            self._respond(Response(400, {"error": "content type is malformed"}))
+            return
+
         if self._content_disposition_is_ambiguous():
             self._respond(Response(400, {
                 "error": "content disposition is ambiguous"}))
@@ -466,6 +470,14 @@ class Handler(BaseHTTPRequestHandler):
         # quoted parameter is harmless to routing; only the media-type portion
         # before the first semicolon decides JSON versus document.
         return bool(values and "," in values[0].split(";", 1)[0])
+
+    def _content_type_is_malformed(self) -> bool:
+        """A media type copied into provenance must be representable text."""
+        values = self.headers.get_all("content-type", [])
+        return bool(values and any(
+            (ord(char) < 32 and char != "\t") or ord(char) == 127
+            or 0xD800 <= ord(char) <= 0xDFFF
+            for char in values[0]))
 
     def _is_document(self) -> bool:
         """Is this POST carrying a document rather than a record?
