@@ -306,6 +306,8 @@ class Handler(BaseHTTPRequestHandler):
         # Refuse all three spellings before either API or static dispatch.
         if "\\" in parsed.path or re.search(r"%(?:2[fF]|5[cC])", parsed.path):
             return None, Response(400, {"error": "the request target is malformed"})
+        if re.search(r"%(?:3[fF]|23)", parsed.path):
+            return None, Response(400, {"error": "the request target is malformed"})
         for segment in parsed.path.split("/"):
             dotted = re.sub(r"%2[eE]", ".", segment)
             if dotted in (".", ".."):

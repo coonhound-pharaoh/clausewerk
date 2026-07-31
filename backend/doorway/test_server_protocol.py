@@ -283,6 +283,19 @@ def test_request_targets_cannot_carry_dot_segments_between_hops():
         assert parsed is None, ambiguous
         assert refused is not None and refused.status == 400, ambiguous
 
+
+def test_request_targets_cannot_hide_query_or_fragment_delimiters():
+    handler = handler_with_headers()
+
+    for ambiguous in (
+        "/api/sign-in%3fadmin=true",
+        "/api/sign-in%3Fadmin=true",
+        "/api/sign-in%23fragment",
+    ):
+        parsed, refused = handler._parse_target(ambiguous)
+        assert parsed is None, ambiguous
+        assert refused is not None and refused.status == 400, ambiguous
+
     parsed, refused = handler._parse_target("/api/me?run=RUN-1")
     assert refused is None
     assert parsed is not None and parsed.path == "/api/me"

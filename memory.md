@@ -3992,3 +3992,12 @@ those segments before choosing API routing while the doorway routed the
 unnormalized form, creating cross-hop endpoint ambiguity even without escaping
 the static root. Origin-form parsing now rejects raw, encoded and mixed dot
 segments before dispatch. Fast protocol tests cover all three forms.
+
+## S154 — Request paths cannot hide query or fragment delimiters — 2026-07-31
+
+Origin-form parsing separated raw query and fragment delimiters but accepted
+percent-encoded `?` and `#` inside the path. An upstream hop may decode those
+reserved characters before routing while the doorway keeps them in the path,
+so the hops can disagree about both endpoint and selector. Target parsing now
+rejects encoded query and fragment delimiters before dispatch, with fast
+protocol coverage for case variants.
