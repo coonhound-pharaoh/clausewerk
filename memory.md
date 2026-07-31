@@ -4475,3 +4475,13 @@ the cleanup exception and hid the failure that actually stopped installation.
 Unlock is now best-effort only while another exception is active; after a
 successful migration, an unlock failure still surfaces. Fixture-free controls
 prove both exception paths.
+
+## S205 — The authenticated shell does not trust mutable CDN code — 2026-07-31
+
+The v4 page ran Tailwind's unversioned browser compiler plus React, ReactDOM,
+and Babel from third-party origins without integrity. Any changed CDN response
+ran beside the in-memory bearer token. Tailwind 3.4.17 is now compiled to local
+CSS, removing that executable dependency; the three pinned unpkg scripts carry
+verified SHA-384 integrity and anonymous CORS attributes. The shell suite proves
+there is no Tailwind CDN reference, every remote script is integrity-locked,
+and the compiled local stylesheet is present.

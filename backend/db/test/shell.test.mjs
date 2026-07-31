@@ -182,6 +182,26 @@ await test('the concept mockup is not imported by the shell', async () => {
   }
 });
 
+await test('third-party code cannot change underneath the authenticated shell', async () => {
+  const html = readFileSync(join(V4, 'index.html'), 'utf8');
+  assert(!html.includes('cdn.tailwindcss.com'),
+    'the authenticated shell executes Tailwind CDN code at runtime');
+  const remoteScripts = [...html.matchAll(
+    /<script\b(?=[^>]*\bsrc=["']https:\/\/)[^>]*>/gi)].map((match) => match[0]);
+  assert(remoteScripts.length > 0, 'the control found no remote scripts');
+  for (const tag of remoteScripts) {
+    assert(/\bintegrity=["']sha384-[A-Za-z0-9+/=]+["']/i.test(tag),
+      `remote script has no SHA-384 integrity lock: ${tag}`);
+    assert(/\bcrossorigin=["']anonymous["']/i.test(tag),
+      `integrity-locked remote script has no anonymous CORS mode: ${tag}`);
+  }
+  const compiled = readFileSync(join(APPDIR, 'tailwind.css'), 'utf8');
+  assert(compiled.length > 5_000, 'the local Tailwind build is missing or empty');
+  for (const utility of ['.flex', '.grid', '.hidden', '.py-1']) {
+    assert(compiled.includes(utility), `the Tailwind build omitted ${utility}`);
+  }
+});
+
 await test('no pane holds an array of example rows', async () => {
   // The shape canned data takes: a literal array of objects sitting in the
   // module, ready to render. Real rows arrive from usePane and are never
