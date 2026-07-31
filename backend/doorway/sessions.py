@@ -185,7 +185,7 @@ class Sessions:
             request.write(
                 "delete from cw.session where token_sha256 in ("
                 "select token_sha256 from cw.session where person = %s "
-                "order by expires_at desc, token_sha256 desc offset %s)",
+                "order by issued_at desc, token_sha256 desc offset %s)",
                 (person, MAX_LIVE_SESSIONS_PER_PERSON - 1),
             )
             # The FINGERPRINT is stored; the key itself is returned below and

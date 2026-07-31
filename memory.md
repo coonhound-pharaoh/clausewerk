@@ -4445,3 +4445,15 @@ digit-limit `ValueError`. A governance value containing thousands of digits
 therefore broke every new sign-in instead of using the parser's documented
 eight-hour fallback. Both conversion failures now fall back; the duration
 control includes a 5,000-digit value that reaches the previously uncaught path.
+
+## S202 — Session trimming follows database issue order — 2026-07-31
+
+The per-person issuance lock enforced the count cap, but trimming ordered equal
+expiries by random token digest. A later concurrent sign-in could therefore
+delete a token another request had just returned while older sessions survived.
+Sessions now carry a database insertion timestamp taken inside the issuance
+lock, and trimming keeps the most recently inserted rows. The concurrency
+control proves all twelve new tokens remain usable while the cap stays at 20.
+The required database mutation harness produced no output before the 304-second
+command ceiling and therefore remains unverified for this change; the live
+session rail and migration-ledger rail completed successfully.

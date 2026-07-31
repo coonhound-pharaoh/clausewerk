@@ -94,7 +94,9 @@ def test_concurrent_sign_in_keeps_one_persons_session_cap(db: Database):
             ("rita@clausewerk",))[0]
 
     assert count == MAX_LIVE_SESSIONS_PER_PERSON
-    assert sessions.person_for(issued[-1].token) == "rita@clausewerk"
+    assert all(sessions.person_for(item.token) == "rita@clausewerk"
+               for item in issued), (
+        "a concurrent sign-in returned a token that trimming already removed")
 
 
 def test_the_store_survives_genuinely_parallel_traffic(db: Database):
