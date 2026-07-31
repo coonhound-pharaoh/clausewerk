@@ -4565,3 +4565,10 @@ could still attempt a state update. Each reload now claims a monotonic generatio
 and may update state only while it remains current; effect cleanup invalidates
 the pending generation. The shell control pins claim, comparison, and cleanup
 in the one hook every data pane uses.
+## S215 — Invalid timestamps do not render fabricated ages — 2026-07-31
+
+The shared age renderer did arithmetic on `Invalid Date`. Its comparisons all
+fell through and it displayed `NaNd`, making malformed response data look like
+a real recorded age. The renderer now verifies the parsed epoch is finite
+before doing elapsed-time arithmetic. The shell executes the isolated real
+helper with invalid timestamp text and proves no `NaN` age is produced.

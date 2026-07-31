@@ -361,6 +361,18 @@ await test('an older pane request cannot overwrite a newer reload', async () => 
     'an unmounted pane does not invalidate its pending request');
 });
 
+await test('an invalid recorded timestamp never renders a fabricated age', async () => {
+  const src = read('common.jsx');
+  const start = src.indexOf('function since(');
+  const end = src.indexOf('// ── The stat-tile strip', start);
+  assert(start >= 0 && end > start, 'the shared age renderer was not found');
+  const context = {};
+  runInNewContext(src.slice(start, end) + '\nglobalThis.since = since;', context);
+  const rendered = context.since('not-a-timestamp');
+  assert(!String(rendered).includes('NaN'),
+    'an invalid timestamp fabricated a numeric-looking age');
+});
+
 await test('no pane holds an array of example rows', async () => {
   // The shape canned data takes: a literal array of objects sitting in the
   // module, ready to render. Real rows arrive from usePane and are never

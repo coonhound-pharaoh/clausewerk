@@ -13,7 +13,9 @@ const { useState, useEffect, useCallback, useRef } = React;
 // column is a fact that starts being wrong the moment it is written.
 function since(ts) {
   if (!ts) return '—';
-  const ms = Date.now() - new Date(ts).getTime();
+  const recorded = new Date(ts).getTime();
+  if (!Number.isFinite(recorded)) return '—';
+  const ms = Date.now() - recorded;
   const mins = Math.floor(ms / 60000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m`;
