@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from dataclasses import dataclass
 
 import psycopg
@@ -485,8 +486,30 @@ def assess_concessions(db: Database, caller: Caller, query: dict) -> Answer:
         return Answer(refused.status, refused.as_body())
 
     assessed = []
+    in_progress = 0
     judgments_requested = 0
     for concession in settled:
+        claim_token = uuid.uuid4()
+        try:
+            with db.as_person(caller.person, caller.role) as request:
+                claimed = request.rows(
+                    """insert into cw.risk_assessment_claim
+                         (concession_id, claim_token, expires_at)
+                       values (%s, %s, now() + interval '5 minutes')
+                       on conflict (concession_id) do update
+                         set claim_token = excluded.claim_token,
+                             claimed_at = now(),
+                             expires_at = excluded.expires_at
+                       where cw.risk_assessment_claim.expires_at <= now()
+                       returning claim_token""",
+                    (concession["concession_id"], claim_token))
+        except psycopg.Error as error:
+            refused = classify(error)
+            return Answer(refused.status, refused.as_body())
+        if not claimed:
+            in_progress += 1
+            continue
+
         baseline = (concession["standard_body"] or "").strip()
         compared = (concession["conceded_body"] or "").strip()
         if (baseline and compared
@@ -527,6 +550,10 @@ def assess_concessions(db: Database, caller: Caller, query: dict) -> Answer:
                     {"concession_id": concession["concession_id"],
                      "baseline": baseline, "compared": compared,
                      "outcome": outcome, **values})[0]
+                request.write(
+                    "delete from cw.risk_assessment_claim "
+                    "where concession_id = %s and claim_token = %s",
+                    (concession["concession_id"], claim_token))
         except psycopg.Error as error:
             refused = classify(error)
             return Answer(refused.status, refused.as_body())
@@ -535,5 +562,6 @@ def assess_concessions(db: Database, caller: Caller, query: dict) -> Answer:
     return Answer(200, {
         "agreement_id": agreement_id,
         "concessions_assessed": len(assessed),
+        "assessment_in_progress": in_progress,
         "risk_assessments": assessed,
     })

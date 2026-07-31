@@ -4353,3 +4353,13 @@ bound. All three reads now cover the same 500 most recent RLS-visible runs. The
 summary is deterministically ordered by creation time and run id; child rows
 select those run ids before ordering, so no included run is cut in half by a
 flat row limit. A structural regression pins the shared server-owned window.
+
+## S192 — Retrospective assessments claim before model calls — 2026-07-31
+
+The retrospective endpoint selected concessions with no assessment, released
+that transaction, and then called the model. Concurrent sweeps could both see
+the same concession, both incur an external call, and both append an estimate,
+despite the endpoint's idempotency promise. An expiring per-concession claim now
+coordinates the outside call without holding a pooled connection. A live claim
+is reported as `assessment_in_progress`; completion appends the outcome and
+releases its matching token in one transaction.

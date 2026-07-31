@@ -411,12 +411,17 @@ def test_one_concession_sweep_bounds_sequential_provider_calls(monkeypatch):
         def rows(self, sql, values):
             if "from cw.concession c" in sql:
                 return concessions
+            if "insert into cw.risk_assessment_claim" in sql:
+                return [{"claim_token": values[1]}]
             return [{"assessment_id": values["concession_id"] + 1,
                      "concession_id": values["concession_id"],
                      "outcome": values["outcome"],
                      "transfer_estimate": values["score"],
                      "basis": values["basis"],
                      "absent_reason": values["reason"]}]
+
+        def write(self, _sql, _values):
+            pass
 
     class Context:
         def __enter__(self):
@@ -469,9 +474,7 @@ def test_a_reachable_model_lands_a_recorded_estimate(seeded, db, monkeypatch):
     assert row["analysis_id"] is not None, "anchored to the analysis row"
 
 
-def test_a_settled_concession_is_assessed_for_what_it_cost(seeded, db,
-                                                           owner_url,
-                                                           monkeypatch):
+def _settle_one_concession(owner_url):
     with psycopg.connect(owner_url, autocommit=True) as owner:
         owner.execute("select set_config('cw.actor','owner@clausewerk',false)")
         owner.execute(
@@ -497,6 +500,12 @@ def test_a_settled_concession_is_assessed_for_what_it_cost(seeded, db,
             "insert into cw.concession_settlement (concession_id, settled_by) "
             "select concession_id, %s from cw.concession", (RITA,))
 
+
+def test_a_settled_concession_is_assessed_for_what_it_cost(seeded, db,
+                                                           owner_url,
+                                                           monkeypatch):
+    _settle_one_concession(owner_url)
+
     def stubbed(baseline, compared):
         from doorway import advisory as advisory_module
         return advisory_module.Judgment(
@@ -517,6 +526,30 @@ def test_a_settled_concession_is_assessed_for_what_it_cost(seeded, db,
                                         {"agreement": "AG-A1"})
     assert again.body["concessions_assessed"] == 0, (
         "idempotent: an assessed concession is not re-asked")
+
+
+def test_a_live_concession_claim_prevents_a_duplicate_model_call(
+        seeded, db, owner_url, monkeypatch):
+    _settle_one_concession(owner_url)
+    with db.as_person(RITA, "requester") as request:
+        request.write(
+            "insert into cw.risk_assessment_claim "
+            "(concession_id, claim_token, expires_at) "
+            "select concession_id, %s, now() + interval '5 minutes' "
+            "from cw.concession",
+            ("00000000-0000-0000-0000-000000000001",))
+
+    def model_must_not_be_called(*_args):
+        raise AssertionError("a competing claim still reached the model")
+
+    monkeypatch.setattr(
+        analysis.advisory, "judge_risk_exposure", model_must_not_be_called)
+    answered = analysis.assess_concessions(
+        db, OWNING_REQUESTER, {"agreement": "AG-A1"})
+
+    assert answered.status == 200
+    assert answered.body["concessions_assessed"] == 0
+    assert answered.body["assessment_in_progress"] == 1
 
 
 def _vendor_paper() -> bytes:
