@@ -4102,3 +4102,13 @@ provenance the engine never used. After inserting the run parent makes both pins
 visible through RLS, the writer now compares every stored parent and member row
 with the emitted pin inside the same transaction. Any mismatch raises, rolls
 back the run, and answers 409. A synthetic poisoned member proves the refusal.
+
+## S166 — Referenced run pins cannot be extended — 2026-07-31
+
+Append-only run-pin tables refused updates and deletes but still accepted new
+snapshot members, ladder rungs, and rules after a run referenced the parent. A
+working role could therefore permanently change an existing run's replay input
+after the doorway's creation-time equality check. Migration 0058 locks pin
+parents while members and runs are inserted, permits exact idempotent member
+replays, and refuses any new or different member once a run references the pin.
+The focused store rail exercises all three child tables.

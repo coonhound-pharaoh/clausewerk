@@ -327,6 +327,30 @@ await test('a run cannot be truncated around the guard', async () => {
   eq(r.n, 1, 'the run store survives a truncate attempt');
 });
 
+await test('a referenced pin cannot gain members afterwards', async () => {
+  await throws(() => db.exec(`insert into cw.snapshot_member
+    (snapshot_id,clause_id,version,selectable)
+    values ('${H1}','DP-H-014',1,false)`),
+    'referenced snapshot cannot gain',
+    'a later insert changed the frozen selectable flag behind an existing run');
+  await throws(() => db.exec(`insert into cw.snapshot_ladder_rung
+    (snapshot_id,category_key,severity,rung,clause_id,version,is_floor)
+    values ('${H1}','data','High',2,'DP-H-014',1,false)`),
+    'referenced snapshot cannot gain',
+    'a later insert extended the ladder behind an existing run');
+  await db.exec(`insert into cw.ruleset_member
+    (ruleset_id,rule_id,version) values ('${R1}','GL-001',1)
+    on conflict do nothing`);
+  await db.exec(`insert into cw.conflict_rule
+    (rule_id,version,name,severity,title,detail,predicate,approved_by)
+    values ('GL-002',1,'Second rule','High','Second','detail',
+            '{"conflicting_values":"jurisdiction"}','R. Vance')`);
+  await throws(() => db.exec(`insert into cw.ruleset_member
+    (ruleset_id,rule_id,version) values ('${R1}','GL-002',1)`),
+    'referenced ruleset cannot gain',
+    'a later insert extended the ruleset behind an existing run');
+});
+
 console.log('\nresolvable forever');
 
 await test('a run still resolves its clauses after they are retired', async () => {
