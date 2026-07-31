@@ -120,6 +120,32 @@ def test_request_controls_are_escaped_in_operational_logs(capsys):
     assert logged.count("\n") == 1
 
 
+def test_connection_ceiling_refuses_before_starting_another_thread():
+    from doorway.server import _bound_inflight_connections
+
+    class FakeServer:
+        started = 0
+        refused = 0
+
+        def process_request(self, _request, _address):
+            self.started += 1
+
+        def process_request_thread(self, _request, _address):
+            pass
+
+        def shutdown_request(self, _request):
+            self.refused += 1
+
+    server = _bound_inflight_connections(FakeServer(), limit=1)
+    assert server._connection_slots.acquire(blocking=False)
+
+    server.process_request(object(), ("127.0.0.1", 1))
+
+    assert server.started == 0
+    assert server.refused == 1
+    server._connection_slots.release()
+
+
 def test_comma_combined_content_dispositions_are_refused_as_ambiguous():
     handler = handler_with_headers(
         ("Content-Disposition", 'attachment, inline; filename="paper.docx"'))

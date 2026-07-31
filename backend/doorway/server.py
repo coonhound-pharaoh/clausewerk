@@ -78,6 +78,7 @@ import mimetypes
 import os
 import re
 import sys
+import threading
 from email.message import Message
 from email.utils import collapse_rfc2231_value
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -91,6 +92,7 @@ from doorway.db import Database
 # at the same size; the point is that an unbounded read is a way to exhaust the
 # service with one request.
 MAX_BODY = 1_000_000
+MAX_INFLIGHT_CONNECTIONS = 64
 
 # THE LARGEST DOCUMENT THE SYSTEM WILL ACCEPT, and it is a PRODUCT FACT, not a
 # technical detail: it decides which real contracts can be filed and which are
@@ -750,6 +752,34 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write(f"{self.address_string()} {safe}\n")
 
 
+def _bound_inflight_connections(server, limit: int = MAX_INFLIGHT_CONNECTIONS):
+    """Prevent ThreadingHTTPServer from creating unbounded slow-client threads."""
+    slots = threading.BoundedSemaphore(limit)
+    start_thread = server.process_request
+    run_request = server.process_request_thread
+
+    def bounded_thread(request, client_address):
+        try:
+            run_request(request, client_address)
+        finally:
+            slots.release()
+
+    def bounded_start(request, client_address):
+        if not slots.acquire(blocking=False):
+            server.shutdown_request(request)
+            return
+        try:
+            start_thread(request, client_address)
+        except Exception:
+            slots.release()
+            raise
+
+    server.process_request_thread = bounded_thread
+    server.process_request = bounded_start
+    server._connection_slots = slots
+    return server
+
+
 def serve(
     database_url: str,
     port: int = 8787,
@@ -773,7 +803,8 @@ def serve(
         BoundHandler.app = app
         BoundHandler.static_root = static_root
 
-        server = ThreadingHTTPServer(("127.0.0.1", port), BoundHandler)
+        server = _bound_inflight_connections(
+            ThreadingHTTPServer(("127.0.0.1", port), BoundHandler))
     except Exception:
         db.close()
         raise

@@ -4271,3 +4271,13 @@ dates. The replacement function permits cross-person derivation only for the
 Administrator notification duty; every other application caller must supply
 their signed actor and actual role. Routing tests prove self access, two spoof
 refusals, and the Administrator's positive control.
+
+## S184 — In-flight HTTP connections are bounded — 2026-07-31
+
+`ThreadingHTTPServer` creates a new thread for every accepted connection. The
+socket timeout limits each slow client to ten seconds but did not limit how many
+threads many concurrent partial requests could allocate. The live server now
+reserves one of 64 semaphore slots before starting a request thread, closes new
+connections when full, releases slots in the request thread's `finally`, and
+also releases on thread-start failure. A unit control exhausts the sole test
+slot and proves no request thread starts.
