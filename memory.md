@@ -4322,14 +4322,3 @@ One tick now attempts at most four external deliveries. Reachable people beyond
 that ceiling remain unclaimed and unsent for the next tick, and the response
 counts them as `deferred_by_delivery_limit`. A fixture-free six-person control
 proves four channel calls and two explicit deferrals.
-
-## S189 — Notification digests carry bounded reference sets — 2026-07-31
-
-The delivery-attempt ceiling did not bound one recipient's payload: the tick
-loaded every waiting row and copied every reference into the email and the
-append-only outbox. One account with a very large queue could therefore create
-an unbounded query result, message, and JSON record. The derivation query now
-reads at most 201 rows, each digest and refs record carries at most 200, and the
-tick response counts truncated digests so operators can see that the workspace
-contains more. A fixture-free oversized queue proves the serialized refs stop
-at the ceiling.

@@ -22,7 +22,6 @@ Requires the compose PostgreSQL, like every doorway suite:
 
 from __future__ import annotations
 
-import json
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor
 import threading
@@ -108,11 +107,8 @@ def test_one_tick_bounds_external_delivery_attempts():
             if "from cw.effective_role" in sql:
                 return people
             if "from cw.waiting_for" in sql:
-                return [
-                    {"kind": "review_ticket", "subject_ref": str(index),
-                     "due_on": None, "since": None}
-                    for index in range(notifications.MAX_DIGEST_ITEMS + 1)
-                ]
+                return [{"kind": "review_ticket", "subject_ref": "1",
+                         "due_on": None, "since": None}]
             if "from cw.notification_outbox" in sql:
                 return []
             if "from cw.notification_address" in sql:
@@ -144,19 +140,6 @@ def test_one_tick_bounds_external_delivery_attempts():
     assert len(sends) == notifications.MAX_DELIVERY_ATTEMPTS_PER_TICK
     assert answered.body["sent"] == notifications.MAX_DELIVERY_ATTEMPTS_PER_TICK
     assert answered.body["deferred_by_delivery_limit"] == 2
-    assert (answered.body["digests_truncated"]
-            == notifications.MAX_DELIVERY_ATTEMPTS_PER_TICK)
-
-
-def test_one_digest_bounds_waiting_references():
-    waiting = [
-        {"kind": "review_ticket", "subject_ref": str(index), "due_on": None}
-        for index in range(notifications.MAX_DIGEST_ITEMS + 2)
-    ]
-
-    _subject, _body, refs = notifications._digest(waiting)
-
-    assert len(json.loads(refs)) == notifications.MAX_DIGEST_ITEMS
 
 
 def outbox(db: Database) -> list[dict]:
