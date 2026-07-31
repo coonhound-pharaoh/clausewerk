@@ -4457,3 +4457,12 @@ control proves all twelve new tokens remain usable while the cap stays at 20.
 The required database mutation harness produced no output before the 304-second
 command ceiling and therefore remains unverified for this change; the live
 session rail and migration-ledger rail completed successfully.
+
+## S203 — Session lookup is no longer a global write — 2026-07-31
+
+Every nonempty bearer lookup first deleted every expired session in the table.
+That made random invalid tokens an unauthenticated trigger for a global write
+and row-lock work before the indexed fingerprint lookup. Expiry already lives
+in `LIVE_SESSION_SQL`, while issuance retains the growth-control sweep, so the
+lookup-side DELETE was removed. A fixture-free control supplies a read-only
+request object and proves invalid-token resolution performs only the lookup.

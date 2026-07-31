@@ -135,18 +135,16 @@ MUTATIONS = [
         # somebody could reasonably move to a scheduled job.
         #
         # Expiry is now a predicate in LIVE_SESSION_SQL, so that is what this row
-        # guards. Mutating the sweep away would now score MISS: the predicate
-        # refuses the row regardless, which is exactly the point.
+        # guards. The redundant person_for sweep has since been removed; the
+        # issue-time sweep remains a separate growth-control guarantee below.
         #
         # The mutation KEEPS THE PLACEHOLDER COUNT and simply makes the predicate
         # never bite. Deleting the clause outright would break the arity and every
         # test would fail on a driver error instead of on the guarantee — proving
         # the tests break, not that they catch anything.
         #
-        # The named test is the one that reads a planted row the sweep has never
-        # touched. A test that goes through person_for cannot catch this, because
-        # the sweep deletes the row first; test_session_expiry.py labels those as
-        # controls for that reason.
+        # The named test reads a planted row directly so it continues to prove
+        # the SQL constant itself rather than some surrounding cleanup effect.
         "sessions never expire",
         "doorway/sessions.py",
         '    "select person from cw.session where token_sha256 = %s and expires_at > %s")',

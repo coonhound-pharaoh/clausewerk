@@ -62,9 +62,9 @@ LOOKUP_ACTOR = "__signin__"
 # THE EXPIRY CONTROL. Named, so it can be pointed at and tested.
 #
 # `and expires_at > %s` is the whole of finding A-3. Before it, whether an
-# expired session was honoured depended ENTIRELY on the DELETE that runs just
-# above this query in person_for — and that DELETE's stated purpose, in its own
-# comment, is housekeeping: sweeping abandoned rows so the table does not grow.
+# expired session was honoured depended ENTIRELY on a housekeeping DELETE in
+# person_for. That global write was later removed from the attacker-facing read
+# path; issuance still sweeps abandoned rows so the table does not grow.
 #
 # Two statements, one of which quietly held the entire expiry guarantee while
 # describing itself as tidying up. Someone moving that sweep to a scheduled job
@@ -211,8 +211,6 @@ class Sessions:
         now = self._now()
         
         with self._db.as_person(LOOKUP_ACTOR, LOOKUP_ROLE) as request:
-            # HOUSEKEEPING, not the control. See LIVE_SESSION_SQL.
-            request.write("delete from cw.session where expires_at <= %s", (now,))
             row = request.one(LIVE_SESSION_SQL, (fingerprint(token), now))
             return row[0] if row else None
 

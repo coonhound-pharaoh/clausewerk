@@ -7,11 +7,28 @@ and survives parallel traffic without crashing.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 import threading
 import pytest
 
 from doorway.sessions import MAX_LIVE_SESSIONS_PER_PERSON, Sessions
 from doorway.db import Database
+
+
+def test_an_invalid_token_lookup_is_read_only():
+    class LookupOnly:
+        @contextmanager
+        def as_person(self, _person, _role):
+            yield self
+
+        def one(self, statement, parameters):
+            assert "expires_at > %s" in statement
+            assert len(parameters) == 2
+            return None
+
+    sessions = Sessions(LookupOnly(), now=lambda: 100.0)
+
+    assert sessions.person_for("attacker-chosen-token") is None
 
 
 @pytest.fixture

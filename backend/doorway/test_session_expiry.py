@@ -2,17 +2,14 @@
 
 AUDIT FINDING A-3.
 
-`person_for` deletes expired rows and then selects by fingerprint. Before this
-fix the select carried no expiry condition of its own, so whether an expired
-session was honoured depended entirely on that preceding DELETE — a statement
-whose stated purpose, in its own comment, is housekeeping: sweeping abandoned
-rows so the table does not grow.
+`person_for` once deleted expired rows and then selected by fingerprint. Before
+finding A-3, the select carried no expiry condition of its own, so whether an
+expired session was honoured depended entirely on that DELETE. The predicate
+now owns expiry; the redundant global DELETE has since left the lookup path.
 
-Two statements, one of which quietly held the whole expiry guarantee while
-describing itself as tidying up. The sweep is an unindexed sequential scan on
-every single request, so moving it to a scheduled job is a change somebody will
-propose for perfectly good reasons — and doing so would have silently turned
-every expired session back on.
+The old two-statement shape quietly put the guarantee in housekeeping. The
+tests below therefore exercise the predicate directly rather than letting any
+cleanup make an expired row disappear before the lookup is measured.
 
 WHY THE TESTS LOOK LIKE THIS, because it is the point and not an oddity.
 
