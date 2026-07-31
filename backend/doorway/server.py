@@ -556,21 +556,25 @@ def serve(
     """Build the server. Does not start serving — the caller decides that, so a
     test can start it on a thread and stop it again."""
     db = Database(database_url)
-    app = App(db)
-    static_root = Path(static).resolve() if static else None
-    # Keep these assignments as the existing inspection seam, but do not make
-    # a live server depend on shared class state. Each server gets a private
-    # subclass whose attributes cannot be overwritten by a later serve().
-    Handler.app = app
-    Handler.static_root = static_root
+    try:
+        app = App(db)
+        static_root = Path(static).resolve() if static else None
+        # Keep these assignments as the existing inspection seam, but do not make
+        # a live server depend on shared class state. Each server gets a private
+        # subclass whose attributes cannot be overwritten by a later serve().
+        Handler.app = app
+        Handler.static_root = static_root
 
-    class BoundHandler(Handler):
-        pass
+        class BoundHandler(Handler):
+            pass
 
-    BoundHandler.app = app
-    BoundHandler.static_root = static_root
+        BoundHandler.app = app
+        BoundHandler.static_root = static_root
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), BoundHandler)
+        server = ThreadingHTTPServer(("127.0.0.1", port), BoundHandler)
+    except Exception:
+        db.close()
+        raise
     server.daemon_threads = True
     server.database = db  # type: ignore[attr-defined]
     return server

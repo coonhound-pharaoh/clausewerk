@@ -3785,3 +3785,12 @@ server now receives a private handler subclass with its own bound state. A
 two-listener transport test proves simultaneous servers retain distinct apps
 and answers; the global assignments remain only as the established inspection
 seam and are no longer read by live servers created through `serve()`.
+
+## S133 — Failed HTTP startup closes its database pool — 2026-07-31
+
+`serve()` opened the PostgreSQL pool before constructing the app and binding
+the listener, but neither failure path closed it. A port collision or app
+construction error therefore leaked connections even though no server was
+returned for the caller to close. Startup now closes the pool and re-raises the
+original error. A focused test forces socket binding to fail and verifies both
+the original error and the pool closure.

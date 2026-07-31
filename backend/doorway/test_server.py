@@ -472,6 +472,28 @@ def test_two_servers_do_not_share_their_apps(monkeypatch):
             thread.join(timeout=5)
 
 
+def test_a_failed_server_start_closes_its_database_pool(monkeypatch):
+    class Pool:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    pool = Pool()
+    monkeypatch.setattr(server_module, "Database", lambda _url: pool)
+    monkeypatch.setattr(server_module, "App", lambda db: Records(Response(200, {})))
+
+    def cannot_bind(*_args, **_kwargs):
+        raise OSError("address already in use")
+
+    monkeypatch.setattr(server_module, "ThreadingHTTPServer", cannot_bind)
+
+    with pytest.raises(OSError, match="address already in use"):
+        server_module.serve("unused", port=8787)
+
+    assert pool.closed, "a failed listener left its connection pool open"
+
+
 def test_a_download_leaves_as_bytes_with_its_own_content_type():
     """The exact bytes, and the content type the Download itself carried.
 
