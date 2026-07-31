@@ -4151,3 +4151,13 @@ therefore gained false score from ordinary words like `supplier` and `ship`,
 leaving the recorded confidence inconsistent with the classifier that selected
 the category. `_score` now uses the same alphabetic-token membership. Synthetic
 controls prove both the substring refusal and standalone acronym match.
+
+## S171 — Ambiguous category matches do not pick a database row — 2026-07-31
+
+A negotiation may hold multiple open positions in one category from different
+rounds. Round analysis fetched current positions without an order and selected
+the first category match, so PostgreSQL row order could decide which live
+argument received advice. The matcher now accepts a position only when exactly
+one open candidate exists; multiple candidates use the existing quarantined
+no-match escalation. A real-schema regression opens a second position in the
+same category and proves neither position is selected.

@@ -125,9 +125,14 @@ def _analyse_one(request, *, negotiation_id: int, round_no: int,
 
     if category_key is not None:
         score = _score(proposed_text or original_text, vocabulary[category_key])
-        matched = next((p for p in positions
-                        if p["category_key"] == category_key
-                        and p["state"] in OPEN_STATES), None)
+        candidates = [p for p in positions
+                      if p["category_key"] == category_key
+                      and p["state"] in OPEN_STATES]
+        # Category words cannot distinguish two live arguments in the same
+        # category. Selecting the first row would let an unordered database
+        # result decide which position received the advice. Ambiguity follows
+        # the existing no-match escalation path instead.
+        matched = candidates[0] if len(candidates) == 1 else None
 
     if matched is not None:
         severity = matched.get("severity") or "Standard"

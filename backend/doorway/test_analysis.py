@@ -200,6 +200,27 @@ def test_the_no_match_path_escalates_into_quarantine(seeded, db):
     assert ticket["state"] == "pending"
 
 
+def test_two_open_positions_in_one_category_are_not_matched_by_row_order(
+        seeded, db):
+    with db.as_person(LEAH, "legal_admin") as request:
+        request.write_one(
+            "insert into cw.negotiation_position "
+            "  (negotiation_id,category_key,our_clause_id,our_version,"
+            "   round_raised,opened_from) "
+            "select negotiation_id,'data','ZH-A-002',1,1,'library_standard' "
+            "from cw.negotiation")
+
+    answered = analysis.analyse(db, OWNING_REQUESTER, {"agreement": "AG-A1"})
+
+    assert answered.status == 200
+    assert answered.body["matched"] == 0
+    data_rows = [row for row in analysis_rows(db)
+                 if row["category_key"] == "data"]
+    assert data_rows
+    assert all(row["matched_position"] is None for row in data_rows)
+    assert all(row["no_match_ticket"] is not None for row in data_rows)
+
+
 def test_an_unclassifiable_paragraph_lands_visibly_unanswered(seeded, db):
     """No category, no position, no ticket a ticket could name. The row
     carries all three absences — never a guess dressed as an answer."""
