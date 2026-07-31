@@ -73,6 +73,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import mimetypes
 import os
 import re
@@ -137,6 +138,20 @@ MIME = {
 
 def _reject_non_finite_json(value: str) -> None:
     raise ValueError(f"{value} is not a JSON number")
+
+
+def _has_non_finite_number(value) -> bool:
+    """JSON may spell infinity indirectly as an overflowing exponent."""
+    pending = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, float) and not math.isfinite(current):
+            return True
+        if isinstance(current, dict):
+            pending.extend(current.values())
+        elif isinstance(current, list):
+            pending.extend(current)
+    return False
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -315,6 +330,8 @@ class Handler(BaseHTTPRequestHandler):
         except (json.JSONDecodeError, UnicodeDecodeError, ValueError, RecursionError):
             # Malformed JSON is the caller's mistake, not a refusal. Saying
             # "refused" here would send somebody to argue about permissions.
+            return None, Response(400, {"error": "that request was not valid JSON"})
+        if _has_non_finite_number(parsed):
             return None, Response(400, {"error": "that request was not valid JSON"})
         if parsed is not None and not isinstance(parsed, dict):
             # Valid JSON is not the same as a valid request: a list or a bare

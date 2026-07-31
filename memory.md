@@ -3856,3 +3856,13 @@ database error rather than a 400 caller mistake. `refuse_structured` now rejects
 booleans centrally. A table-wide test covers both values in every plain field,
 and the endpoint-level test proves the result is a shaped 400 rather than a
 service failure.
+
+## S140 — Overflowing JSON exponents cannot become infinity — 2026-07-31
+
+The HTTP parser used `parse_constant` to reject the non-standard tokens `NaN`
+and `Infinity`, but valid JSON exponent syntax such as `1e400` becomes positive
+infinity in Python without invoking that hook. The non-finite value could then
+reach plain bindings or nested JSON and fail late or pollute calculations.
+`server.py` now iteratively checks the entire parsed object for non-finite
+floats. The existing socket-level non-finite test now covers both signs of the
+overflowing-exponent form alongside the three explicit tokens.

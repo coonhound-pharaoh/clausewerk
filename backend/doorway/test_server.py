@@ -837,7 +837,9 @@ def test_chunked_request_is_refused_instead_of_desynchronising_the_connection():
     assert not app.seen
 
 
-@pytest.mark.parametrize("token", ("NaN", "Infinity", "-Infinity"))
+@pytest.mark.parametrize("token", (
+    "NaN", "Infinity", "-Infinity", "1e400", "-1e400",
+))
 def test_non_finite_json_numbers_are_refused(token):
     app = Records(Response(200, {"ok": True}))
     payload = f'{{"value": {token}}}'.encode()
