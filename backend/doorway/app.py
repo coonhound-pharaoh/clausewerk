@@ -38,8 +38,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 from doorway import (
-    advisory, documents, executions, manifests, notifications, paper, reads,
-    redlines, runs, writes,
+    advisory, analysis, documents, executions, manifests, notifications, paper,
+    reads, redlines, runs, writes,
 )
 from doorway.db import Database
 from doorway.identity import (
@@ -261,6 +261,25 @@ class App:
         # itself.
         if key == "POST /negotiations/redline":
             answered = redlines.record(self._db, caller, upload, selector)
+            return Response(answered.status, answered.body)
+
+        # Round analysis (NC-17) and its supplier tail (NC-19). Not Writes
+        # for the reason POST /runs is not: each parses a stored document or
+        # walks the quarantine, matches, classifies, ranks, may open tickets
+        # and appends analysis rows — many statements, one recorded act each.
+        if key == "POST /negotiations/analyse":
+            answered = analysis.analyse(self._db, caller, selector)
+            return Response(answered.status, answered.body)
+
+        if key == "POST /negotiations/analyse/supplier":
+            answered = analysis.analyse_supplier_units(self._db, caller, selector)
+            return Response(answered.status, answered.body)
+
+        # NC-26's retrospective half: what each settled concession actually
+        # cost, as an estimate on its own record. Model-down still answers —
+        # an absence is an outcome.
+        if key == "POST /concessions/assess-risk":
+            answered = analysis.assess_concessions(self._db, caller, selector)
             return Response(answered.status, answered.body)
 
         if key == "POST /notifications/tick":

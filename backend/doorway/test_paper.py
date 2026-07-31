@@ -177,6 +177,25 @@ def test_the_same_document_files_the_same_tickets(seeded, db):
         "determinism: re-ingesting files the same classification, comparably")
 
 
+def test_every_unit_is_anchored_to_its_paragraph_in_the_stored_bytes(seeded, db):
+    """NC-18: a quarantined unit answers WHERE it came from — paragraph N of
+    the stored document — in the same unit of work as the ticket."""
+    answered = paper.ingest(db, LEGAL, upload_of([ABOUT_NOTHING, ABOUT_DATA]),
+                            {"agreement": "AG-100"})
+    assert answered.status == 200, answered.body
+    [ticket] = answered.body["tickets"]
+    assert ticket["paragraph_no"] == 1, (
+        "the classified paragraph sits second in the parsed document; the "
+        "report must say so")
+    with db.as_person(LEAH, "legal_admin") as request:
+        [unit] = request.rows(
+            "select u.paragraph_no, u.document_id from cw.supplier_unit u "
+            "where u.ticket_id = %s", (ticket["ticket_id"],))
+    assert unit["paragraph_no"] == 1
+    assert unit["document_id"] == answered.body["document_id"], (
+        "the anchor names the document this very ingest stored")
+
+
 def test_the_report_carries_references_and_the_hash_not_a_judgment(seeded, db):
     answered = paper.ingest(db, LEGAL, upload_of([ABOUT_DATA]),
                             {"agreement": "AG-100"})

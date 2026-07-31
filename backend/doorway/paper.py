@@ -126,14 +126,17 @@ def ingest(db: Database, caller: Caller, upload, query: dict) -> Answer:
             vocabulary = {c["key"]: _terms_of(c["key"], c["label"])
                           for c in categories}
 
-            classified: list[tuple[str, str]] = []   # (category_key, paragraph)
+            # (category_key, paragraph, position). The position is the
+            # paragraph's index among the document's parsed paragraphs — the
+            # unit's source anchor (NC-18), pointing into the stored bytes.
+            classified: list[tuple[str, str, int]] = []
             unclassified = 0
-            for paragraph in paragraphs:
+            for position, paragraph in enumerate(paragraphs):
                 key = _classify(paragraph, vocabulary)
                 if key is None:
                     unclassified += 1
                 else:
-                    classified.append((key, paragraph))
+                    classified.append((key, paragraph, position))
 
             if len(classified) > MAX_UNITS:
                 return Answer(413, {
@@ -153,7 +156,7 @@ def ingest(db: Database, caller: Caller, upload, query: dict) -> Answer:
                  upload.filename))[0]
 
             tickets = []
-            for key, paragraph in classified:
+            for key, paragraph, position in classified:
                 row = request.rows(
                     """insert into cw.review_ticket
                          (agreement_id, category_key, severity, reason_code,
@@ -161,13 +164,22 @@ def ingest(db: Database, caller: Caller, upload, query: dict) -> Answer:
                        values (%s, %s, 'Standard', 'supplier-paper',
                                'VENDOR LANGUAGE', %s)
                        returning ticket_id, category_key""",
-                    (agreement_id, key, paragraph))
-                tickets.append(row[0])
+                    (agreement_id, key, paragraph))[0]
+                # The anchor (NC-18): this unit is paragraph N of the stored
+                # document, whose sha256 the schema itself computed. Same
+                # unit of work as the ticket — a unit without its provenance
+                # never lands.
+                request.write(
+                    "insert into cw.supplier_unit "
+                    "  (ticket_id, document_id, paragraph_no) "
+                    "values (%s, %s, %s)",
+                    (row["ticket_id"], stored["document_id"], position))
+                tickets.append({**row, "paragraph_no": position})
 
             # The gap half of the report: always-include categories the paper
             # did not appear to address. A gap is reported as a gap — what to
             # do about it belongs to the people, not the product.
-            addressed = {key for key, _ in classified}
+            addressed = {key for key, _, _ in classified}
             missing = request.rows(
                 """select distinct c.category_key, cat.label
                    from cw.clause c join cw.category cat on cat.key = c.category_key

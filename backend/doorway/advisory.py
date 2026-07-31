@@ -246,6 +246,123 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
         model=model, model_version=version, prompt=prompt, inputs=inputs)
 
 
+# ── The risk-exposure judgment (NC-26, owner rulings U14a–U14d) ─────────────
+#
+# The second question the product asks a model, on the first one's seam. The
+# range is -1..1 because the owner asked for BOTH directions: what a proposed
+# move would cost before the buyer chooses, and what an accepted concession
+# actually cost. Same never-raises contract, same _absent path — so the
+# harness row guarding "a judgment nobody obtained is recorded as a number
+# anyway" covers this judge for free. The call flow mirrors the semantic
+# judge deliberately rather than sharing a helper: the harness keys on that
+# function's lines, and a shared body would let one mutation cancel itself
+# out across the two (the S110 shape).
+
+RISK_EXPOSURE_PROMPT = (
+    "A baseline contract clause and a proposed replacement follow. Estimate "
+    "what fraction of risk moves between the parties if the replacement is "
+    "accepted, as a number from -1 to 1: positive means risk moves TO the "
+    "customer, negative means risk moves to the vendor, 0 means no material "
+    "transfer. Reply with JSON only: "
+    '{"score": <number>, "basis": "<one sentence>"}.'
+)
+
+
+def judge_risk_exposure(baseline: str, compared: str) -> Judgment:
+    """Ask the model how much risk a change transfers, and in which direction.
+
+    Never raises; every failure is an absence with its reason, because a
+    buyer is never blocked by a judgment being unavailable — advice that
+    gates action has become a decision (NC-26's model-down rule).
+    """
+    model = os.environ.get(MODEL_VARIABLE) or DEFAULT_MODEL
+    prompt = RISK_EXPOSURE_PROMPT
+    inputs = [
+        {"name": "baseline", "characters": len(baseline)},
+        {"name": "compared", "characters": len(compared)},
+    ]
+
+    key = os.environ.get(KEY_VARIABLE)
+    if not key or not key.strip():
+        return _absent(
+            f"no model key is configured: {KEY_VARIABLE} is not set in the "
+            "environment, so no judgment was obtained",
+            model=model, prompt=prompt, inputs=inputs)
+
+    body = json.dumps({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": json.dumps(
+                {"baseline": baseline, "compared": compared})},
+        ],
+        "temperature": 0,
+    }).encode("utf-8")
+
+    request = urllib.request.Request(
+        ENDPOINT, data=body, method="POST",
+        headers={"content-type": "application/json"})
+    request.add_unredirected_header("Authorization", f"Bearer {key.strip()}")
+
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as reply:
+            raw = reply.read(MAX_RESPONSE_BYTES + 1)
+            if len(raw) > MAX_RESPONSE_BYTES:
+                return _absent("the model's reply was too large to accept",
+                               model=model, prompt=prompt, inputs=inputs)
+            payload = json.loads(raw.decode("utf-8"))
+    except urllib.error.HTTPError as refused:
+        return _absent(f"the model provider refused the call (HTTP {refused.code})",
+                       model=model, prompt=prompt, inputs=inputs)
+    except (urllib.error.URLError, http.client.HTTPException,
+            TimeoutError, OSError) as unreachable:
+        return _absent(f"the model could not be reached ({type(unreachable).__name__})",
+                       model=model, prompt=prompt, inputs=inputs)
+    except (ValueError, json.JSONDecodeError, RecursionError):
+        return _absent("the model's reply was not readable",
+                       model=model, prompt=prompt, inputs=inputs)
+
+    if not isinstance(payload, dict):
+        return _absent("the model answered, but its response was not a JSON object",
+                       model=model, prompt=prompt, inputs=inputs)
+
+    reported_model = payload.get("model")
+    if reported_model is None:
+        version = model
+    elif not isinstance(reported_model, str) or not reported_model.strip():
+        return _absent("the model answered without usable model provenance",
+                       model=model, prompt=prompt, inputs=inputs)
+    else:
+        version = reported_model
+    try:
+        content = payload["choices"][0]["message"]["content"]
+        answered = json.loads(content)
+        raw_score = answered["score"]
+        if isinstance(raw_score, bool) or not isinstance(raw_score, (int, float)):
+            raise TypeError("score is not a JSON number")
+        score = float(raw_score)
+        basis = answered.get("basis")
+        if basis is not None and not isinstance(basis, str):
+            raise TypeError("basis is not text")
+    except (KeyError, IndexError, TypeError, ValueError, RecursionError):
+        return _absent("the model answered, but not with a judgment in the "
+                       "shape that was asked for",
+                       model=model, model_version=version,
+                       prompt=prompt, inputs=inputs)
+
+    if not math.isfinite(score) or not -1.0 <= score <= 1.0:
+        # Out of range is not a judgment to be clamped into one.
+        return _absent("the model answered outside the range it was asked for",
+                       model=model, model_version=version,
+                       prompt=prompt, inputs=inputs)
+
+    return Judgment(
+        score=score,
+        basis=basis or None,
+        absent_reason=None,
+        model=model, model_version=version, prompt=prompt, inputs=inputs)
+
+
 # ── The pipeline ────────────────────────────────────────────────────────────
 
 

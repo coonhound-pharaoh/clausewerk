@@ -3630,6 +3630,58 @@ a button is a knowing decision). test_obligations.py (29); BODIES in
 test_writes.py grew three entries — the structural sweep failed loudly
 until it did, which is that fixture doing its job.
 
+## S125 — The ungated sweep, day two: NC-16, OB-06, NC-18, NC-17, NC-19, NC-26 — 2026-07-30
+
+**NC-16 (0049):** portfolio views fenced to the run views' phrasing in lieu
+of D-7. THE REPRESENTATION RULE, stated in the migration and asserted: an
+agreement = its latest run (created_at, run_id tie-break); unattached runs
+their own labelled figure. Representativeness evaluated globally BEFORE the
+fence — a requester whose deal's latest run is Legal's still sees THAT run,
+not their own older one promoted. Requester test asserts the NUMBER.
+Unresolved never folds into zero. Two SQL mutation rows.
+
+**OB-06 (0050):** document_ref on obligation acts + counterparty_ack
+(evidence-not-closure). ONE new guard: the same-deal rule. Guard/policy
+replaced carrying 0037/0039 harness-keyed blocks verbatim — THIRD copy; the
+preflight demands the copies match, so any future replacement must carry
+them again. Two SQL mutation rows.
+
+**NC-18 (0051):** cw.supplier_unit — the anchor RP-05 lacked: paragraph N
+of the stored document, same-deal-guarded, positions-never-wording (a
+column-name test enforces that). paper.ingest anchors in the ticket's unit
+of work. The quarantine claim asserted non-vacuously against
+cw.selectable_clause.
+
+**NC-17 (0052 + analysis.py):** one row per analysed paragraph; matched OR
+escalated (no-ai-match ticket — a ticket NAMES a category, so only
+category-with-no-open-position escalates) OR visibly unanswered (no
+category: no guess, no ticket). Matcher/classifier named per row (§4
+calibration residue); classifier imported from paper.py — one copy;
+ranking = NC-06 verbatim; advice-by-schema (no path to position_movement,
+tested). Doorway mutation row on the escalation branch.
+
+**NC-19:** analyse_supplier_units through the same _analyse_one — one
+pipeline, two entrances, same-shape rows asserted.
+
+**NC-26 (0053 + judge_risk_exposure):** own record (0030 is
+ticket-anchored; these anchor analysis rows and concessions). Prospective
+after the analysis COMMITS (B2 — never a transaction across the provider
+call); retrospective per settled concession, idempotent. Signed -1..1.
+Model-down still answers; the _absent harness row covers the new judge
+free (same path). The judge deliberately DUPLICATES the semantic judge's
+call flow rather than sharing a helper — a shared body would let a
+mutation cancel itself across the two (S110's shape).
+
+**Fixture lessons collected:** clause ids must start with the category's
+short code; concession settlement demands an assigned attorney + approvals
+(fail-closed by design); executed_agreement.run_id FK is real in PG (PGlite
+suites that skip runs pass only because their file created them earlier).
+
+Reads now 59. STILL OWNER-GATED: NC-12/14 (D-2 counsel), NC-15 (D-6
+re-put), NC-20..23 (D-5), NC-24, OB-13 (DocuSign creds), OB-14
+(deployment), OB-11/15 (paused shell). The matcher-fallback reading and
+the NC-16 narrow fence are flagged for Mike's confirmation, not blocking.
+
 ## S123 — NC-09 built: recording a received redline — 2026-07-29
 
 A module (redlines.py, POST /negotiations/redline), settling the package's

@@ -117,6 +117,20 @@ NC-07. OB-14 waits on deployment. Nothing here waits on anything in the NC set e
 *Serves OA §2.4. Gate: NC-07 merged (the system can receive a document), plus its owner-decided
 size limit.*
 
+> **BUILT — 2026-07-30, migration `0050`** (the gate opened with 0047). Small
+> on purpose: it CONNECTS the evidence store to the obligation record.
+> `document_ref` on the act — satisfy-with-document keeps the mandatory note
+> (bytes without a sentence are not evidence anybody can act on);
+> `counterparty_ack` records against a received document, never a bare flag,
+> and is evidence, not closure. **The one new guard is the same-deal rule:**
+> evidence answers for the deal it was received on, refused otherwise. Both
+> sides append-only already (0037/0047), so "immutably linked" needed no new
+> mechanism. Guard and policy replaced carrying the 0037/0039 harness-keyed
+> blocks verbatim (third copy, the 0039 precedent). Doorway: `document_ref`
+> on satisfy, `POST /obligations/ack`. Suites:
+> `obligation-evidence.test.mjs` (8), doorway grew three; two SQL mutation
+> rows.
+
 Bounded outline: satisfy-with-document stores received bytes hashed (the executed-document
 pattern), immutably linked to the instance; `counterparty_ack` records against a received
 document, never a bare flag. Evidence rows are undeletable. Full specification when NC-07's

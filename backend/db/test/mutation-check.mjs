@@ -2780,6 +2780,48 @@ grant usage, select on sequence cw.notification_outbox_outbox_id_seq to cw_legal
     repl: `  new.received_by := coalesce(new.received_by, cw.app_actor());`,
     expect: 'the recorder is the connection, whatever the insert claimed' },
 
+  // ── Supplier units anchored (0051, NC-18) ──
+  // The same-deal shape on provenance: without it a unit can claim any
+  // document in the system as its source.
+  { suite: 'supplier-units.test.mjs',
+    name: 'a unit may anchor to any deal’s paper',
+    find: `  if t_agreement is distinct from d_agreement then`,
+    repl: `  if false then`,
+    expect: 'a unit anchored to another deal’s paper is refused' },
+
+  // ── Document and counterparty evidence (0050, OB-06) ──
+  // The same-deal rule dropped: any received document anywhere "proves" any
+  // duty. The guard's structure survives; only the ownership test goes.
+  { suite: 'obligation-evidence.test.mjs',
+    name: 'evidence from any deal proves any duty',
+    find: `                    where rd.document_id = new.document_ref
+                      and rd.agreement_id = i.agreement_id) then`,
+    repl: `                    where rd.document_id = new.document_ref) then`,
+    expect: 'evidence from another deal is refused' },
+
+  { suite: 'obligation-evidence.test.mjs',
+    name: 'an acknowledgement can be a bare flag',
+    find: `alter table cw.obligation_act add constraint ack_needs_document
+  check (act <> 'counterparty_ack' or document_ref is not null);`,
+    repl: `alter table cw.obligation_act add constraint ack_needs_document
+  check (true);`,
+    expect: 'an acknowledgement without a document is refused' },
+
+  // ── The portfolio's certain count (0049, NC-16) ──
+  { suite: 'portfolio.test.mjs',
+    name: 'every run counts and renegotiated deals double',
+    find: `                         and (r2.created_at, r2.run_id) > (r.created_at, r.run_id)))`,
+    repl: `                         and false))`,
+    expect: 'a renegotiated deal counts once, through its latest run' },
+
+  { suite: 'portfolio.test.mjs',
+    name: 'unresolved is folded into nothing',
+    find: `where d.clause_id is null
+group by d.category_key, c.label, d.severity;`,
+    repl: `where false
+group by d.category_key, c.label, d.severity;`,
+    expect: 'an unresolved decision appears as unresolved, never as absent' },
+
   // ── The edit-quality threshold (0048, NC-13) ──
   // The one boundary this package converts from discipline into a check: the
   // system never chooses the number. A shipped default is exactly the breach

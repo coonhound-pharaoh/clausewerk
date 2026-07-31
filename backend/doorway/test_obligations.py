@@ -98,7 +98,19 @@ def seeded(db: Database, owner_url: str):
             "('AG-OB2','DP-H-014',1,1,0,'notify','vendor','ben''s duty',%s,"
             " current_date + 40,'attestation',14,false,false)",
             (RITA, BEN))
+        owner.execute(
+            "insert into cw.received_document (agreement_id,bytes,filename) "
+            "values ('AG-OB1', %s, 'certificate.pdf'), "
+            "       ('AG-OB2', %s, 'wrong-deal.pdf')",
+            (b"evidence bytes", b"foreign bytes"))
     return db
+
+
+def document_named(db: Database, filename: str) -> int:
+    with db.as_person(LEAH, "legal_admin") as request:
+        return request.rows(
+            "select document_id from cw.received_document where filename = %s",
+            (filename,))[0]["document_id"]
 
 
 def obligation_of(db: Database, summary: str) -> int:
@@ -218,6 +230,47 @@ def test_a_waiver_without_an_approved_override_is_refused_in_the_schemas_words(
     assert shaped.refused, shaped.body
     assert "approval" in shaped.body.get("reason", "") or shaped.body.get(
         "reason", "").strip(), shaped.body
+
+
+def test_satisfy_with_document_cites_the_stored_evidence(seeded, db):
+    """OB-06 through the doorway: the act closes the duty and points at the
+    received-document row. The same-deal rule and the ack semantics are the
+    schema's, proved in db/test/obligation-evidence.test.mjs."""
+    mine = obligation_of(db, "placeholder duty")
+    doc = document_named(db, "certificate.pdf")
+    shaped = write_answer(db, OWNING_REQUESTER, "POST /obligations/satisfy",
+                          {"obligation_id": mine,
+                           "note": "the certificate, as received",
+                           "document_ref": doc})
+    assert shaped.status == 200, shaped.body
+    assert shaped.body["rows"][0]["document_ref"] == doc
+
+
+def test_evidence_from_another_deal_is_refused_through_the_doorway(seeded, db):
+    mine = obligation_of(db, "placeholder duty")
+    foreign = document_named(db, "wrong-deal.pdf")
+    shaped = write_answer(db, OWNING_REQUESTER, "POST /obligations/satisfy",
+                          {"obligation_id": mine, "note": "borrowed proof",
+                           "document_ref": foreign})
+    assert shaped.refused, shaped.body
+    assert shaped.body.get("reason", "").strip()
+
+
+def test_an_acknowledgement_needs_its_document_and_closes_nothing(seeded, db):
+    mine = obligation_of(db, "placeholder duty")
+    bare = write_answer(db, OWNING_REQUESTER, "POST /obligations/ack",
+                        {"obligation_id": mine})
+    assert bare.status == 400, bare.body
+    assert "document_ref" in bare.body["reason"]
+
+    doc = document_named(db, "certificate.pdf")
+    acked = write_answer(db, OWNING_REQUESTER, "POST /obligations/ack",
+                         {"obligation_id": mine, "document_ref": doc})
+    assert acked.status == 200, acked.body
+
+    states = {r["obligation_id"]: r["state"]
+              for r in read_run(db, LEGAL, "GET /obligations")}
+    assert states[mine] == "pending", "an ack is evidence, not closure"
 
 
 def test_a_closed_obligation_takes_no_further_act(seeded, db):

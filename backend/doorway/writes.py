@@ -675,14 +675,36 @@ WRITES: dict[str, Write] = {
     # obligation the arithmetic already calls overdue. Giving that claim a
     # button is a decision to take knowingly when a screen needs it — not a
     # completeness itch to scratch here.
+    # document_ref is OB-06's satisfy-with-document: a received document
+    # (0047's store) cited as evidence. Optional — attestation alone still
+    # closes a duty — and the note stays mandatory either way: bytes without
+    # a sentence are not evidence anybody can act on. The same-deal rule is
+    # the schema's (0050): evidence answers for the deal it arrived on.
     "POST /obligations/satisfy": Write(
-        sql="""insert into cw.obligation_act (obligation_id, act, note)
-       values (%(obligation_id)s, 'satisfied', %(note)s)
-       returning act_id, obligation_id, act, acted_by, acted_at""",
+        sql="""insert into cw.obligation_act (obligation_id, act, note, document_ref)
+       values (%(obligation_id)s, 'satisfied', %(note)s, %(document_ref)s)
+       returning act_id, obligation_id, act, acted_by, acted_at, document_ref""",
         rule="cw.obligation_act record_act policy — Legal, or the requester on "
              "their own deal; satisfaction_needs_note refuses a blank note, "
-             "and the '' a form posts when nobody typed is blank",
-        fields=(Field("obligation_id"), Field("note")),
+             "and cw.obligation_act_guard() refuses evidence from another "
+             "deal (0050)",
+        fields=(Field("obligation_id"), Field("note"),
+                Field("document_ref", required=False)),
+    ),
+
+    # The counterparty acknowledged something — recorded AGAINST a received
+    # document, never as a bare flag (OB-06). Evidence, not closure: the
+    # duty stays open, and the state view never reads this act.
+    "POST /obligations/ack": Write(
+        sql="""insert into cw.obligation_act
+         (obligation_id, act, note, document_ref)
+       values (%(obligation_id)s, 'counterparty_ack', %(note)s, %(document_ref)s)
+       returning act_id, obligation_id, act, acted_by, document_ref""",
+        rule="cw.obligation_act record_act policy; ack_needs_document (0050) "
+             "refuses a bare flag, and the same-deal rule refuses foreign "
+             "evidence",
+        fields=(Field("obligation_id"), Field("document_ref"),
+                Field("note", required=False)),
     ),
 
     "POST /obligations/reassign": Write(

@@ -298,6 +298,17 @@ MUTATIONS = [
         "test_a_recorded_redline_is_a_received_round_pointing_at_the_stored_bytes",
     ),
     (
+        # NC-17's load-bearing rule: where nothing clears the bar the system
+        # ESCALATES (ADR-0005) — it never quietly drops the paragraph. With
+        # this branch gone, unmatched vendor language vanishes from the
+        # record instead of landing in quarantine.
+        "an unmatched change is dropped instead of escalated",
+        "doorway/analysis.py",
+        "    elif category_key is not None:",
+        "    elif False:",
+        "test_analysis.py::test_the_no_match_path_escalates_into_quarantine",
+    ),
+    (
         # The regression NC-09 found live: the document branch handed
         # App.handle no query at all, so every upload arrived addressed to
         # nobody and the app-level tests never noticed — they pass the query

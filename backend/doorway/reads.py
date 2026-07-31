@@ -544,6 +544,65 @@ READS: dict[str, Read] = {
         rule="cw.ticket_route grant — legal_reviewer, legal_admin, auditor",
     ),
 
+    # ── Portfolio questions on our own paper (NC-16, migration 0049) ────────
+    # THE CERTAIN HALF, and labelled as such: counts from the recorded
+    # decision sets, no AI anywhere. Each agreement is represented by its
+    # LATEST run (the 0049 representation rule) and an unattached run stands
+    # alone in its own figure — so a renegotiated deal never counts twice and
+    # nothing is silently dropped. The rung answers are the runs' own pinned
+    # snapshots: historic answers reproduce, they are never recomputed
+    # against today's library.
+    "GET /portfolio/positions": Read(
+        sql="""select category_key, category, severity, clause_id, version,
+                 title, rung_at_run, was_floor, decisions, agreements,
+                 unattached_runs
+          from cw.portfolio_position
+          order by category_key, severity, clause_id, version""",
+        rule="cw.portfolio_position scopes itself through cw.portfolio_run's "
+             "own WHERE clause (0049), in the run views' exact phrasing — a "
+             "requester's NUMBERS are computed only over runs they created "
+             "or deals they own, which is the fence D-7 can later widen",
+    ),
+
+    "GET /portfolio/unresolved": Read(
+        sql="""select category_key, category, severity, unresolved,
+                 agreements, unattached_runs
+          from cw.portfolio_unresolved
+          order by category_key, severity""",
+        rule="cw.portfolio_unresolved via cw.portfolio_run (0049) — nothing "
+             "could be selected is its own count, never folded into zero: "
+             "'no exposure' and 'unmeasured exposure' are different sentences",
+    ),
+
+    # ── Round analysis and risk estimates (NC-17/NC-26, 0052/0053) ──────────
+    # Advice on the record: which position each analysed paragraph touches,
+    # by which instrument, with the retreat path beside it — and the risk
+    # estimates, labelled estimates, absences recorded as outcomes. Nothing
+    # here can move a position or gate anything.
+    "GET /negotiations/analysis": Read(
+        sql="""select analysis_id, negotiation_id, round_no, paragraph_index,
+                 original_text, proposed_text, author, matched_position,
+                 no_match_ticket, match_score, matcher, category_key,
+                 classifier, model, model_version, alternatives, analysed_at,
+                 analysed_by
+          from cw.round_analysis order by analysis_id""",
+        rule="cw.round_analysis read_scoped policy (0052) — Legal and the "
+             "Auditor in full, a requester their own deals' analyses; no "
+             "viewer, and no administrator (the negotiation family's open "
+             "boundary, 0027)",
+    ),
+
+    "GET /risk/assessments": Read(
+        sql="""select assessment_id, analysis_id, concession_id, direction,
+                 outcome, transfer_estimate, basis, absent_reason, model,
+                 model_version, assessed_at, assessed_by
+          from cw.risk_assessment order by assessment_id""",
+        rule="cw.risk_assessment read_scoped policy (0053) — estimates are "
+             "advisory, signed -1..1, and an absent outcome carries its "
+             "reason; the texts the model read stay on the row for the "
+             "record and are deliberately not repeated on this list surface",
+    ),
+
     # ── Obligations (OB-07, migrations 0036-0039) ───────────────────────────
     # The state view is deliberately UNscoped per person: colleagues cover for
     # each other (open-questions §12, settled), so every working role sees the

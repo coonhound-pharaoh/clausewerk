@@ -1238,6 +1238,18 @@ the `reads.py` queue.
 
 *Serves plan WP-8 (the precise half).*
 
+> **BUILT — 2026-07-30, migration `0049`, fenced to the narrowest defensible
+> scope in lieu of D-7** (the run views' exact phrasing, which D-7 can only
+> widen). **The agreement-representation rule, stated and asserted:** an
+> agreement is its LATEST run — greatest (created_at, run_id) — and an
+> unattached run stands alone in its own `unattached_runs` figure; a
+> renegotiated deal never counts twice. `cw.portfolio_position` (counts +
+> drill-down per category/severity/clause/version, with the PINNED rung so
+> historic answers reproduce after supersession) and `cw.portfolio_unresolved`
+> (its own count, never folded into zero). The requester test asserts the
+> NUMBER, not the row list. Two reads; two SQL mutation rows;
+> `portfolio.test.mjs` (5). Engine untouched.
+
 **Gate.** D-7 (who may ask portfolio-wide questions), plus the connection work's files being clean
 for the `reads.py` edit. Needs no vectors, no supplier-paper work, and no other decision. Fourth in
 the `reads.py` queue.
@@ -1309,6 +1321,21 @@ the `reads.py` queue.
 
 *Serves plan WP-3 (Negotiation Round Analysis). Split at integration; the deterministic half is
 NC-06.*
+
+> **BUILT — 2026-07-30, migration `0052` + `analysis.py`, on the stated
+> two-layer matcher reading** (keyword scores, escalate when nothing clears
+> the bar — flagged to the owner as assumed, per the standing warn-don't-gate
+> rule). One row per analysed paragraph of a received round: the exact texts
+> read, the matched open position OR the `no-ai-match` ticket the escalation
+> opened OR — where no category exists at all — a visibly unanswered row that
+> guesses nothing. Every row names its matcher and classifier (§4's
+> calibration residue, recorded); the classifier is paper.py's, imported so
+> the two boundaries cannot diverge; the ranking is NC-06's module verbatim,
+> stored as references. Advice by schema: nothing can reach
+> `cw.position_movement`, asserted by test. Model columns null until a model
+> is seated — the recorded absence. `POST /negotiations/analyse`;
+> `GET /negotiations/analysis`; `test_analysis.py`; a doorway mutation row on
+> the escalation. Engine untouched.
 
 **Gate.** How the redline matcher's fallback is read. `ADR-0005` says the fallback IS escalation (a
 review ticket with reason 'no-ai-match'); `docs/open-questions.md` §4 says the keyword scorer is
@@ -1388,6 +1415,20 @@ not by rewriting history. If the owner disagrees, this package becomes decision-
 
 *Serves plan WP-4 (Supplier Paper), the decomposition half. Split at integration.*
 
+> **BUILT — 2026-07-30, migration `0051`** (the migration question resolved:
+> yes, one). RP-05 had already built the decomposition, the deterministic
+> classifier (ADR-0005: the fallback ships first; a model is seated in front
+> later, as paper.py's own docstring records) and the review-queue quarantine.
+> This package landed what was missing: **the source anchor** —
+> `cw.supplier_unit`, paragraph N of the stored received document (0047's
+> schema-computed sha), same-deal-guarded, append-only, carrying positions and
+> never wording — written by `paper.ingest` in the ticket's own unit of work,
+> and the report now says where each unit came from. **And the quarantine test
+> that IS the claim:** a supplier unit adds nothing to `cw.selectable_clause`,
+> asserted non-vacuously (`supplier-units.test.mjs`, 6). Unknown categories
+> cannot arise at this boundary by construction — the classifier's vocabulary
+> IS `cw.category`. One SQL mutation row on the same-deal guard.
+
 **Gate.** NC-07 (receive a document).
 
 **Prerequisites**
@@ -1452,6 +1493,13 @@ view could forget about. Treat this as a design proposal, not a verified fact.
 ## NC-19 — Supplier units through round analysis
 
 *Serves plan WP-4 (Supplier Paper), the analysis tail. Split at integration.*
+
+> **BUILT — 2026-07-30.** `POST /negotiations/analyse/supplier`: quarantined
+> units (NC-18) through the SAME `_analyse_one` a redline runs — one
+> pipeline, two entrances, no new storage. The single-pipeline claim is
+> asserted: a supplier unit and a redline paragraph land rows of the same
+> shape, same instruments, in the same record
+> (`test_supplier_units_run_the_same_pipeline_and_land_the_same_shape`).
 
 **Gate.** NC-17 and NC-18 both delivered.
 
@@ -1815,6 +1863,18 @@ the dispatch and read lines. The append-only rows already written stay, as evide
 ---
 
 ## NC-26 — Risk-exposure judgments in round analysis, both directions
+
+> **BUILT — 2026-07-30, migration `0053` + `judge_risk_exposure` on NC-25's
+> seam.** Its own record (`cw.risk_assessment`), not 0030's — different
+> anchors: PROSPECTIVE rows ride every matched analysis paragraph (recorded
+> after the analysis commits, B2 verbatim — no transaction across the
+> provider call); RETROSPECTIVE rows land per settled concession via
+> `POST /concessions/assess-risk`, idempotent. Signed −1..1, both directions
+> as the owner asked; every row carries the exact texts read, model and
+> version; **model-down still answers** — the analysis lands whole and the
+> absence is an outcome with its reason, proven by test. The `_absent`
+> harness row covers the new judge for free (same path). No estimate's
+> value or wording is pinned anywhere.
 
 *Serves plan WP-3 (owner additions U14a/U14d). Consumes NC-25's record and adapter.*
 
