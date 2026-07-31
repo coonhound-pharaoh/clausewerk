@@ -4539,3 +4539,12 @@ headers, `res.blob()` escaped and the requesting screen stopped before clearing
 its busy state. Blob consumption now returns the same unreachable result as an
 initial fetch failure. The real adapter is tested with successful headers and a
 body stream that rejects.
+
+## S212 — Sign-in requires a complete identity before storing it — 2026-07-31
+
+A readable successful sign-in object was accepted without checking its token or
+identity fields. A truncated or wrong-shaped response could therefore report
+success, store undefined state, and crash when the root selected the returned
+role's workspace. Sign-in now requires nonblank text for token, person, role,
+and display name, plus a text-or-null unit, before changing browser state. The
+real adapter is tested with an incomplete 200 and proves nothing is installed.

@@ -132,6 +132,12 @@ const API = (() => {
       if (res.ok && (payload === null || typeof payload !== 'object'
           || Array.isArray(payload))) return unreadable(res.status);
       if (!res.ok) return { ok: false, reason: payload?.reason ?? 'sign-in failed' };
+      if (![payload.token, payload.person, payload.role, payload.display_name].every(
+          (value) => typeof value === 'string' && value.trim())) {
+        return unreadable(res.status);
+      }
+      if (payload.unit !== null && payload.unit !== undefined
+          && typeof payload.unit !== 'string') return unreadable(res.status);
       token = payload.token;
       identity = {
         person: payload.person, role: payload.role,

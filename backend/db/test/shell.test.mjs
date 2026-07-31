@@ -311,6 +311,24 @@ await test('a download interrupted after its headers settles as unreachable', as
   assert(result.unreachable === true, 'the interrupted body was not a transport failure');
 });
 
+await test('a successful sign-in must carry a complete usable identity', async () => {
+  const context = {
+    fetch: async () => ({
+      ok: true, status: 200,
+      json: async () => ({ person: 'person@example.test', role: 'viewer' }),
+    }),
+  };
+  const source = read('api.jsx').replace('const API =', 'globalThis.API =');
+  runInNewContext(source, context);
+
+  const result = await context.API.signIn('person@example.test');
+
+  assert(result.ok === false, 'an incomplete sign-in was reported as success');
+  assert(result.invalidResponse === true, 'the incomplete identity was not identified');
+  assert(!context.API.signedIn, 'an incomplete sign-in installed a browser token');
+  eq(context.API.session, null, 'an incomplete sign-in installed an identity');
+});
+
 await test('no pane holds an array of example rows', async () => {
   // The shape canned data takes: a literal array of objects sitting in the
   // module, ready to render. Real rows arrive from usePane and are never
