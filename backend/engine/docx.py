@@ -183,6 +183,7 @@ MAX_PART_BYTES = 16 * 1024 * 1024        # one part of the archive, decompressed
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024     # the whole archive, decompressed
 MAX_ARCHIVE_MEMBERS = 10_000              # central-directory entries
 MAX_MEMBER_NAME_CHARS = 1_024             # one central-directory name
+MAX_DUPLICATE_NAMES_IN_ERROR = 10         # bounded caller-facing detail
 MAX_ELEMENT_DEPTH = 256                  # nested elements in document.xml
 MAX_ELEMENTS = 100_000                    # total elements in document.xml
 MAX_ATTRIBUTES_PER_ELEMENT = 1_024        # one tag's attribute map
@@ -275,9 +276,11 @@ def _document_xml(data: bytes) -> ET.Element:
                     duplicates.add(member.filename)
                 seen_names.add(member.filename)
             if duplicates:
+                examples = sorted(duplicates)[:MAX_DUPLICATE_NAMES_IN_ERROR]
                 raise NotADocx(
-                    "the archive contains duplicate member names: "
-                    + ", ".join(sorted(duplicates))
+                    "the archive contains duplicate member names "
+                    f"({len(duplicates)} total): " + ", ".join(examples)
+                    + (" …" if len(duplicates) > len(examples) else "")
                     + " — different readers could select different contract text")
             declared = sum(i.file_size for i in members)
             if declared > MAX_ARCHIVE_BYTES:

@@ -4419,3 +4419,11 @@ names could still be tens of thousands of characters and duplicate refusal
 joined attacker-controlled names into its error. Each member name is now capped
 at 1,024 characters before duplicate details are collected, and the refusal
 does not echo the hostile name. A compact archive regression proves both facts.
+
+## S199 — Duplicate DOCX diagnostics are bounded — 2026-07-31
+
+After member-name length was bounded, duplicate detection could still join as
+many as 10,000 attacker-chosen names into a caller-facing refusal. The error now
+reports the total duplicate count but lists at most ten sorted examples, with
+an ellipsis when more exist. A regression supplies twelve distinct duplicate
+names and proves the eleventh is not reflected in the diagnostic.

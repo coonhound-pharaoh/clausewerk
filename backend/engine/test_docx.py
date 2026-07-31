@@ -18,6 +18,7 @@ from engine.docx import (
     DOC_RELS,
     MAX_ATTRIBUTES_PER_ELEMENT,
     MAX_ARCHIVE_MEMBERS,
+    MAX_DUPLICATE_NAMES_IN_ERROR,
     MAX_MEMBER_NAME_CHARS,
     MAX_ELEMENTS,
     RELS,
@@ -661,6 +662,28 @@ def test_an_overlong_archive_member_name_is_refused_without_echoing_it():
 
     assert "metadata bomb" in str(refused.value)
     assert hostile_name not in str(refused.value)
+
+
+@pytest.mark.filterwarnings("ignore:Duplicate name")
+def test_duplicate_member_diagnostics_are_bounded():
+    names = [f"duplicate/{index:02d}.xml"
+             for index in range(MAX_DUPLICATE_NAMES_IN_ERROR + 2)]
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+        z.writestr("word/document.xml",
+                   f'<w:document xmlns:w="{W}"><w:body/></w:document>')
+        for name in names:
+            z.writestr(name, b"")
+            z.writestr(name, b"")
+
+    with pytest.raises(NotADocx) as refused:
+        parse_redlines(buf.getvalue())
+
+    detail = str(refused.value)
+    assert f"({len(names)} total)" in detail
+    assert names[MAX_DUPLICATE_NAMES_IN_ERROR - 1] in detail
+    assert names[MAX_DUPLICATE_NAMES_IN_ERROR] not in detail
+    assert "…" in detail
 
 
 def test_an_archive_with_excessive_empty_members_is_refused():
