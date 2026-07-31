@@ -4281,3 +4281,12 @@ reserves one of 64 semaphore slots before starting a request thread, closes new
 connections when full, releases slots in the request thread's `finally`, and
 also releases on thread-start failure. A unit control exhausts the sole test
 slot and proves no request thread starts.
+
+## S185 — Execution byte size is positive at the boundary — 2026-07-31
+
+The execution doorway accepted zero and negative document sizes as correctly
+typed input, leaving a database constraint to reject them after transactional
+work had begun. That late rejection was also classified as a conflict on the
+request's merits instead of a malformed request. The doorway now refuses every
+nonpositive byte size with 400 before opening a database request. Direct
+regressions cover both zero and a negative value without a database fixture.

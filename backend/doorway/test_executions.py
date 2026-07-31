@@ -212,6 +212,14 @@ def test_wrong_execution_scalar_types_are_boundary_errors(field, wrong):
     assert answered.status == 400
 
 
+@pytest.mark.parametrize("wrong", [0, -1])
+def test_nonpositive_execution_byte_sizes_are_boundary_errors(wrong):
+    answered = executions.execute(
+        None, None, filing("RUN-BOUNDARY", byte_size=wrong))
+
+    assert answered.status == 400
+
+
 @pytest.mark.parametrize("field", ["name", "party", "method", "signed_on", "title"])
 def test_wrong_signatory_scalar_types_are_boundary_errors(field):
     signatory = {**filing("RUN-BOUNDARY")["signatories"][0], field: 42}

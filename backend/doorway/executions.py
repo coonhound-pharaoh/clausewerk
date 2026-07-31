@@ -180,6 +180,8 @@ def execute(db: Database, caller: Caller, body: dict) -> Answer:
     if (not isinstance(body.get("byte_size"), int)
             or isinstance(body.get("byte_size"), bool)):
         return _rejected("byte_size must be an integer")
+    if body["byte_size"] <= 0:
+        return _rejected("byte_size must be positive")
 
     signatories = body.get("signatories")
     if not isinstance(signatories, list) or not signatories:
