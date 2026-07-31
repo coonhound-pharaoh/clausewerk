@@ -4427,3 +4427,13 @@ many as 10,000 attacker-chosen names into a caller-facing refusal. The error now
 reports the total duplicate count but lists at most ten sorted examples, with
 an ellipsis when more exist. A regression supplies twelve distinct duplicate
 names and proves the eleventh is not reflected in the diagnostic.
+
+## S200 — Document uploads preflight the session before reading bytes — 2026-07-31
+
+The HTTP transport read a document body before `App.handle()` resolved its
+bearer session, so an unauthenticated client could make a worker receive up to
+the 1 GiB document limit merely to learn it had no session. Document endpoints
+now preflight the current session after parsing their small query and before
+reading the body. Dispatch resolves identity again after the read so revocation
+between the two checks still takes effect. A socket regression advertises a
+1,000,000,000-byte body, sends none, and receives 401 without app dispatch.

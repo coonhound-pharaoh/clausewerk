@@ -267,6 +267,10 @@ class Handler(BaseHTTPRequestHandler):
             if refused is not None:
                 self._respond(refused)
                 return
+            refused = self.app.preflight_session(self._token())
+            if refused is not None:
+                self._respond(refused)
+                return
             upload, refused = self._read_document()
             if refused is not None:
                 self._respond(refused)

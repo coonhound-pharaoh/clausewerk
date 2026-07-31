@@ -118,6 +118,21 @@ class App:
     def sessions(self) -> Sessions:
         return self._sessions
 
+    def preflight_session(self, token: str | None) -> Response | None:
+        """Refuse an absent or revoked session before a large body is read.
+
+        `handle()` resolves the caller again after the read. That second check
+        is deliberate: a role can be revoked between this resource guard and
+        dispatch, and preflight must never become cached authorization.
+        """
+        try:
+            caller_for(self._db, self._sessions, token)
+        except NoSession:
+            return Response(401, {"error": "no session"})
+        except NoEffectiveRole as gone:
+            return Response(403, {"error": "refused", "reason": str(gone)})
+        return None
+
     # ── Sign in ─────────────────────────────────────────────────────────────
     # No password. This is the seam an identity provider plugs into, and it is
     # marked as a seam rather than dressed up as authentication. What is real

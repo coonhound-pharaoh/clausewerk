@@ -429,12 +429,20 @@ class Records:
         self.answer = answer
         self.seen: list[dict] = []
 
+    def preflight_session(self, _token):
+        return None
+
     def handle(self, method, path, token=None, body=None, query=None,
                upload=None):
         self.seen.append({"method": method, "path": path,
                           "token": token, "body": body, "query": query,
                           "upload": upload})
         return self.answer
+
+
+class RefusesDocumentSession(Records):
+    def preflight_session(self, _token):
+        return Response(401, {"error": "no session"})
 
 
 @contextmanager
@@ -730,6 +738,25 @@ def test_a_document_over_the_limit_is_refused_unread():
     assert body.get("error") != "refused", (
         "a document that is too large is not a permission problem")
     assert not app.seen, "the oversized document reached the app anyway"
+
+
+def test_a_document_without_a_session_is_refused_before_its_body_is_read():
+    app = RefusesDocumentSession(Response(200, {"wrong": True}))
+
+    with stub_serving(app) as base:
+        parsed = urllib.parse.urlparse(base)
+        with socket.create_connection((parsed.hostname, parsed.port), timeout=5) as client:
+            client.sendall(
+                b"POST /api/paper/ingest?agreement=AG-1 HTTP/1.1\r\n"
+                b"Host: 127.0.0.1\r\n"
+                b"Content-Type: application/octet-stream\r\n"
+                b"Content-Length: 1000000000\r\n\r\n")
+            client.shutdown(socket.SHUT_WR)
+            reply = client.makefile("rb").read()
+
+    assert b" 401 " in reply.split(b"\r\n", 1)[0]
+    assert b'"error": "no session"' in reply
+    assert not app.seen
 
 
 def test_a_wrong_route_cannot_make_the_server_read_a_document_sized_body():
