@@ -38,6 +38,7 @@ import re
 
 import psycopg
 import pytest
+from psycopg import sql
 
 from doorway.setup import OWNER_URL as DEFAULT_OWNER_URL, prepare
 
@@ -56,6 +57,11 @@ TEST_DATABASE = os.environ.get(
 # The prefix a stale database can be recognised by. Only ever used to clean up
 # databases this file created.
 TEST_DATABASE_PREFIX = "clausewerk_doorway_"
+
+
+def _database_statement(command: str, name: str) -> sql.Composed:
+    """Compose an owner-level database command without treating its name as SQL."""
+    return sql.SQL(command + " {}").format(sql.Identifier(name))
 
 
 def _with_database(url: str, name: str) -> str:
@@ -87,7 +93,7 @@ def _ensure_database_exists() -> None:
     try:
         with psycopg.connect(maintenance, autocommit=True) as conn:
             try:
-                conn.execute(f'create database "{TEST_DATABASE}"')
+                conn.execute(_database_statement("create database", TEST_DATABASE))
             except psycopg.errors.DuplicateDatabase:
                 pass
     except psycopg.OperationalError as exc:
@@ -132,7 +138,8 @@ def _this_run_s_database():
             conn.execute(
                 "select pg_terminate_backend(pid) from pg_stat_activity "
                 "where datname = %s and pid <> pg_backend_pid()", (TEST_DATABASE,))
-            conn.execute(f'drop database if exists "{TEST_DATABASE}"')
+            conn.execute(_database_statement(
+                "drop database if exists", TEST_DATABASE))
     except psycopg.Error:
         # A database left behind is untidy; a run that fails while tidying up
         # reports the wrong thing. The next run clears it.

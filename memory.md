@@ -4395,3 +4395,11 @@ delivery outcome. Failure capture now tolerates broken string conversion,
 substitutes the exception type when detail is absent or unrepresentable, and
 bounds the result to 500 characters. Live controls prove both hostile exception
 shapes still produce a sent-to-outbox `failed` outcome.
+
+## S196 — Test database names are identifiers, never owner SQL — 2026-07-31
+
+The doorway test fixture accepted `CW_TEST_DATABASE` and interpolated it into
+owner-privileged `CREATE DATABASE` SQL. A name containing a quote could end the
+identifier and append another statement when the suite started. Creation and
+cleanup now compose the configured name with psycopg's identifier quoting; a
+fixture-free control proves hostile punctuation remains inside one identifier.
