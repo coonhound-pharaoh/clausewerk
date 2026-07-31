@@ -16,6 +16,7 @@ import pytest
 from engine.docx import (
     CONTENT_TYPES,
     DOC_RELS,
+    MAX_ARCHIVE_MEMBERS,
     MAX_ELEMENTS,
     RELS,
     STYLES,
@@ -643,6 +644,20 @@ def test_duplicate_document_parts_are_refused_as_ambiguous():
 
     with pytest.raises(NotADocx, match="duplicate member names"):
         parse_redlines(buf.getvalue())
+
+
+def test_an_archive_with_excessive_empty_members_is_refused():
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+        z.writestr("word/document.xml",
+                   f'<w:document xmlns:w="{W}"><w:body/></w:document>')
+        for index in range(MAX_ARCHIVE_MEMBERS):
+            z.writestr(f"empty/{index}", b"")
+
+    attack = buf.getvalue()
+    assert len(attack) < 2_000_000, "the metadata bomb fixture must stay compact"
+    with pytest.raises(NotADocx, match="metadata bomb"):
+        parse_redlines(attack)
 
 
 def test_unsupported_zip_compression_is_a_document_refusal():

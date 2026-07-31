@@ -4011,3 +4011,12 @@ layer's later NUL check. The origin boundary now requires printable ASCII in
 the raw target and rejects `%00` anywhere; ordinary percent-encoded UTF-8 stays
 valid. Fast protocol tests cover raw NUL, encoded NUL, DEL, raw non-ASCII and a
 valid encoded UTF-8 control.
+
+## S156 — DOCX archives have a member-count ceiling — 2026-07-31
+
+The untrusted DOCX reader bounded decompressed bytes, part size, XML depth and
+element count but not ZIP member count. Empty entries add no declared payload,
+so a compact archive could force large central-directory lists and duplicate
+tracking without crossing a byte ceiling. The parser now refuses more than
+10,000 members before per-name bookkeeping. A compact empty-entry metadata-bomb
+fixture proves the refusal.

@@ -181,6 +181,7 @@ class NotADocx(ValueError):
 # what a real contract needs.
 MAX_PART_BYTES = 16 * 1024 * 1024        # one part of the archive, decompressed
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024     # the whole archive, decompressed
+MAX_ARCHIVE_MEMBERS = 10_000              # central-directory entries
 MAX_ELEMENT_DEPTH = 256                  # nested elements in document.xml
 MAX_ELEMENTS = 100_000                    # total elements in document.xml
 
@@ -253,6 +254,10 @@ def _document_xml(data: bytes) -> ET.Element:
     try:
         with zipfile.ZipFile(BytesIO(data)) as z:
             members = z.infolist()
+            if len(members) > MAX_ARCHIVE_MEMBERS:
+                raise NotADocx(
+                    f"the archive contains more than {MAX_ARCHIVE_MEMBERS} parts "
+                    "— refused as a metadata bomb")
             seen_names: set[str] = set()
             duplicates: set[str] = set()
             for member in members:
