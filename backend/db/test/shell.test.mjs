@@ -349,6 +349,18 @@ await test('a successful sign-in cannot name an unknown workspace role', async (
   assert(!context.API.signedIn, 'an unknown role installed a browser token');
 });
 
+await test('an older pane request cannot overwrite a newer reload', async () => {
+  const src = stripComments(read('common.jsx'));
+  assert(/const generation = useRef\(0\)/.test(src),
+    'the shared pane hook has no request generation');
+  assert(/const request = \+\+generation\.current/.test(src),
+    'a pane reload does not claim a new generation');
+  assert(/if \(request !== generation\.current\) return/.test(src),
+    'a stale pane response can still update state');
+  assert(/return \(\) => \{ generation\.current \+= 1; \}/.test(src),
+    'an unmounted pane does not invalidate its pending request');
+});
+
 await test('no pane holds an array of example rows', async () => {
   // The shape canned data takes: a literal array of objects sitting in the
   // module, ready to render. Real rows arrive from usePane and are never

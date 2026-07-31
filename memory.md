@@ -4556,3 +4556,12 @@ unknown nonblank role still installed the token, then crashed when the root
 looked up a workspace that does not exist. The API adapter now requires the
 role to be one of the six protocol values before mutating browser state. The
 real adapter is tested with a `superuser` response and proves no token lands.
+
+## S214 — Older pane responses cannot overwrite newer reloads — 2026-07-31
+
+The shared pane hook allowed overlapping fetches to settle in any order. A slow
+initial request could overwrite a newer manual reload, and an unmounted pane
+could still attempt a state update. Each reload now claims a monotonic generation
+and may update state only while it remains current; effect cleanup invalidates
+the pending generation. The shell control pins claim, comparison, and cleanup
+in the one hook every data pane uses.

@@ -6,7 +6,7 @@
 // wrong quietly. WP-U07 consolidates them into one strip and one list, and every
 // workspace opens on those.
 
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect, useCallback, useRef } = React;
 
 // ── How long has this been waiting ────────────────────────────────────────
 // Rendered from the recorded timestamp, never from a stored "age" — an age
@@ -166,13 +166,19 @@ function LoadFailed({ reason }) {
 // the first two into an empty list.
 function usePane(fetcher, deps = []) {
   const [state, setState] = useState({ status: 'loading', rows: [], reason: null });
+  const generation = useRef(0);
   const reload = useCallback(async () => {
+    const request = ++generation.current;
     setState((s) => ({ ...s, status: 'loading' }));
     const r = await fetcher();
+    if (request !== generation.current) return;
     if (r.ok) setState({ status: 'loaded', rows: r.rows, reason: null });
     else setState({ status: 'failed', rows: [], reason: r.reason, http: r.status });
   }, deps);
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    reload();
+    return () => { generation.current += 1; };
+  }, [reload]);
   return { ...state, reload };
 }
 
