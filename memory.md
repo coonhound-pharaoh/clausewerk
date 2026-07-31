@@ -3775,3 +3775,13 @@ also contains intentionally predictable development credentials, another
 machine on the network could bypass the doorway and connect directly. The port
 mapping is now `127.0.0.1:5432:5432`. A dependency-free configuration test
 pins both the required loopback mapping and the absence of the broad mapping.
+
+## S132 — HTTP server instances keep separate apps — 2026-07-31
+
+`serve()` stored its `App` and static root on the global `Handler` class. A
+second server created in the same process overwrote those values, so requests
+arriving at the first listener could run against the second database. Each
+server now receives a private handler subclass with its own bound state. A
+two-listener transport test proves simultaneous servers retain distinct apps
+and answers; the global assignments remain only as the established inspection
+seam and are no longer read by live servers created through `serve()`.

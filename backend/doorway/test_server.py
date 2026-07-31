@@ -449,6 +449,29 @@ def stub_serving(app):
         Handler.app, Handler.static_root = held_app, held_root
 
 
+def test_two_servers_do_not_share_their_apps(monkeypatch):
+    """A later serve() must not redirect an earlier listener's requests."""
+    monkeypatch.setattr(server_module, "Database", lambda name: name)
+    monkeypatch.setattr(
+        server_module, "App",
+        lambda name: Records(Response(200, {"server": name})))
+    servers = [server_module.serve("first", port=0),
+               server_module.serve("second", port=0)]
+    threads = [threading.Thread(target=s.serve_forever, daemon=True) for s in servers]
+    for thread in threads:
+        thread.start()
+    try:
+        bases = [f"http://127.0.0.1:{s.server_address[1]}" for s in servers]
+        assert Client(bases[0]).call("GET", "/api/me")[1] == {"server": "first"}
+        assert Client(bases[1]).call("GET", "/api/me")[1] == {"server": "second"}
+    finally:
+        for server in servers:
+            server.shutdown()
+            server.server_close()
+        for thread in threads:
+            thread.join(timeout=5)
+
+
 def test_a_download_leaves_as_bytes_with_its_own_content_type():
     """The exact bytes, and the content type the Download itself carried.
 
