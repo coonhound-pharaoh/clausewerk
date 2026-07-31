@@ -689,6 +689,32 @@ def test_a_wrong_route_cannot_make_the_server_read_a_document_sized_body():
     assert not app.seen, "the wrong-route document reached the app"
 
 
+def test_two_document_names_are_refused_before_the_body_is_read():
+    """Different HTTP hops may choose different repeated metadata fields.
+
+    The evidence record must not depend on which Content-Disposition a proxy
+    or this server selects, and refusal must happen before document bytes move.
+    """
+    app = Records(Response(200, {"ok": True}))
+
+    with stub_serving(app) as base:
+        parsed = urllib.parse.urlparse(base)
+        with socket.create_connection((parsed.hostname, parsed.port), timeout=5) as client:
+            client.sendall(
+                b"POST /api/negotiations/redline HTTP/1.1\r\n"
+                b"Host: localhost\r\n"
+                b"Content-Type: application/octet-stream\r\n"
+                b"Content-Disposition: attachment; filename=first.docx\r\n"
+                b"Content-Disposition: attachment; filename=second.docx\r\n"
+                b"Content-Length: 1000000000\r\n"
+                b"Connection: close\r\n\r\n")
+            reply = client.makefile("rb").read()
+
+    assert b" 400 " in reply.split(b"\r\n", 1)[0]
+    assert b"content disposition is ambiguous" in reply
+    assert not app.seen
+
+
 def test_a_document_that_is_not_there_is_a_400_and_not_a_crash():
     """An upload with nothing in it is the caller's mistake, named as such.
     Never a 500: "we broke" would send somebody to argue about a bug."""

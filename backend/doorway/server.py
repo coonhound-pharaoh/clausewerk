@@ -183,6 +183,11 @@ class Handler(BaseHTTPRequestHandler):
             self._respond(Response(400, {"error": "content type is ambiguous"}))
             return
 
+        if len(self.headers.get_all("content-disposition", [])) > 1:
+            self._respond(Response(400, {
+                "error": "content disposition is ambiguous"}))
+            return
+
         if self._is_document():
             endpoint = self._endpoint(parsed.path)
             if endpoint not in DOCUMENT_ENDPOINTS:

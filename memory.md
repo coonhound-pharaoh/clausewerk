@@ -3746,3 +3746,13 @@ it read a body the route could never use. `server.py` now names the two byte
 routes (`/paper/ingest` and `/negotiations/redline`) and returns 415 before
 query or body parsing everywhere else. A raw-socket test sends only headers
 claiming a one-billion-byte body; the prompt response proves it was not read.
+
+## S129 — Duplicate document-name headers are refused — 2026-07-31
+
+`server.py` rejected duplicate Content-Type and Content-Length fields but used
+the first of multiple Content-Disposition fields. Different HTTP hops may pick
+different fields, so an immutable evidence row could record a filename other
+than the one another hop inspected. Duplicate Content-Disposition fields now
+receive a 400 before any document bytes are read. A raw-socket regression sends
+two names and claims a one-billion-byte body, proving both ambiguity refusal and
+the unread-body order.
