@@ -142,6 +142,52 @@ def test_one_tick_bounds_external_delivery_attempts():
     assert answered.body["deferred_by_delivery_limit"] == 2
 
 
+@pytest.mark.parametrize("failing_context", [2, 3])
+def test_every_notification_database_phase_classifies_refusals(failing_context):
+    class Request:
+        def rows(self, sql, values=()):
+            if "assert_may_run_notifications" in sql:
+                return [{}]
+            if "from cw.effective_role" in sql:
+                return [{"person": "person@example.com", "role": "requester"}]
+            if "from cw.waiting_for" in sql:
+                return [{"kind": "review_ticket", "subject_ref": "1",
+                         "due_on": None, "since": None}]
+            if "from cw.notification_outbox" in sql:
+                return []
+            if "from cw.notification_address" in sql:
+                return [{"address": "person@example.com"}]
+            raise AssertionError(sql)
+
+    class Context:
+        def __init__(self, number):
+            self.number = number
+
+        def __enter__(self):
+            if self.number == failing_context:
+                raise psycopg.errors.InsufficientPrivilege("notification denied")
+            return Request()
+
+        def __exit__(self, *_args):
+            return False
+
+    class StubDatabase:
+        contexts = 0
+
+        def as_person(self, *_args):
+            self.contexts += 1
+            return Context(self.contexts)
+
+    sends, channel = recording_channel()
+    answered = notifications.tick(
+        StubDatabase(), Caller(ADMIN, "administrator"), channel)
+
+    assert answered.status == 403
+    assert answered.body["error"] == "refused"
+    assert "notification denied" in answered.body["reason"]
+    assert sends == []
+
+
 def outbox(db: Database) -> list[dict]:
     with db.as_person(ADMIN, "administrator") as request:
         return request.rows(

@@ -157,24 +157,28 @@ def tick(db: Database, caller: Caller, channel: Channel,
     for person in people:
         # Read everything this person's attempt needs, then LEAVE the
         # transaction before any channel talk (B2).
-        with db.as_person(caller.person, caller.role) as request:
-            waiting = request.rows(
-                "select kind, subject_ref, due_on::text as due_on, since "
-                "from cw.waiting_for(%s, %s) "
-                "order by due_on nulls last, kind, subject_ref",
-                (person["person"], person["role"]))
-            if not waiting:
-                continue
-            digested += 1
-            sent_today = request.rows(
-                "select 1 from cw.notification_outbox "
-                "where person = %s and channel = 'email' and sent_on = %s "
-                "  and kind = 'digest' and outcome = 'sent'",
-                (person["person"], day))
-            address_rows = request.rows(
-                "select address from cw.notification_address "
-                "where person = %s and channel = 'email' and removed_at is null",
-                (person["person"],))
+        try:
+            with db.as_person(caller.person, caller.role) as request:
+                waiting = request.rows(
+                    "select kind, subject_ref, due_on::text as due_on, since "
+                    "from cw.waiting_for(%s, %s) "
+                    "order by due_on nulls last, kind, subject_ref",
+                    (person["person"], person["role"]))
+                if not waiting:
+                    continue
+                digested += 1
+                sent_today = request.rows(
+                    "select 1 from cw.notification_outbox "
+                    "where person = %s and channel = 'email' and sent_on = %s "
+                    "  and kind = 'digest' and outcome = 'sent'",
+                    (person["person"], day))
+                address_rows = request.rows(
+                    "select address from cw.notification_address "
+                    "where person = %s and channel = 'email' and removed_at is null",
+                    (person["person"],))
+        except psycopg.Error as error:
+            refused = classify(error)
+            return Answered(refused.status, refused.as_body())
 
         if sent_today:
             already += 1
@@ -194,17 +198,21 @@ def tick(db: Database, caller: Caller, channel: Channel,
         # lease, and RETURNING is empty for a live competing claim. No database
         # connection remains checked out while the channel runs (B2).
         claim_token = uuid.uuid4()
-        with db.as_person(caller.person, caller.role) as request:
-            claimed = request.rows(
-                "insert into cw.notification_delivery_claim "
-                "  (person, channel, sent_on, kind, claim_token, expires_at) "
-                "values (%s, 'email', %s, 'digest', %s, now() + interval '5 minutes') "
-                "on conflict (person, channel, sent_on, kind) do update "
-                "set claim_token = excluded.claim_token, claimed_at = now(), "
-                "    expires_at = excluded.expires_at "
-                "where cw.notification_delivery_claim.expires_at <= now() "
-                "returning claim_token",
-                (person["person"], day, claim_token))
+        try:
+            with db.as_person(caller.person, caller.role) as request:
+                claimed = request.rows(
+                    "insert into cw.notification_delivery_claim "
+                    "  (person, channel, sent_on, kind, claim_token, expires_at) "
+                    "values (%s, 'email', %s, 'digest', %s, now() + interval '5 minutes') "
+                    "on conflict (person, channel, sent_on, kind) do update "
+                    "set claim_token = excluded.claim_token, claimed_at = now(), "
+                    "    expires_at = excluded.expires_at "
+                    "where cw.notification_delivery_claim.expires_at <= now() "
+                    "returning claim_token",
+                    (person["person"], day, claim_token))
+        except psycopg.Error as error:
+            refused = classify(error)
+            return Answered(refused.status, refused.as_body())
         if not claimed:
             in_progress += 1
             continue

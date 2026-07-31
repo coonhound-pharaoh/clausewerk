@@ -4374,3 +4374,13 @@ processes 50, and reports the excess as `concessions_deferred`; deferred rows
 remain unassessed and eligible for the next sweep. The fixture-free fan-out
 control now supplies 52 concessions and proves 50 outcomes, two deferrals, and
 only four provider calls.
+
+## S194 — Every notification database phase classifies refusals — 2026-07-31
+
+The notification tick classified database failures during its initial authority
+read and final outbox write, but not during per-person derivation or delivery
+claiming. A permission, integrity, or connectivity failure in either middle
+phase escaped to the server's generic 500 instead of retaining its database
+meaning. Both phases now use the same classifier as the surrounding work.
+Fixture-free controls inject insufficient privilege into each transaction and
+prove a 403 with no channel call.
