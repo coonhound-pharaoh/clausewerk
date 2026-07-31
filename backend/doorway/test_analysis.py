@@ -329,6 +329,19 @@ def test_model_down_still_answers_and_the_absence_is_an_outcome(seeded, db,
         "an absence carries its reason — it is an outcome, not a blank")
 
 
+def test_a_prospective_assessment_database_refusal_is_not_a_500(
+        seeded, db, monkeypatch):
+    def refused_after_analysis(*_args, **_kwargs):
+        raise psycopg.errors.InsufficientPrivilege("assessment write denied")
+
+    monkeypatch.setattr(analysis, "_record_prospective", refused_after_analysis)
+    answered = analysis.analyse(db, OWNING_REQUESTER, {"agreement": "AG-A1"})
+
+    assert answered.status == 403
+    assert answered.body["error"] == "refused"
+    assert "assessment write denied" in answered.body["reason"]
+
+
 def test_a_reachable_model_lands_a_recorded_estimate(seeded, db, monkeypatch):
     """The judge is stubbed at the seam — the mechanism is what is pinned,
     never any estimate's value as a truth about contracts."""

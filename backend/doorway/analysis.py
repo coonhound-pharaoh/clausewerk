@@ -318,7 +318,11 @@ def analyse(db: Database, caller: Caller, query: dict) -> Answer:
 
     # The analysis is committed; the estimates arrive after the fact (NC-26)
     # and their absence blocks nothing.
-    assessments = _record_prospective(db, caller, analysed)
+    try:
+        assessments = _record_prospective(db, caller, analysed)
+    except psycopg.Error as error:
+        refused = classify(error)
+        return Answer(refused.status, refused.as_body())
     for row in analysed:
         row.pop("_baseline", None), row.pop("_compared", None)
 
@@ -408,7 +412,11 @@ def analyse_supplier_units(db: Database, caller: Caller, query: dict) -> Answer:
         refused: Refused = classify(error)
         return Answer(refused.status, refused.as_body())
 
-    assessments = _record_prospective(db, caller, analysed)
+    try:
+        assessments = _record_prospective(db, caller, analysed)
+    except psycopg.Error as error:
+        refused = classify(error)
+        return Answer(refused.status, refused.as_body())
     for row in analysed:
         row.pop("_baseline", None), row.pop("_compared", None)
 

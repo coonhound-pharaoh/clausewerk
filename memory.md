@@ -4290,3 +4290,14 @@ work had begun. That late rejection was also classified as a conflict on the
 request's merits instead of a malformed request. The doorway now refuses every
 nonpositive byte size with 400 before opening a database request. Direct
 regressions cover both zero and a negative value without a database fixture.
+
+## S186 — Prospective assessment write refusals stay classified — 2026-07-31
+
+Round analysis commits before calling the advisory model, then opens a short
+transaction to append each prospective risk assessment. Both prospective
+callers left a database error from that second phase uncaught, unlike the
+retrospective path, so a permission or integrity refusal became a generic 500
+after the analysis itself had already landed. Both callers now classify that
+database refusal into the normal explicit response. A regression injects an
+insufficient-privilege failure after analysis and proves the endpoint answers
+403 with the database's reason instead of crashing.
