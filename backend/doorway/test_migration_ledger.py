@@ -25,6 +25,8 @@ Assertions are on exceptions, row counts and digests. Never on wording.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import psycopg
 import pytest
 
@@ -73,6 +75,23 @@ def test_an_unchanged_tree_migrates_again_without_complaint(schema, owner_url):
     normal case and has to stay silent."""
     with psycopg.connect(owner_url, autocommit=True) as conn:
         assert migrate(conn) == [], "a settled database re-applied something"
+
+
+def test_two_migrators_serialize_the_same_new_file(schema, owner_url, tmp_path):
+    migration = tmp_path / "9999_concurrent_probe.sql"
+    migration.write_text(
+        "create table cw.concurrent_migration_probe (id int primary key);",
+        encoding="utf-8",
+    )
+
+    def apply():
+        with psycopg.connect(owner_url, autocommit=True) as conn:
+            return migrate(conn, tmp_path)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _index: apply(), range(2)))
+
+    assert sorted(results, key=len) == [[], [migration.name]]
 
 
 def test_a_ledger_predating_checksums_is_baselined_not_rejected(schema, owner_url):

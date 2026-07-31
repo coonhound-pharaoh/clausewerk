@@ -4242,3 +4242,13 @@ quoted or raw NUL/control value therefore caused PostgreSQL text failure only
 after the whole upload was read. POST routing now rejects controls, DEL, and
 lone surrogates in the sole media-type field before body reads. A protocol
 regression proves a NUL-bearing type returns 400 with the body untouched.
+
+## S181 — Concurrent migrators serialize ledger decisions — 2026-07-31
+
+Migration files were transactional and checksummed, but two service instances
+could read the same absent ledger row and execute the same DDL concurrently.
+The narrow retry handled one cluster-role catalog error, not duplicate schema
+application. `migrate()` now holds a database advisory lock across ledger setup,
+drift checks, and all per-file transactions, releasing it in `finally`. A
+two-connection regression applies one temporary migration exactly once: one
+caller reports the file and the other reports no work.

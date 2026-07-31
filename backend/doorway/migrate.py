@@ -61,6 +61,9 @@ import psycopg
 CONTENDED = "tuple concurrently updated"
 CONTENTION_ATTEMPTS = 5
 CONTENTION_PAUSE_SECONDS = 0.05
+# ASCII "CLAUSEWK" as a signed-bigint advisory-lock namespace. Session-level
+# because each migration is deliberately its own transaction.
+MIGRATION_LOCK_KEY = 0x434C41555345574B
 
 MIGRATIONS_DIR = Path(
     os.environ.get("CW_MIGRATIONS", Path(__file__).resolve().parent.parent / "db" / "migrations")
@@ -173,6 +176,16 @@ def _check_nothing_applied_has_changed(
 
 
 def migrate(conn: psycopg.Connection, directory: Path = MIGRATIONS_DIR) -> list[str]:
+    """Serialize ledger inspection and application across service instances."""
+    conn.execute("select pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    try:
+        return _migrate_locked(conn, directory)
+    finally:
+        conn.execute("select pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+
+
+def _migrate_locked(conn: psycopg.Connection,
+                    directory: Path = MIGRATIONS_DIR) -> list[str]:
     """Apply every migration not yet recorded. Returns the ones applied now."""
     with conn.transaction():
         conn.execute(_LEDGER)
