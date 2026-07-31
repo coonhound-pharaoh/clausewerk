@@ -4252,3 +4252,12 @@ application. `migrate()` now holds a database advisory lock across ledger setup,
 drift checks, and all per-file transactions, releasing it in `finally`. A
 two-connection regression applies one temporary migration exactly once: one
 caller reports the file and the other reports no work.
+
+## S182 — Request controls are escaped in operational logs — 2026-07-31
+
+The request-target parser refused control bytes, but `http.server` later passed
+the original caller-controlled request line to `log_message`, which wrote it
+verbatim to stderr. ESC or carriage return could therefore manipulate a local
+operator terminal or forge log layout even though the request itself answered
+400. Logging now renders every control and DEL as a visible hex escape after
+formatting. A synthetic ESC/CR request line proves one control-free log line.

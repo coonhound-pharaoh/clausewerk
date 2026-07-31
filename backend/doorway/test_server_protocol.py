@@ -108,6 +108,18 @@ def test_control_characters_in_content_type_are_refused_unread():
     assert handler.rfile.tell() == 0
 
 
+def test_request_controls_are_escaped_in_operational_logs(capsys):
+    handler = handler_with_headers()
+    handler.address_string = lambda: "127.0.0.1"
+
+    handler.log_message('%s', 'GET /bad\x1b[2J\rforged HTTP/1.1')
+
+    logged = capsys.readouterr().err
+    assert "\x1b" not in logged and "\r" not in logged
+    assert "\\x1b" in logged and "\\x0d" in logged
+    assert logged.count("\n") == 1
+
+
 def test_comma_combined_content_dispositions_are_refused_as_ambiguous():
     handler = handler_with_headers(
         ("Content-Disposition", 'attachment, inline; filename="paper.docx"'))

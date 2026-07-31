@@ -739,7 +739,15 @@ class Handler(BaseHTTPRequestHandler):
                 pass
 
     def log_message(self, fmt: str, *args) -> None:
-        sys.stderr.write(f"{self.address_string()} {fmt % args}\n")
+        rendered = fmt % args
+        # requestline is caller-controlled even when _parse_target refuses it.
+        # Render controls visibly so ESC, CR, DEL and friends cannot rewrite a
+        # terminal or forge a second operational log line.
+        safe = "".join(
+            char if ord(char) >= 32 and ord(char) != 127
+            else f"\\x{ord(char):02x}"
+            for char in rendered)
+        sys.stderr.write(f"{self.address_string()} {safe}\n")
 
 
 def serve(
