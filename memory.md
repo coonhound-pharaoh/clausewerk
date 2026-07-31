@@ -3766,3 +3766,12 @@ the real filename was therefore recorded as the immutable evidence name.
 case-insensitive `filename` parameter, supports RFC 2231 encoded values, and
 treats repeated filename parameters within one field as ambiguous. A transport
 test proves a prefixed lookalike cannot displace the real name.
+
+## S131 — The development database is loopback-only — 2026-07-31
+
+The Python doorway binds to `127.0.0.1`, but Docker published PostgreSQL as
+`5432:5432`, which exposes it on every host interface. Because the compose file
+also contains intentionally predictable development credentials, another
+machine on the network could bypass the doorway and connect directly. The port
+mapping is now `127.0.0.1:5432:5432`. A dependency-free configuration test
+pins both the required loopback mapping and the absence of the broad mapping.

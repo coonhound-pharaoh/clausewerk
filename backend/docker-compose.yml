@@ -30,7 +30,10 @@ services:
       POSTGRES_PASSWORD: clausewerk
       POSTGRES_DB: clausewerk
     ports:
-      - "5432:5432"
+      # Development credentials are committed and intentionally predictable.
+      # Publish only to this machine; the doorway is loopback-only for the same
+      # reason, and the database must not be the wider door around it.
+      - "127.0.0.1:5432:5432"
     volumes:
       # Mounted one level above the data itself, which is what PostgreSQL 18's
       # image expects: it keeps each major version in its own subdirectory so a
