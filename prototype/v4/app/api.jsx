@@ -106,6 +106,10 @@ const API = (() => {
     async signOut() {
       try {
         if (token) await call('POST', '/sign-out');
+      } catch {
+        // Remote cleanup is best-effort. Re-throwing here prevents App's
+        // onSignOut callback from clearing the visible workspace even though
+        // this function destroys the only browser-held credential below.
       } finally {
         // Signing out is first a local security act. A network failure may
         // leave the server-side session to expire, but it must never leave the

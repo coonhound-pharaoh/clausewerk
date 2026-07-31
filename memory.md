@@ -4494,3 +4494,12 @@ credentially signed in after they clicked sign out. Local token and identity
 destruction now runs in `finally`; the server session may expire naturally if
 unreachable, but the page cannot keep using it. The shell suite executes the
 real API module with a rejecting fetch and proves both local values are gone.
+
+## S207 — A failed remote sign-out still returns to the front door — 2026-07-31
+
+Destroying the browser token in `finally` was necessary but incomplete: the
+network exception still escaped `API.signOut()`, so the root callback stopped
+before clearing React's visible identity. The workspace remained on screen with
+no usable credential. Remote session cleanup is now best-effort and local
+sign-out resolves after destroying the token, allowing the root to clear the
+workspace. The rejecting-fetch control now also proves sign-out does not throw.

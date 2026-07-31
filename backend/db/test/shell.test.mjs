@@ -219,7 +219,7 @@ await test('sign-out forgets the bearer token even when the service is down', as
   assert(context.API.signedIn, 'the control did not establish a session');
 
   context.fetch = async () => { throw new Error('network down'); };
-  try { await context.API.signOut(); } catch { /* local destruction must still win */ }
+  await context.API.signOut();
 
   assert(!context.API.signedIn, 'the bearer token survived a failed sign-out');
   eq(context.API.session, null, 'the signed-out identity remained in memory');
