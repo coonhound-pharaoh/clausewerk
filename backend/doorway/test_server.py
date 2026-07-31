@@ -641,6 +641,24 @@ def test_a_documents_deal_selector_travels_with_it():
         "('noise' dropped), but the named keys must arrive.")
 
 
+def test_only_the_exact_filename_parameter_names_the_document():
+    app = Records(Response(404, {"error": "no such endpoint"}))
+
+    with stub_serving(app) as base:
+        request = urllib.request.Request(
+            base + "/api/negotiations/redline",
+            method="POST", data=b"document",
+            headers={
+                "content-type": DOCX_TYPE,
+                "content-disposition": (
+                    "attachment; xfilename=wrong.docx; filename=right.docx"),
+            })
+        with pytest.raises(urllib.error.HTTPError):
+            urllib.request.urlopen(request)
+
+    assert app.seen[-1]["upload"].filename == "right.docx"
+
+
 def test_a_document_over_the_limit_is_refused_unread():
     """The size limit is the product fact this package owns. Over it, the
     request is refused on its declared length — before the bytes are read,

@@ -77,6 +77,8 @@ import mimetypes
 import os
 import re
 import sys
+from email.message import Message
+from email.utils import collapse_rfc2231_value
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import ParseResult, parse_qs, unquote, urlparse
@@ -183,7 +185,7 @@ class Handler(BaseHTTPRequestHandler):
             self._respond(Response(400, {"error": "content type is ambiguous"}))
             return
 
-        if len(self.headers.get_all("content-disposition", [])) > 1:
+        if self._content_disposition_is_ambiguous():
             self._respond(Response(400, {
                 "error": "content disposition is ambiguous"}))
             return
@@ -388,17 +390,26 @@ class Handler(BaseHTTPRequestHandler):
         accept.
         """
         header = self.headers.get("content-disposition") or ""
-        marker = "filename="
-        at = header.lower().find(marker)
-        if at < 0:
-            return None
-        value = header[at + len(marker):].strip()
-        if value.startswith('"'):
-            closing = value.find('"', 1)
-            value = value[1:closing] if closing > 0 else value[1:]
-        else:
-            value = value.split(";")[0].strip()
-        return value or None
+        parsed = Message()
+        parsed["content-disposition"] = header
+        value = parsed.get_param(
+            "filename", header="content-disposition", unquote=True)
+        if isinstance(value, tuple):
+            value = collapse_rfc2231_value(value)
+        return (str(value).strip() or None) if value is not None else None
+
+    def _content_disposition_is_ambiguous(self) -> bool:
+        values = self.headers.get_all("content-disposition", [])
+        if len(values) > 1:
+            return True
+        if not values:
+            return False
+        parsed = Message()
+        parsed["content-disposition"] = values[0]
+        parameters = parsed.get_params(
+            header="content-disposition", unquote=True) or []
+        return sum(1 for name, _value in parameters
+                   if name.casefold() == "filename") > 1
 
     def _static_relative(self, path: str) -> tuple[str | None, Response | None]:
         """Decode one static path without accepting malformed percent escapes."""

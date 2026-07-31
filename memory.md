@@ -3756,3 +3756,13 @@ than the one another hop inspected. Duplicate Content-Disposition fields now
 receive a 400 before any document bytes are read. A raw-socket regression sends
 two names and claims a one-billion-byte body, proving both ambiguity refusal and
 the unread-body order.
+
+## S130 — Document filenames use exact parameter parsing — 2026-07-31
+
+The upload parser searched for the substring `filename=` anywhere in
+Content-Disposition. A parameter such as `xfilename=wrong.docx` placed before
+the real filename was therefore recorded as the immutable evidence name.
+`server.py` now uses the standard email parameter parser, selects the exact
+case-insensitive `filename` parameter, supports RFC 2231 encoded values, and
+treats repeated filename parameters within one field as ambiguous. A transport
+test proves a prefixed lookalike cannot displace the real name.
