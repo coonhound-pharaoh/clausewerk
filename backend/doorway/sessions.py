@@ -36,6 +36,10 @@ from typing import Callable
 from doorway.db import Database
 
 EIGHT_HOURS = 8 * 3600.0
+# Sign-in is identity-only until a provider is connected, so repeated issuance
+# is an unauthenticated write path. Bound live rows per finite account instead
+# of letting one known name grow cw.session for the whole configured lifetime.
+MAX_LIVE_SESSIONS_PER_PERSON = 20
 
 # The role sign-in reads as, before any role is known. This is the one genuine
 # chicken-and-egg in the serving path, and it is NOT resolved by using the owner.
@@ -168,6 +172,17 @@ class Sessions:
             # unauthenticated door, so unswept growth is a way for a stranger
             # to fill the database one sign-in at a time.
             request.write("delete from cw.session where expires_at <= %s", (now,))
+            # Make room before inserting. The newest token below is never a
+            # deletion candidate; among existing sessions, the longest-lived
+            # ones are retained. Concurrent requests can exceed the exact cap
+            # briefly by at most the bounded connection pool, and every later
+            # issuance trims the set again.
+            request.write(
+                "delete from cw.session where token_sha256 in ("
+                "select token_sha256 from cw.session where person = %s "
+                "order by expires_at desc, token_sha256 desc offset %s)",
+                (person, MAX_LIVE_SESSIONS_PER_PERSON - 1),
+            )
             # The FINGERPRINT is stored; the key itself is returned below and
             # then forgotten. This is the only moment the doorway ever holds a
             # key it could write down, and it does not.

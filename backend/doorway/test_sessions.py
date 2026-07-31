@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 import pytest
 
-from doorway.sessions import Sessions
+from doorway.sessions import MAX_LIVE_SESSIONS_PER_PERSON, Sessions
 from doorway.db import Database
 
 
@@ -57,6 +57,19 @@ def test_expired_sessions_are_swept_when_a_new_one_is_issued(db: Database):
     clock["t"] = 11.0  # all five are now expired
     sessions.issue("leah@clausewerk", 10.0)
     assert len(sessions) == 1, "expired sessions were kept until presented"
+
+
+def test_repeated_sign_in_cannot_grow_one_persons_live_sessions_without_bound(
+        db: Database):
+    sessions = Sessions(db, now=lambda: 0.0)
+    newest = None
+
+    for _ in range(MAX_LIVE_SESSIONS_PER_PERSON + 7):
+        newest = sessions.issue("rita@clausewerk", 3600.0)
+
+    assert len(sessions) == MAX_LIVE_SESSIONS_PER_PERSON
+    assert newest is not None
+    assert sessions.person_for(newest.token) == "rita@clausewerk"
 
 
 def test_the_store_survives_genuinely_parallel_traffic(db: Database):

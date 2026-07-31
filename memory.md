@@ -4112,3 +4112,13 @@ after the doorway's creation-time equality check. Migration 0058 locks pin
 parents while members and runs are inserted, permits exact idempotent member
 replays, and refuses any new or different member once a run references the pin.
 The focused store rail exercises all three child tables.
+
+## S167 — Repeated sign-in has a live-session ceiling — 2026-07-31
+
+Each sign-in inserted a new session lasting up to the configured lifetime, and
+the expiry sweep bounded only dead rows. Because the current identity-only
+sign-in accepts any known person name, one caller could continuously grow the
+live session table. Issuance now retains at most 19 existing sessions for that
+person before adding the new token, bounding the steady-state set at 20 per
+finite account. The session rail issues 27 tokens and proves both the ceiling
+and newest-token usability.
