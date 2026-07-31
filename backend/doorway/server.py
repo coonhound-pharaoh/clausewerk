@@ -118,6 +118,11 @@ REQUEST_TIMEOUT_SECONDS = 30
 QUERY_KEYS = ("run", "agreement")
 MAX_QUERY_FIELDS = 20
 
+# Routes whose body is bytes rather than a JSON record. This decision must be
+# made before reading: otherwise any unknown or JSON-only route can make an
+# unauthenticated worker consume a document-sized body before returning 404.
+DOCUMENT_ENDPOINTS = frozenset({"/paper/ingest", "/negotiations/redline"})
+
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".jsx": "text/babel; charset=utf-8",
@@ -179,6 +184,11 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if self._is_document():
+            endpoint = self._endpoint(parsed.path)
+            if endpoint not in DOCUMENT_ENDPOINTS:
+                self._respond(Response(415, {
+                    "error": "that endpoint does not accept a document"}))
+                return
             # The selector travels WITH the document. A document POST names its
             # deal in the query string (?agreement=…) because its body IS the
             # document — there is no JSON record to carry the name. This branch
@@ -195,7 +205,7 @@ class Handler(BaseHTTPRequestHandler):
             if refused is not None:
                 self._respond(refused)
                 return
-            self._respond(self.app.handle("POST", self._endpoint(parsed.path),
+            self._respond(self.app.handle("POST", endpoint,
                                           token=self._token(), query=selector,
                                           upload=upload))
             return

@@ -3736,3 +3736,13 @@ A duration with hundreds of digits also matched the syntax and then raised
 `OverflowError`, turning sign-in into a 500. Non-positive and non-representable
 durations now use the existing eight-hour fallback. No new maximum session
 policy was invented. Direct regression cases cover both failure shapes.
+
+## S128 — Wrong routes refuse document bodies unread — 2026-07-31
+
+The HTTP router treated every non-JSON POST as a document and consumed up to
+the one-gigabyte document ceiling before `App` returned 404. That let an
+unauthenticated request to an unknown or JSON-only route hold a worker and make
+it read a body the route could never use. `server.py` now names the two byte
+routes (`/paper/ingest` and `/negotiations/redline`) and returns 415 before
+query or body parsing everywhere else. A raw-socket test sends only headers
+claiming a one-billion-byte body; the prompt response proves it was not read.

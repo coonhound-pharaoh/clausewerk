@@ -608,7 +608,7 @@ def test_a_document_arrives_as_bytes_and_reaches_the_app_unchanged():
     app = Records(Response(404, {"error": "no such endpoint"}))
 
     with stub_serving(app) as base:
-        status, body = post_bytes(base, "/api/negotiation/redline", payload,
+        status, body = post_bytes(base, "/api/negotiations/redline", payload,
                                   DOCX_TYPE, filename="round-3.docx")
 
     arrived = app.seen[-1]["upload"]
@@ -651,7 +651,7 @@ def test_a_document_over_the_limit_is_refused_unread():
     server_module.MAX_DOCUMENT_BYTES = 1_000
     try:
         with stub_serving(app) as base:
-            status, body = post_bytes(base, "/api/negotiation/redline",
+            status, body = post_bytes(base, "/api/negotiations/redline",
                                       b"x" * 4_000, DOCX_TYPE)
     finally:
         server_module.MAX_DOCUMENT_BYTES = held
@@ -662,13 +662,40 @@ def test_a_document_over_the_limit_is_refused_unread():
     assert not app.seen, "the oversized document reached the app anyway"
 
 
+def test_a_wrong_route_cannot_make_the_server_read_a_document_sized_body():
+    """Route selection precedes body consumption.
+
+    Only headers are sent. If the server tries to read the declared body this
+    request times out; a prompt 415 proves the wrong route was rejected unread.
+    """
+    app = Records(Response(200, {"ok": True}))
+
+    with stub_serving(app) as base:
+        parsed = urllib.parse.urlparse(base)
+        with socket.create_connection((parsed.hostname, parsed.port), timeout=5) as client:
+            client.sendall(
+                b"POST /api/sign-in HTTP/1.1\r\n"
+                b"Host: localhost\r\n"
+                b"Content-Type: application/octet-stream\r\n"
+                b"Content-Length: 1000000000\r\n"
+                b"Connection: close\r\n\r\n")
+            chunks = []
+            while chunk := client.recv(4096):
+                chunks.append(chunk)
+            reply = b"".join(chunks)
+
+    assert b" 415 " in reply
+    assert b"does not accept a document" in reply
+    assert not app.seen, "the wrong-route document reached the app"
+
+
 def test_a_document_that_is_not_there_is_a_400_and_not_a_crash():
     """An upload with nothing in it is the caller's mistake, named as such.
     Never a 500: "we broke" would send somebody to argue about a bug."""
     app = Records(Response(404, {"error": "no such endpoint"}))
 
     with stub_serving(app) as base:
-        status, body = post_bytes(base, "/api/negotiation/redline", b"",
+        status, body = post_bytes(base, "/api/negotiations/redline", b"",
                                   DOCX_TYPE)
 
     assert status == 400, f"an empty upload got {status}: {body}"
