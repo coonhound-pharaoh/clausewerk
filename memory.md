@@ -3715,3 +3715,15 @@ tell), and the selector surviving the wire.
 writes.py was NOT touched — the queue's next claimant is now NC-20
 (Gate D-5). Gates open next: NC-18 (supplier decompose — largely built by
 RP-05 already), OB-06, OB-07, NC-10; NC-13 next in reads.py.
+
+## S126 — Download filenames fail closed at the HTTP boundary — 2026-07-31
+
+`server.py` used `Download.filename` directly inside Content-Disposition. The
+only current producer rejects quotes and line breaks, but the transport itself
+accepted an unsafe internal value; a future producer could inject a header or
+make the server fail after beginning a 200 response. The transport now accepts
+only printable ASCII attachment names without quote or backslash and returns a
+generic 500 before sending download headers otherwise. A socket-level,
+parameterized test covers quotes, CRLF, backslash and non-ASCII input. This is
+defence in depth at the boundary, not filename rewriting: the producer's value
+is either carried unchanged or refused.

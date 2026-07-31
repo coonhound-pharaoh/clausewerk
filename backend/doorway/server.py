@@ -455,6 +455,18 @@ class Handler(BaseHTTPRequestHandler):
         asked for. A transport that edits its payload's name is a transport
         that can be argued with about what the name was.
         """
+        # A Download is an internal value, but the filename crosses an HTTP
+        # syntax boundary here. Validate it here as well as at today's sole
+        # producer so a future producer cannot turn a quote or control byte
+        # into a second header (or make http.server abort mid-response).
+        if (not download.filename
+                or any(ord(char) < 32 or ord(char) > 126
+                       for char in download.filename)
+                or '"' in download.filename
+                or "\\" in download.filename):
+            self._respond(Response(500, {"error": "the service failed"}))
+            return
+
         self.send_response(download.status)
         self.send_header("content-type", download.content_type)
         self.send_header("content-disposition",

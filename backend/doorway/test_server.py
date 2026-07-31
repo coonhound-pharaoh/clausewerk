@@ -489,6 +489,28 @@ def test_a_download_names_its_file_and_its_length():
         "a browser that is told the wrong length truncates or hangs")
 
 
+@pytest.mark.parametrize("filename", [
+    'contract.docx"; filename="stolen.txt',
+    "contract.docx\r\nx-injected: yes",
+    "contract\\name.docx",
+    "contract\N{SNOWMAN}.docx",
+])
+def test_a_download_filename_cannot_change_the_response_headers(filename):
+    """The transport owns HTTP syntax even when a producer owns the name.
+
+    A bad internal Download must fail before any 200 or Content-Disposition
+    header is sent. Otherwise a later producer can inject a header, corrupt
+    the attachment name, or make http.server die halfway through its reply.
+    """
+    app = Records(Download(200, b"contract", DOCX_TYPE, filename))
+
+    with stub_serving(app) as base:
+        status, body = Client(base).call("GET", "/api/runs/contract")
+
+    assert status == 500
+    assert body == {"error": "the service failed"}
+
+
 def test_a_query_string_reaches_the_app_and_is_consumed_by_nothing():
     """The seam, and only the seam. Whitelisted keys (`?run=`, and since RP-05
     `?agreement=`) arrive; anything not on the whitelist does not; and the
