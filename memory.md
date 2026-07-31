@@ -4548,3 +4548,11 @@ success, store undefined state, and crash when the root selected the returned
 role's workspace. Sign-in now requires nonblank text for token, person, role,
 and display name, plus a text-or-null unit, before changing browser state. The
 real adapter is tested with an incomplete 200 and proves nothing is installed.
+
+## S213 — Sign-in accepts only the six workspace roles — 2026-07-31
+
+Complete text fields were not enough to make a sign-in response usable: an
+unknown nonblank role still installed the token, then crashed when the root
+looked up a workspace that does not exist. The API adapter now requires the
+role to be one of the six protocol values before mutating browser state. The
+real adapter is tested with a `superuser` response and proves no token lands.

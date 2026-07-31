@@ -329,6 +329,26 @@ await test('a successful sign-in must carry a complete usable identity', async (
   eq(context.API.session, null, 'an incomplete sign-in installed an identity');
 });
 
+await test('a successful sign-in cannot name an unknown workspace role', async () => {
+  const context = {
+    fetch: async () => ({
+      ok: true, status: 200,
+      json: async () => ({
+        token: 'live-secret', person: 'person@example.test',
+        role: 'superuser', display_name: 'Person', unit: 'Test',
+      }),
+    }),
+  };
+  const source = read('api.jsx').replace('const API =', 'globalThis.API =');
+  runInNewContext(source, context);
+
+  const result = await context.API.signIn('person@example.test');
+
+  assert(result.ok === false, 'an unknown role was accepted');
+  assert(result.invalidResponse === true, 'the unknown role was not identified');
+  assert(!context.API.signedIn, 'an unknown role installed a browser token');
+});
+
 await test('no pane holds an array of example rows', async () => {
   // The shape canned data takes: a literal array of objects sitting in the
   // module, ready to render. Real rows arrive from usePane and are never

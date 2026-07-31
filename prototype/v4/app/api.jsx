@@ -21,6 +21,10 @@ const API = (() => {
   // Same origin. The service serves this page, so there is no base URL to
   // configure and no cross-origin rule to relax.
   const base = '/api';
+  const sessionRoles = new Set([
+    'requester', 'legal_reviewer', 'legal_admin',
+    'auditor', 'viewer', 'administrator',
+  ]);
   let token = null;
   let identity = null;
 
@@ -136,6 +140,7 @@ const API = (() => {
           (value) => typeof value === 'string' && value.trim())) {
         return unreadable(res.status);
       }
+      if (!sessionRoles.has(payload.role)) return unreadable(res.status);
       if (payload.unit !== null && payload.unit !== undefined
           && typeof payload.unit !== 'string') return unreadable(res.status);
       token = payload.token;
