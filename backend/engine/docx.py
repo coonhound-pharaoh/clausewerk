@@ -184,6 +184,7 @@ MAX_ARCHIVE_BYTES = 64 * 1024 * 1024     # the whole archive, decompressed
 MAX_ARCHIVE_MEMBERS = 10_000              # central-directory entries
 MAX_ELEMENT_DEPTH = 256                  # nested elements in document.xml
 MAX_ELEMENTS = 100_000                    # total elements in document.xml
+MAX_ATTRIBUTES_PER_ELEMENT = 1_024        # one tag's attribute map
 
 
 class _BoundedDepthBuilder(ET.TreeBuilder):
@@ -205,6 +206,10 @@ class _BoundedDepthBuilder(ET.TreeBuilder):
     def start(self, tag, attrs):
         self._depth += 1
         self._elements += 1
+        if len(attrs) > MAX_ATTRIBUTES_PER_ELEMENT:
+            raise NotADocx(
+                "word/document.xml contains an element with more than "
+                f"{MAX_ATTRIBUTES_PER_ELEMENT} attributes — refused")
         if self._depth > self._limit:
             raise NotADocx(
                 f"word/document.xml nests more than {self._limit} elements deep "

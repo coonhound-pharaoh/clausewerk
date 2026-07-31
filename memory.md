@@ -4020,3 +4020,11 @@ so a compact archive could force large central-directory lists and duplicate
 tracking without crossing a byte ceiling. The parser now refuses more than
 10,000 members before per-name bookkeeping. A compact empty-entry metadata-bomb
 fixture proves the refusal.
+
+## S157 — DOCX XML elements have an attribute ceiling — 2026-07-31
+
+The DOCX XML parser bounded bytes, depth and element count but not the number of
+attributes on one element. A compact tag can force a large attribute map while
+remaining shallow and under every existing ceiling. The streaming tree builder
+now refuses more than 1,024 attributes on an element before adding it to the
+tree. A sub-20 KB attribute-bomb fixture proves the refusal.

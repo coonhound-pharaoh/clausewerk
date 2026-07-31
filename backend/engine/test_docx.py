@@ -16,6 +16,7 @@ import pytest
 from engine.docx import (
     CONTENT_TYPES,
     DOC_RELS,
+    MAX_ATTRIBUTES_PER_ELEMENT,
     MAX_ARCHIVE_MEMBERS,
     MAX_ELEMENTS,
     RELS,
@@ -658,6 +659,21 @@ def test_an_archive_with_excessive_empty_members_is_refused():
     assert len(attack) < 2_000_000, "the metadata bomb fixture must stay compact"
     with pytest.raises(NotADocx, match="metadata bomb"):
         parse_redlines(attack)
+
+
+def test_an_xml_element_with_excessive_attributes_is_refused():
+    attributes = " ".join(
+        f'a{index}="x"' for index in range(MAX_ATTRIBUTES_PER_ELEMENT + 1))
+    document = (
+        f'<w:document xmlns:w="{W}" {attributes}>'
+        '<w:body/></w:document>')
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("word/document.xml", document)
+
+    assert len(buf.getvalue()) < 20_000, "the attribute bomb must stay compact"
+    with pytest.raises(NotADocx, match="more than 1024 attributes"):
+        parse_redlines(buf.getvalue())
 
 
 def test_unsupported_zip_compression_is_a_document_refusal():
