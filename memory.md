@@ -4530,3 +4530,12 @@ of rendering the service response as invalid. The adapter now requires an own
 `rows` property, when present, to be an array; other successful record-shaped
 responses remain valid. The real adapter is tested with an object disguised as
 rows and returns the classified invalid-response path.
+
+## S211 — Interrupted download bodies settle as transport failures — 2026-07-31
+
+The download adapter caught rejection while opening a request but not rejection
+while consuming its successful response body. If the connection broke after
+headers, `res.blob()` escaped and the requesting screen stopped before clearing
+its busy state. Blob consumption now returns the same unreachable result as an
+initial fetch failure. The real adapter is tested with successful headers and a
+body stream that rejects.

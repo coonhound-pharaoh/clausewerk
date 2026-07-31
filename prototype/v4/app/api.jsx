@@ -105,7 +105,10 @@ const API = (() => {
     }
     const disposition = res.headers.get('content-disposition') || '';
     const named = /filename="([^"]+)"/.exec(disposition);
-    return { ok: true, blob: await res.blob(), filename: named ? named[1] : 'contract.docx' };
+    let blob;
+    try { blob = await res.blob(); }
+    catch { return unreachable(); }
+    return { ok: true, blob, filename: named ? named[1] : 'contract.docx' };
   }
 
   return {
