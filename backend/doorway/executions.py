@@ -172,6 +172,12 @@ def execute(db: Database, caller: Caller, body: dict) -> Answer:
     for index, who in enumerate(signatories):
         if not isinstance(who, dict):
             return _rejected(f"signatory {index} is not a signatory")
+        try:
+            for field in (*SIGNATORY_FIELDS, "title"):
+                if field in who:
+                    refuse_structured(f"signatory {index} {field}", who[field])
+        except WrongShape as wrong:
+            return _rejected(str(wrong))
         for field in SIGNATORY_FIELDS:
             if not str(who.get(field) or "").strip():
                 return _rejected(f"signatory {index} names no {field}")

@@ -171,6 +171,21 @@ def test_signatory_row_fan_out_is_bounded_before_database_work():
     assert answered.status == 400
 
 
+@pytest.mark.parametrize(("field", "wrong"), [
+    ("name", {"nested": "name"}),
+    ("party", ["ours"]),
+    ("method", True),
+    ("title", {"nested": "title"}),
+])
+def test_structured_signatory_fields_are_boundary_errors(field, wrong):
+    signatory = {**filing("RUN-BOUNDARY")["signatories"][0], field: wrong}
+
+    answered = executions.execute(
+        None, None, filing("RUN-BOUNDARY", signatories=[signatory]))
+
+    assert answered.status == 400
+
+
 # ── Gate 1 · the deal binding ───────────────────────────────────────────────
 
 

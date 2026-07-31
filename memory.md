@@ -4169,3 +4169,12 @@ byte ceiling and inserted one immutable `executed_signatory` row per entry as
 part of an irreversible filing. It now refuses more than 100 signatories before
 opening a database transaction. A 101-entry synthetic filing calls the boundary
 without a database and proves the early 400.
+
+## S173 — Structured signatory fields are boundary errors — 2026-07-31
+
+Execution checked signatory fields with `str(value).strip()`, so objects, lists,
+and booleans looked nonblank and reached immutable filing inserts as bind
+parameters. Objects and lists then failed adaptation as a service/database error
+instead of a malformed request; optional structured titles bypassed even the
+presence loop. Required signatory fields and title now use the shared plain-value
+guard before database work. Four synthetic shapes prove clean 400 responses.
