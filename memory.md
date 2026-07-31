@@ -4579,3 +4579,10 @@ strings. An object or array could therefore reach a React error surface and
 crash rendering while the service was already failing. The wrapper now accepts
 only nonblank text and otherwise uses its endpoint-specific fallback. The shell
 executes ordinary, download, and sign-in refusals with hostile response shapes.
+## S217 — Session polling results belong to one identity — 2026-07-31
+
+The periodic `/me` request outlived the identity effect that started it. If an
+old request returned 401 after sign-out and a replacement sign-in, it could
+forget the replacement credential. The effect now invalidates pending results
+on cleanup and permits only one check at a time. The shell locks both lifetime
+and overlap guards to the actual polling effect.

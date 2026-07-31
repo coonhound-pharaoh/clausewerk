@@ -43,12 +43,20 @@ function App() {
   // surface claiming access that is gone.
   useEffect(() => {
     if (!identity) return;
+    let active = true;
+    let checking = false;
     const check = async () => {
-      const r = await API.me();
-      if (!r.ok && r.expired) { API.forget(); setIdentity(null); }
+      if (checking) return;
+      checking = true;
+      try {
+        const r = await API.me();
+        if (active && !r.ok && r.expired) { API.forget(); setIdentity(null); }
+      } finally {
+        checking = false;
+      }
     };
     const t = setInterval(check, 30000);
-    return () => clearInterval(t);
+    return () => { active = false; clearInterval(t); };
   }, [identity]);
 
   if (!identity) return <SignIn onSignedIn={onSignedIn} />;

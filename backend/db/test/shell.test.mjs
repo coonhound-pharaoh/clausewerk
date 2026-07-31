@@ -398,6 +398,22 @@ await test('an invalid recorded timestamp never renders a fabricated age', async
     'an invalid timestamp fabricated a numeric-looking age');
 });
 
+await test('a stale session check cannot forget a replacement session', async () => {
+  const src = stripComments(read('main.jsx'));
+  const marker = src.indexOf('const t = setInterval(check');
+  const start = src.lastIndexOf('useEffect(() => {', marker);
+  const end = src.indexOf('}, [identity]);', start);
+  assert(start >= 0 && end > start, 'the session polling effect was not found');
+  const effect = src.slice(start, end);
+  assert(/let active = true/.test(effect), 'the polling effect has no lifetime guard');
+  assert(/if \(active && !r\.ok && r\.expired\)/.test(effect),
+    'a result from an obsolete identity can still forget the current session');
+  assert(/active = false; clearInterval\(t\)/.test(effect),
+    'unmounting the old identity does not invalidate its pending check');
+  assert(/if \(checking\) return/.test(effect),
+    'a slow session check can be duplicated by the next interval');
+});
+
 await test('no pane holds an array of example rows', async () => {
   // The shape canned data takes: a literal array of objects sitting in the
   // module, ready to render. Real rows arrive from usePane and are never
