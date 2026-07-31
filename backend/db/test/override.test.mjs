@@ -93,7 +93,8 @@ await db.exec(`
   insert into cw.category (key,label,short) values
     ('data','Data Privacy','DP'), ('liab','Liability','LB');
   insert into cw.agreement (agreement_id,counterparty,requester)
-    values ('AG-1','Northwind','${DANA}');
+    values ('AG-1','Northwind','${DANA}'),
+           ('AG-2','Contoso','${ELI}');
   insert into cw.snapshot (snapshot_id) values ('${'1'.repeat(64)}');
   insert into cw.ruleset (ruleset_id) values ('${'2'.repeat(64)}');
   insert into cw.run (run_id,agreement_id,vendor,manifest,manifest_source,
@@ -101,6 +102,11 @@ await db.exec(`
                       gate_open,created_by)
     values ('RUN-1','AG-1','Northwind','{}','manual','${'1'.repeat(64)}',
             '${'2'.repeat(64)}','${'c'.repeat(64)}','1.0.0',false,'${DANA}');
+  insert into cw.run (run_id,agreement_id,vendor,manifest,manifest_source,
+                      snapshot_id,ruleset_id,result_hash,engine_version,
+                      gate_open,created_by)
+    values ('RUN-2','AG-2','Contoso','{}','manual','${'1'.repeat(64)}',
+            '${'2'.repeat(64)}','${'d'.repeat(64)}','1.0.0',false,'${ELI}');
   select set_config('cw.actor','',false);`);
 
 const FINDINGS = JSON.stringify([
@@ -143,6 +149,18 @@ await test('a direct insert cannot forge the override requester', async () => {
      'the opener used for scope and self-decision checks must come from the session');
   eq(r[0].requested_now, true,
      'the immutable request time must come from the database clock');
+});
+
+await test('a requester cannot open an override on another requester\u2019s run', async () => {
+  await throws(() => queryAs('requester', `
+    insert into cw.override_request (run_id,agreement_id,justification)
+    values ('RUN-2','AG-2','${JUST}')`, [], DANA), 'row-level security');
+});
+
+await test('an override run and agreement anchor cannot disagree', async () => {
+  await throws(() => queryAs('requester', `
+    insert into cw.override_request (run_id,agreement_id,justification)
+    values ('RUN-2','AG-1','${JUST}')`, [], DANA), 'row-level security');
 });
 
 await test('a requester cannot append a finding to another requester’s request',

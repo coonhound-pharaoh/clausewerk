@@ -3935,3 +3935,14 @@ visibility lookup. Migration 0055 retains portfolio-wide storage for the two
 Legal roles and requires `cw.owns_agreement(agreement_id)` for requesters. The
 received-document schema test now carries a second deal and proves the foreign
 write is refused while own-deal storage still succeeds.
+
+## S148 — Requester override requests are anchored to an owned run — 2026-07-31
+
+The override-request trigger bound `requested_by`, but the direct INSERT policy
+checked only the requester role. A requester could name another person's run
+and provide a null or mismatched agreement anchor, bypassing the governed
+helper's scoped lookup. Migration 0056 requires a run visible under the existing
+requester read policy and an agreement anchor exactly matching that run; this
+also preserves requester-created legacy runs whose anchor is null. The override
+schema suite now carries two requesters, agreements and runs, and refuses both a
+foreign-run request and a deliberately mismatched run/agreement pair.
