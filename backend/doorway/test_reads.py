@@ -134,6 +134,17 @@ def test_every_read_names_the_rule_that_decides_who_sees_it(key: str):
     )
 
 
+def test_run_history_reads_share_one_bounded_recent_run_window():
+    summary = READS["GET /runs"].sql.lower()
+    decisions = READS["GET /runs/decisions"].sql.lower()
+    findings = READS["GET /runs/findings"].sql.lower()
+
+    assert "order by created_at desc, run_id desc limit 500" in summary
+    for children in (decisions, findings):
+        assert "select run_id from cw.run" in children
+        assert "order by created_at desc, run_id desc limit 500" in children
+
+
 @pytest.mark.parametrize("key", sorted(READS))
 def test_no_read_is_a_write_in_disguise(key: str):
     """A GET that changes something turns a link into an action, and a browser

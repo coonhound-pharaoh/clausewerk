@@ -4343,3 +4343,13 @@ account above the stated resource bound. Issuance now takes a transaction-scoped
 PostgreSQL advisory lock keyed by person before the trim-and-insert pair; other
 people remain independent. A 12-worker regression starts from 19 sessions and
 proves the final count is exactly 20 and the newest token works.
+
+## S191 — Run-history reads use one bounded recent window — 2026-07-31
+
+The run summary, decisions, and findings endpoints returned every visible run
+ever recorded. For an Auditor that meant an ever-growing response containing
+the whole company history, and the source itself acknowledged the missing
+bound. All three reads now cover the same 500 most recent RLS-visible runs. The
+summary is deterministically ordered by creation time and run id; child rows
+select those run ids before ordering, so no included run is cut in half by a
+flat row limit. A structural regression pins the shared server-owned window.

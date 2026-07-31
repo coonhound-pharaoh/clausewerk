@@ -382,12 +382,11 @@ READS: dict[str, Read] = {
     # run filters what the policy already returned, and a screen that filters
     # can never be the thing that decides what it may see.
     #
-    # THE CONSEQUENCE, STATED RATHER THAN DISCOVERED. These answers are
-    # unbounded. For an auditor, GET /runs/decisions is every decision of every
-    # run ever recorded, in one reply. When that becomes a problem the answer is
-    # a bound WRITTEN INTO THE SQL HERE — a default limit, most recent first —
-    # and never a filter the caller supplies, because the caller-supplied filter
-    # is the thing being avoided.
+    # THE CONSEQUENCE IS NOW BOUNDED. For an auditor, these answers previously
+    # returned every decision and finding of every run ever recorded. The bound
+    # is written into the SQL here: the 500 most recent visible runs, with all
+    # child rows for each included run. It is never a filter the caller supplies,
+    # because caller-supplied scope is the thing being avoided.
     #
     # THE DEPENDENCY, VISIBLE FROM THE FILE THAT DEPENDS ON IT. The first two
     # are only safe because 0025 scoped cw.run_summary and cw.run_contract in
@@ -415,7 +414,7 @@ READS: dict[str, Read] = {
                  snapshot_id, ruleset_id, result_hash, engine_version,
                  gate_open, overridden, created_by, created_at,
                  decisions, unresolved, findings, blocking
-          from cw.run_summary order by created_at desc""",
+          from cw.run_summary order by created_at desc, run_id desc limit 500""",
         rule="cw.run_summary scopes itself in its own WHERE clause, in the same "
              "words as cw.run's read_scoped policy (0025) — a view does not "
              "inherit the policy on the table underneath it",
@@ -424,7 +423,11 @@ READS: dict[str, Read] = {
     "GET /runs/decisions": Read(
         sql="""select run_id, seq, category, severity, reason, baseline,
                  clause_id, version, title, body, warning, suppressed
-          from cw.run_contract order by run_id, seq""",
+          from cw.run_contract
+          where run_id in (
+            select run_id from cw.run
+            order by created_at desc, run_id desc limit 500)
+          order by run_id, seq""",
         rule="cw.run_contract scopes itself in its own WHERE clause via its join "
              "to cw.run (0025)",
     ),
@@ -435,7 +438,11 @@ READS: dict[str, Read] = {
     "GET /runs/findings": Read(
         sql="""select run_id, seq, rule_id, rule_version, severity, title,
                  detail, refs
-          from cw.run_finding order by run_id, seq""",
+          from cw.run_finding
+          where run_id in (
+            select run_id from cw.run
+            order by created_at desc, run_id desc limit 500)
+          order by run_id, seq""",
         rule="cw.run_finding read_scoped policy — a finding is visible exactly "
              "when its run is",
     ),
