@@ -3903,3 +3903,13 @@ cache and routing ambiguity. GET, POST and OPTIONS now refuse such requests
 before parsing the target or body; HTTP/1.0 retains its optional-Host rule but
 still rejects ambiguous supplied values. Fast protocol tests cover four bad
 shapes and one valid host with a port.
+
+## S145 — A single Host must still be a valid authority — 2026-07-31
+
+The first Host guard enforced cardinality but still accepted malformed single
+values: embedded credentials or paths, whitespace, broken IPv6 and non-numeric
+ports. Proxies and origin libraries do not interpret those strings uniformly.
+The guard now validates printable ASCII authority syntax through `urlparse`,
+forces port parsing, and excludes user information and all path/query/fragment
+components. Protocol cases cover five additional invalid forms plus bracketed
+IPv6 as a valid control.

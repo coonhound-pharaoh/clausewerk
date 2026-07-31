@@ -334,10 +334,31 @@ class Handler(BaseHTTPRequestHandler):
         values = self.headers.get_all("host", [])
         if len(values) > 1:
             return True
-        invalid = bool(values and (not values[0].strip() or "," in values[0]))
+        invalid = bool(values and not self._valid_host_authority(values[0]))
         if getattr(self, "request_version", "HTTP/1.1") == "HTTP/1.1":
             return len(values) != 1 or invalid
         return invalid
+
+    @staticmethod
+    def _valid_host_authority(value: str) -> bool:
+        if (not value or value != value.strip() or "," in value
+                or any(ord(char) < 33 or ord(char) > 126 for char in value)):
+            return False
+        try:
+            parsed = urlparse("//" + value)
+            _ = parsed.port
+        except ValueError:
+            return False
+        return bool(
+            parsed.netloc == value
+            and parsed.hostname
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.path
+            and not parsed.params
+            and not parsed.query
+            and not parsed.fragment
+        )
 
     def _content_length(self) -> tuple[int | None, Response | None]:
         """Return one unambiguous request length.

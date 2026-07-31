@@ -76,6 +76,11 @@ def test_http_11_requires_one_unambiguous_host():
         (("Host", ""),),
         (("Host", "first"), ("Host", "second")),
         (("Host", "first, second"),),
+        (("Host", "host:not-a-port"),),
+        (("Host", "user@host"),),
+        (("Host", "host/path"),),
+        (("Host", "host with-space"),),
+        (("Host", "[::1"),),
     ):
         handler = handler_with_headers(*headers)
         handler.request_version = "HTTP/1.1"
@@ -84,6 +89,10 @@ def test_http_11_requires_one_unambiguous_host():
     handler = handler_with_headers(("Host", "127.0.0.1:8787"))
     handler.request_version = "HTTP/1.1"
     assert not handler._host_is_ambiguous()
+
+    ipv6 = handler_with_headers(("Host", "[::1]:8787"))
+    ipv6.request_version = "HTTP/1.1"
+    assert not ipv6._host_is_ambiguous()
 
 
 def test_cross_origin_read_access_is_not_granted_by_default(monkeypatch):
