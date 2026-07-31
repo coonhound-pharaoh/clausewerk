@@ -140,6 +140,15 @@ def _reject_non_finite_json(value: str) -> None:
     raise ValueError(f"{value} is not a JSON number")
 
 
+def _object_without_duplicate_keys(pairs) -> dict:
+    answer = {}
+    for key, value in pairs:
+        if key in answer:
+            raise ValueError(f"duplicate JSON key: {key}")
+        answer[key] = value
+    return answer
+
+
 def _has_non_finite_number(value) -> bool:
     """JSON may spell infinity indirectly as an overflowing exponent."""
     pending = [value]
@@ -326,7 +335,11 @@ class Handler(BaseHTTPRequestHandler):
         if len(raw) != length:
             return None, Response(400, {"error": "that request arrived incomplete"})
         try:
-            parsed = json.loads(raw or b"null", parse_constant=_reject_non_finite_json)
+            parsed = json.loads(
+                raw or b"null",
+                parse_constant=_reject_non_finite_json,
+                object_pairs_hook=_object_without_duplicate_keys,
+            )
         except (json.JSONDecodeError, UnicodeDecodeError, ValueError, RecursionError):
             # Malformed JSON is the caller's mistake, not a refusal. Saying
             # "refused" here would send somebody to argue about permissions.

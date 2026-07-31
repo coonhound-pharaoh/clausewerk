@@ -3866,3 +3866,12 @@ reach plain bindings or nested JSON and fail late or pollute calculations.
 `server.py` now iteratively checks the entire parsed object for non-finite
 floats. The existing socket-level non-finite test now covers both signs of the
 overflowing-exponent form alongside the three explicit tokens.
+
+## S141 — Duplicate JSON keys are refused as ambiguous — 2026-07-31
+
+Python's JSON decoder accepts repeated object keys and silently keeps the last
+value. Other consumers may keep the first, so a request containing two actors,
+identifiers or decisions has no single meaning across the path that handles or
+records it. The HTTP parser now uses an object-pairs hook that rejects repeated
+keys at any nesting level. A socket-level request with two `person` fields is
+proved to receive a 400 before reaching the app.
