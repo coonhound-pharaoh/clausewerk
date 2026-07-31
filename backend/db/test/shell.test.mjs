@@ -278,6 +278,31 @@ await test('an unreadable 401 still expires the browser session', async () => {
   assert(result.expired === true, 'an unreadable 401 did not expire the session');
 });
 
+await test('error payloads cannot inject non-text reasons into the shell', async () => {
+  const context = {
+    fetch: async (path) => ({
+      ok: false, status: 503,
+      json: async () => path.endsWith('/sign-in')
+        ? { reason: { nested: 'not renderable' } }
+        : { reason: ['not', 'renderable'], error: { nested: true } },
+    }),
+  };
+  const source = read('api.jsx').replace('const API =', 'globalThis.API =');
+  runInNewContext(source, context);
+
+  const results = await Promise.all([
+    context.API.me(),
+    context.API.contract('RUN-1'),
+    context.API.signIn('person@example.test'),
+  ]);
+
+  for (const result of results) {
+    assert(result.ok === false, 'an error response was reported as success');
+    assert(typeof result.reason === 'string' && result.reason.trim(),
+      'a non-text error reason escaped the API boundary');
+  }
+});
+
 await test('a successful rows response must actually carry an array', async () => {
   const context = {
     fetch: async () => ({

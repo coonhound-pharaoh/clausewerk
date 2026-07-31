@@ -4572,3 +4572,10 @@ fell through and it displayed `NaNd`, making malformed response data look like
 a real recorded age. The renderer now verifies the parsed epoch is finite
 before doing elapsed-time arithmetic. The shell executes the isolated real
 helper with invalid timestamp text and proves no `NaN` age is produced.
+## S216 — Browser error reasons are text-only — 2026-07-31
+
+The API wrapper trusted `reason` and `error` fields from failed responses to be
+strings. An object or array could therefore reach a React error surface and
+crash rendering while the service was already failing. The wrapper now accepts
+only nonblank text and otherwise uses its endpoint-specific fallback. The shell
+executes ordinary, download, and sign-in refusals with hostile response shapes.

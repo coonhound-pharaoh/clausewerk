@@ -36,6 +36,12 @@ const API = (() => {
     ok: false, status, reason: 'the service returned an unreadable response',
     invalidResponse: true,
   });
+  const failureReason = (payload, fallback) => {
+    for (const candidate of [payload?.reason, payload?.error]) {
+      if (typeof candidate === 'string' && candidate.trim()) return candidate;
+    }
+    return fallback;
+  };
 
   async function call(method, path, body) {
     let res;
@@ -71,7 +77,7 @@ const API = (() => {
     return {
       ok: false,
       status: res.status,
-      reason: payload?.reason ?? payload?.error ?? `the request failed (${res.status})`,
+      reason: failureReason(payload, `the request failed (${res.status})`),
       expired: res.status === 401,
     };
   }
@@ -103,7 +109,7 @@ const API = (() => {
       return {
         ok: false,
         status: res.status,
-        reason: payload?.reason ?? payload?.error ?? `the request failed (${res.status})`,
+        reason: failureReason(payload, `the request failed (${res.status})`),
         expired: res.status === 401,
       };
     }
@@ -135,7 +141,7 @@ const API = (() => {
       }; }
       if (res.ok && (payload === null || typeof payload !== 'object'
           || Array.isArray(payload))) return unreadable(res.status);
-      if (!res.ok) return { ok: false, reason: payload?.reason ?? 'sign-in failed' };
+      if (!res.ok) return { ok: false, reason: failureReason(payload, 'sign-in failed') };
       if (![payload.token, payload.person, payload.role, payload.display_name].every(
           (value) => typeof value === 'string' && value.trim())) {
         return unreadable(res.status);
