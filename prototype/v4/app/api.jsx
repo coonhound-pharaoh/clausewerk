@@ -104,8 +104,14 @@ const API = (() => {
     },
 
     async signOut() {
-      if (token) await call('POST', '/sign-out');
-      token = null; identity = null;
+      try {
+        if (token) await call('POST', '/sign-out');
+      } finally {
+        // Signing out is first a local security act. A network failure may
+        // leave the server-side session to expire, but it must never leave the
+        // bearer credential active in this page after the person signed out.
+        token = null; identity = null;
+      }
     },
 
     // Called when any request comes back 401. The session is gone — expired, or

@@ -4485,3 +4485,12 @@ CSS, removing that executable dependency; the three pinned unpkg scripts carry
 verified SHA-384 integrity and anonymous CORS attributes. The shell suite proves
 there is no Tailwind CDN reference, every remote script is integrity-locked,
 and the compiled local stylesheet is present.
+
+## S206 — Sign-out always destroys the browser credential — 2026-07-31
+
+The v4 client cleared its bearer token only after the server-side sign-out call
+returned. A network or service failure therefore left the person visibly and
+credentially signed in after they clicked sign out. Local token and identity
+destruction now runs in `finally`; the server session may expire naturally if
+unreachable, but the page cannot keep using it. The shell suite executes the
+real API module with a rejecting fetch and proves both local values are gone.

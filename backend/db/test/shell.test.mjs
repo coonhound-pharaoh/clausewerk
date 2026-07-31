@@ -33,6 +33,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const V4 = join(HERE, '..', '..', '..', 'prototype', 'v4');
@@ -200,6 +201,28 @@ await test('third-party code cannot change underneath the authenticated shell', 
   for (const utility of ['.flex', '.grid', '.hidden', '.py-1']) {
     assert(compiled.includes(utility), `the Tailwind build omitted ${utility}`);
   }
+});
+
+await test('sign-out forgets the bearer token even when the service is down', async () => {
+  const context = {
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({
+        token: 'live-secret', person: 'person@example.test', role: 'viewer',
+        display_name: 'Person', unit: 'Test',
+      }),
+    }),
+  };
+  const source = read('api.jsx').replace('const API =', 'globalThis.API =');
+  runInNewContext(source, context);
+  await context.API.signIn('person@example.test');
+  assert(context.API.signedIn, 'the control did not establish a session');
+
+  context.fetch = async () => { throw new Error('network down'); };
+  try { await context.API.signOut(); } catch { /* local destruction must still win */ }
+
+  assert(!context.API.signedIn, 'the bearer token survived a failed sign-out');
+  eq(context.API.session, null, 'the signed-out identity remained in memory');
 });
 
 await test('no pane holds an array of example rows', async () => {
