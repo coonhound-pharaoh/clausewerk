@@ -184,14 +184,19 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
     # request, even when the host changes. An API key belongs only at ENDPOINT.
     request.add_unredirected_header("Authorization", f"Bearer {key.strip()}")
 
+    if not _JUDGMENT_SLOTS.acquire(blocking=False):
+        return _absent("the model provider is already at its concurrency limit",
+                       model=model, prompt=prompt, inputs=inputs)
     try:
-        with _JUDGMENT_SLOTS:
+        try:
             with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as reply:
                 raw = reply.read(MAX_RESPONSE_BYTES + 1)
                 if len(raw) > MAX_RESPONSE_BYTES:
                     return _absent("the model's reply was too large to accept",
                                    model=model, prompt=prompt, inputs=inputs)
                 payload = json.loads(raw.decode("utf-8"))
+        finally:
+            _JUDGMENT_SLOTS.release()
     except urllib.error.HTTPError as refused:
         # The provider's own status, not its body: a body can carry account
         # detail, and this string is written into an evidence row.
@@ -305,14 +310,19 @@ def judge_risk_exposure(baseline: str, compared: str) -> Judgment:
         headers={"content-type": "application/json"})
     request.add_unredirected_header("Authorization", f"Bearer {key.strip()}")
 
+    if not _JUDGMENT_SLOTS.acquire(blocking=False):
+        return _absent("the model provider is already at its concurrency limit",
+                       model=model, prompt=prompt, inputs=inputs)
     try:
-        with _JUDGMENT_SLOTS:
+        try:
             with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as reply:
                 raw = reply.read(MAX_RESPONSE_BYTES + 1)
                 if len(raw) > MAX_RESPONSE_BYTES:
                     return _absent("the model's reply was too large to accept",
                                    model=model, prompt=prompt, inputs=inputs)
                 payload = json.loads(raw.decode("utf-8"))
+        finally:
+            _JUDGMENT_SLOTS.release()
     except urllib.error.HTTPError as refused:
         return _absent(f"the model provider refused the call (HTTP {refused.code})",
                        model=model, prompt=prompt, inputs=inputs)

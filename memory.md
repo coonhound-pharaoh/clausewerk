@@ -3823,3 +3823,14 @@ provider. The semaphore now wraps network access inside both outbound adapters,
 so no caller can omit it; the redundant outer semantic lock was removed. A
 12-worker regression observes the risk adapter and proves its provider-call
 peak never exceeds `MAX_CONCURRENT_JUDGMENTS` while still overlapping calls.
+
+## S137 — Excess model work fails fast instead of parking threads — 2026-07-31
+
+The provider semaphore bounded active network calls but used blocking acquire,
+so every excess HTTP request still parked a server thread waiting for a slot.
+During a provider outage, unbounded requests could therefore exhaust the
+threaded server despite the stated ceiling. Both adapters now acquire without
+waiting; when four calls are already active, additional judgments immediately
+return an honest `absent` outcome naming provider capacity. The 12-worker test
+now proves exactly four calls enter the provider and all eight excess calls
+return the capacity absence without entering it.

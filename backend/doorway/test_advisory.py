@@ -211,7 +211,11 @@ def test_risk_judgments_share_the_provider_concurrency_ceiling(monkeypatch):
             lambda _n: advisory.judge_risk_exposure(AI_TEXT, APPROVED),
             range(12)))
 
-    assert all(j.outcome == "recorded" for j in judgments)
+    recorded = [j for j in judgments if j.outcome == "recorded"]
+    busy = [j for j in judgments if j.outcome == "absent"
+            and "concurrency limit" in j.absent_reason]
+    assert len(recorded) == advisory.MAX_CONCURRENT_JUDGMENTS
+    assert len(busy) == len(judgments) - advisory.MAX_CONCURRENT_JUDGMENTS
     assert peak <= advisory.MAX_CONCURRENT_JUDGMENTS
     assert peak > 1, "the test never exercised overlapping provider calls"
 
