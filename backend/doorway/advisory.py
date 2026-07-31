@@ -166,6 +166,11 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
         {"name": "compared", "characters": len(compared)},
     ]
 
+    if not model.strip() or not _representable_text(model):
+        return _absent(
+            f"the configured model name in {MODEL_VARIABLE} is not usable",
+            model=DEFAULT_MODEL, prompt=prompt, inputs=inputs)
+
     key = os.environ.get(KEY_VARIABLE)
     if not key or not key.strip():
         return _absent(
@@ -300,6 +305,11 @@ def judge_risk_exposure(baseline: str, compared: str) -> Judgment:
         {"name": "baseline", "characters": len(baseline)},
         {"name": "compared", "characters": len(compared)},
     ]
+
+    if not model.strip() or not _representable_text(model):
+        return _absent(
+            f"the configured model name in {MODEL_VARIABLE} is not usable",
+            model=DEFAULT_MODEL, prompt=prompt, inputs=inputs)
 
     key = os.environ.get(KEY_VARIABLE)
     if not key or not key.strip():

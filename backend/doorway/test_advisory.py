@@ -168,6 +168,24 @@ def test_the_adapter_names_the_variable_it_reads(monkeypatch):
     assert advisory.KEY_VARIABLE in advisory.__doc__
 
 
+@pytest.mark.parametrize("judge", [
+    advisory.judge_semantic_difference,
+    advisory.judge_risk_exposure,
+])
+@pytest.mark.parametrize("configured", ["   ", "model\x00name", "model\ud800name"])
+def test_invalid_configured_model_names_become_recordable_absences(
+    monkeypatch, judge, configured
+):
+    monkeypatch.setenv(advisory.MODEL_VARIABLE, configured)
+
+    judgment = judge(AI_TEXT, APPROVED)
+
+    assert judgment.outcome == "absent"
+    assert advisory.MODEL_VARIABLE in judgment.absent_reason
+    assert judgment.model == advisory.DEFAULT_MODEL
+    assert advisory._representable_text(judgment.model)
+
+
 def test_the_adapter_never_raises_at_its_caller(monkeypatch):
     """A judgment is advisory. Nothing about it may interrupt the work of the
     person who asked. Given a key that cannot possibly work, the adapter still

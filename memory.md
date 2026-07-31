@@ -4046,3 +4046,12 @@ model provenance or judgment basis, causing the later evidence insert to fail
 instead of recording an absence. The adapters now reject unrepresentable text
 before returning a judgment. Tests cover NUL and lone-surrogate provenance in
 both adapters plus an unrepresentable basis.
+
+## S160 — Invalid configured model names become recordable absences — 2026-07-31
+
+The model name comes from deployment configuration and is copied even into
+no-key absence rows. Blank, NUL-containing or lone-surrogate values therefore
+made the explanatory database record fail before any provider call. Both
+adapters now turn an unusable configured name into an absence that identifies
+the bad variable while storing the safe default model label. Parameterized
+tests cover three invalid shapes across both adapters.
