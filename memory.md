@@ -4132,3 +4132,13 @@ into unbounded deterministic work and database writes within the byte ceiling.
 The shared manifest boundary now refuses more than 200 risks before entry
 normalization, covering both pre-flight and run endpoints. A 201-risk synthetic
 manifest proves the early refusal.
+
+## S169 — Analysis invocation fan-out is bounded — 2026-07-31
+
+Redline analysis processed every changed paragraph in a DOCX, while supplier
+analysis processed all units accumulated across every ingest on a deal. Each
+unit can create immutable analysis and ticket rows and trigger an external model
+judgment, so file-byte and per-ingest limits did not bound one analysis call.
+Both entrances now refuse more than 200 units before writing analysis rows or
+calling a provider; the supplier query reads at most 201 to make the decision.
+A three-redline fixture with a lowered ceiling proves zero analysis rows land.

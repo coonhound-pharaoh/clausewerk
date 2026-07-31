@@ -59,6 +59,10 @@ CLASSIFIER = "deterministic-category-words"
 # says is over — reopening is cw.position_revival's job to surface, not this
 # module's to do silently.
 OPEN_STATES = ("open", "held", "escalated", "conceded")
+# One unit can create an immutable analysis row, a quarantine ticket, and an
+# external judgment. Bound invocation fan-out independently of DOCX byte size
+# and of the per-ingest supplier-paper ceiling.
+MAX_ANALYSIS_UNITS = 200
 
 
 @dataclass(frozen=True)
@@ -280,6 +284,12 @@ def analyse(db: Database, caller: Caller, query: dict) -> Answer:
                 return Answer(400, {"error": "refused", "kind": "rejected",
                                     "reason": f"that round's document is not "
                                               f"a readable .docx: {not_docx}"})
+            if len(redlines) > MAX_ANALYSIS_UNITS:
+                return Answer(413, {
+                    "error": "refused", "kind": "rejected",
+                    "reason": f"{len(redlines)} changed paragraphs is more "
+                              f"than one analysis may process "
+                              f"({MAX_ANALYSIS_UNITS}); split the round"})
 
             categories = request.rows("select key, label from cw.category")
             vocabulary = {c["key"]: _terms_of(c["key"], c["label"])
@@ -360,12 +370,18 @@ def analyse_supplier_units(db: Database, caller: Caller, query: dict) -> Answer:
                    from cw.supplier_unit u
                    join cw.review_ticket t using (ticket_id)
                    where t.agreement_id = %s
-                   order by u.paragraph_no""", (agreement_id,))
+                   order by u.paragraph_no
+                   limit %s""", (agreement_id, MAX_ANALYSIS_UNITS + 1))
             if not units:
                 return Answer(409, {
                     "error": "refused", "kind": "changed_nothing",
                     "reason": "no supplier units on that deal; ingest the "
                               "vendor's paper first (POST /paper/ingest)"})
+            if len(units) > MAX_ANALYSIS_UNITS:
+                return Answer(413, {
+                    "error": "refused", "kind": "rejected",
+                    "reason": f"more than {MAX_ANALYSIS_UNITS} supplier units "
+                              "are waiting; split them across deals"})
 
             categories = request.rows("select key, label from cw.category")
             vocabulary = {c["key"]: _terms_of(c["key"], c["label"])

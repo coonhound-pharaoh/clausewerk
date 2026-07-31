@@ -170,6 +170,16 @@ def test_the_matched_path_names_position_score_instrument_and_retreat(seeded, db
         "no model is seated; the absence is recorded, never smoothed over")
 
 
+def test_redline_fan_out_is_refused_before_analysis_rows(seeded, db, monkeypatch):
+    monkeypatch.setattr(analysis, "MAX_ANALYSIS_UNITS", 2)
+
+    answered = analysis.analyse(
+        db, OWNING_REQUESTER, {"agreement": "AG-A1"})
+
+    assert answered.status == 413
+    assert analysis_rows(db) == []
+
+
 def test_the_no_match_path_escalates_into_quarantine(seeded, db):
     analysis.analyse(db, OWNING_REQUESTER, {"agreement": "AG-A1"})
     escalated = next(r for r in analysis_rows(db)
