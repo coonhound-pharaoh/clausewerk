@@ -4055,3 +4055,12 @@ made the explanatory database record fail before any provider call. Both
 adapters now turn an unusable configured name into an absence that identifies
 the bad variable while storing the safe default model label. Parameterized
 tests cover three invalid shapes across both adapters.
+
+## S161 — Supplier-paper classification has a paragraph ceiling — 2026-07-31
+
+Supplier ingest capped the number of classified tickets only after scanning
+every nonblank paragraph against every category. A document near the XML
+element ceiling could therefore consume substantial CPU while opening no
+tickets at all. Ingest now refuses more than 5,000 nonblank paragraphs before
+hashing, database access or classification. A monkeypatched 5,001-paragraph
+regression proves no ticket or received-document row is written.

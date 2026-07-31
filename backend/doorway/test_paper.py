@@ -260,6 +260,23 @@ def test_not_a_docx_is_the_callers_mistake(seeded, db):
     assert "docx" in answered.body["reason"]
 
 
+def test_excessive_paragraphs_are_refused_before_classification(
+    seeded, db, monkeypatch
+):
+    monkeypatch.setattr(
+        paper.docx, "paragraphs",
+        lambda _body: ["unclassified filler"] * (paper.MAX_PARAGRAPHS + 1))
+
+    answered = paper.ingest(
+        db, LEGAL, upload_of([ABOUT_NOTHING]), {"agreement": "AG-100"})
+
+    assert answered.status == 413
+    assert str(paper.MAX_PARAGRAPHS + 1) in answered.body["reason"]
+    assert not tickets(db)
+    with db.as_person(LEAH, "legal_admin") as request:
+        assert request.rows("select 1 from cw.received_document") == []
+
+
 def test_a_caller_the_ticket_policies_refuse_is_refused_here(seeded, db):
     """The database decides who may file supplier paper; this module reports.
     An auditor reads everything and writes nothing — including this."""

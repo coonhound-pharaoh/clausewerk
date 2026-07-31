@@ -57,6 +57,11 @@ from engine import docx
 # not a review queue, it is a denial of service on the reviewers; refused with
 # the number, so the caller knows it is a limit and not a bug.
 MAX_UNITS = 200
+# Classification cost scales with every nonblank paragraph, including ones that
+# open no ticket. Keep that separate from MAX_UNITS: a document can be cheap in
+# queue records and still be hostile CPU input. Five thousand paragraphs is far
+# beyond an ordinary contract while bounding the category-word scan.
+MAX_PARAGRAPHS = 5_000
 
 # A word must be this long to count as a signal. Shorter words ("of", "and",
 # "data" would survive at 4) are how every paragraph matches every category.
@@ -111,6 +116,12 @@ def ingest(db: Database, caller: Caller, upload, query: dict) -> Answer:
     except docx.NotADocx as not_docx:
         return Answer(400, {"error": "refused", "kind": "rejected",
                             "reason": f"that is not a readable .docx: {not_docx}"})
+
+    if len(paragraphs) > MAX_PARAGRAPHS:
+        return Answer(413, {
+            "error": "refused", "kind": "rejected",
+            "reason": f"{len(paragraphs)} nonblank paragraphs is more than one "
+                      f"ingest may classify ({MAX_PARAGRAPHS}); split the document"})
 
     sha = hashlib.sha256(upload.body).hexdigest()
 
