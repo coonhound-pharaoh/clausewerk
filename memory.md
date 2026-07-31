@@ -3875,3 +3875,12 @@ identifiers or decisions has no single meaning across the path that handles or
 records it. The HTTP parser now uses an object-pairs hook that rejects repeated
 keys at any nesting level. A socket-level request with two `person` fields is
 proved to receive a 400 before reaching the app.
+
+## S142 — Unrepresentable JSON text is refused at the wire — 2026-07-31
+
+JSON escapes can decode to lone UTF-16 surrogate code points or NUL. Python's
+decoder accepts both, but a surrogate cannot be encoded as normal UTF-8 and
+PostgreSQL text cannot contain NUL; either value produced a late response or
+driver failure instead of a caller-facing 400. The HTTP boundary now walks keys
+and values iteratively and rejects both forms before dispatch. Socket tests
+cover an escaped lone surrogate and escaped NUL.

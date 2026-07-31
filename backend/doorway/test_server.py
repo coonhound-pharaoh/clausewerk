@@ -874,6 +874,24 @@ def test_duplicate_json_keys_are_refused_instead_of_choosing_one():
     assert not app.seen
 
 
+@pytest.mark.parametrize("escaped", [br"\ud800", br"\u0000"])
+def test_json_text_that_cannot_reach_postgresql_is_refused(escaped):
+    app = Records(Response(200, {"ok": True}))
+    payload = b'{"person":"' + escaped + b'"}'
+
+    with stub_serving(app) as base:
+        request = urllib.request.Request(
+            base + "/api/sign-in", method="POST", data=payload,
+            headers={"content-type": "application/json"})
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            urllib.request.urlopen(request)
+        body = json.loads(refused.value.read())
+
+    assert refused.value.code == 400
+    assert body["error"] == "that request was not valid JSON"
+    assert not app.seen
+
+
 def test_excessively_nested_json_is_a_bad_request_not_a_service_failure():
     app = Records(Response(200, {"ok": True}))
     payload = ("[" * 2_000 + "0" + "]" * 2_000).encode()

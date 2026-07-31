@@ -163,6 +163,23 @@ def _has_non_finite_number(value) -> bool:
     return False
 
 
+def _has_unrepresentable_text(value) -> bool:
+    """Reject text JSON accepts but UTF-8/PostgreSQL text cannot carry."""
+    pending = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, str):
+            if "\0" in current or any(
+                    0xD800 <= ord(char) <= 0xDFFF for char in current):
+                return True
+        elif isinstance(current, dict):
+            pending.extend(current.keys())
+            pending.extend(current.values())
+        elif isinstance(current, list):
+            pending.extend(current)
+    return False
+
+
 class Handler(BaseHTTPRequestHandler):
     # Set by serve() before the server starts.
     app: App = None  # type: ignore[assignment]
@@ -345,6 +362,8 @@ class Handler(BaseHTTPRequestHandler):
             # "refused" here would send somebody to argue about permissions.
             return None, Response(400, {"error": "that request was not valid JSON"})
         if _has_non_finite_number(parsed):
+            return None, Response(400, {"error": "that request was not valid JSON"})
+        if _has_unrepresentable_text(parsed):
             return None, Response(400, {"error": "that request was not valid JSON"})
         if parsed is not None and not isinstance(parsed, dict):
             # Valid JSON is not the same as a valid request: a list or a bare
