@@ -195,6 +195,9 @@ class Handler(BaseHTTPRequestHandler):
     # ── The request ─────────────────────────────────────────────────────────
 
     def do_GET(self) -> None:  # noqa: N802 — the base class names it
+        if self._host_is_ambiguous():
+            self._respond(Response(400, {"error": "host is ambiguous"}))
+            return
         parsed, refused = self._parse_target(self.path)
         if refused is not None:
             self._respond(refused)
@@ -216,6 +219,9 @@ class Handler(BaseHTTPRequestHandler):
                                       token=self._token(), query=selector))
 
     def do_POST(self) -> None:  # noqa: N802
+        if self._host_is_ambiguous():
+            self._respond(Response(400, {"error": "host is ambiguous"}))
+            return
         parsed, refused = self._parse_target(self.path)
         if refused is not None:
             self._respond(refused)
@@ -266,6 +272,9 @@ class Handler(BaseHTTPRequestHandler):
                                       token=self._token(), body=body))
 
     def do_OPTIONS(self) -> None:  # noqa: N802
+        if self._host_is_ambiguous():
+            self._respond(Response(400, {"error": "host is ambiguous"}))
+            return
         self.send_response(204)
         self._cors()
         self.end_headers()
@@ -320,6 +329,15 @@ class Handler(BaseHTTPRequestHandler):
         scheme, separator, credentials = header.partition(" ")
         token = credentials.strip()
         return token if separator and scheme.casefold() == "bearer" and token else None
+
+    def _host_is_ambiguous(self) -> bool:
+        values = self.headers.get_all("host", [])
+        if len(values) > 1:
+            return True
+        invalid = bool(values and (not values[0].strip() or "," in values[0]))
+        if getattr(self, "request_version", "HTTP/1.1") == "HTTP/1.1":
+            return len(values) != 1 or invalid
+        return invalid
 
     def _content_length(self) -> tuple[int | None, Response | None]:
         """Return one unambiguous request length.

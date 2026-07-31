@@ -55,6 +55,7 @@ def test_duplicate_authorization_fields_never_select_an_identity():
 
 def test_duplicate_content_types_are_refused_as_ambiguous():
     handler = handler_with_headers(
+        ("Host", "localhost"),
         ("Content-Type", "application/json"),
         ("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
         body=b"{}",
@@ -67,6 +68,22 @@ def test_duplicate_content_types_are_refused_as_ambiguous():
 
     assert answered[0].status == 400
     assert handler.rfile.tell() == 0
+
+
+def test_http_11_requires_one_unambiguous_host():
+    for headers in (
+        (),
+        (("Host", ""),),
+        (("Host", "first"), ("Host", "second")),
+        (("Host", "first, second"),),
+    ):
+        handler = handler_with_headers(*headers)
+        handler.request_version = "HTTP/1.1"
+        assert handler._host_is_ambiguous(), headers
+
+    handler = handler_with_headers(("Host", "127.0.0.1:8787"))
+    handler.request_version = "HTTP/1.1"
+    assert not handler._host_is_ambiguous()
 
 
 def test_cross_origin_read_access_is_not_granted_by_default(monkeypatch):

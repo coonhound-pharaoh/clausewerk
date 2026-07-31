@@ -3893,3 +3893,13 @@ interpret those forms with different authorities or resource identities. The
 doorway is an origin server and now requires a slash-prefixed origin-form target
 with no scheme, authority or fragment. Fast protocol tests reject four ambiguous
 forms and retain an ordinary path-plus-query control.
+
+## S144 — HTTP authority requires one Host field — 2026-07-31
+
+The origin server accepted HTTP/1.1 requests with no Host, an empty Host,
+comma-combined hosts or repeated Host fields. Intermediaries may select a
+different authority from the one the application ultimately serves, creating
+cache and routing ambiguity. GET, POST and OPTIONS now refuse such requests
+before parsing the target or body; HTTP/1.0 retains its optional-Host rule but
+still rejects ambiguous supplied values. Fast protocol tests cover four bad
+shapes and one valid host with a port.
