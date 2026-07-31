@@ -4091,3 +4091,14 @@ file routing. The server correctly answered 400, but the stale assertion made
 the broad security rail fail despite the traversal remaining closed. The test
 now accepts 400 at the parser boundary as well as the static boundary's 403 or
 404, and retains its content-leak assertion if any request is served.
+
+## S165 — Content-addressed run pins are verified before commit — 2026-07-31
+
+The run writer treated every `ON CONFLICT DO NOTHING` collision in the five
+shared snapshot and ruleset tables as identical by definition. The database did
+not verify the hashes, while working roles could preinsert those rows, so a
+preclaimed id with different members could silently bind a later run to
+provenance the engine never used. After inserting the run parent makes both pins
+visible through RLS, the writer now compares every stored parent and member row
+with the emitted pin inside the same transaction. Any mismatch raises, rolls
+back the run, and answers 409. A synthetic poisoned member proves the refusal.

@@ -32,6 +32,7 @@ from pathlib import Path
 
 import pytest
 
+from doorway import runs
 from doorway.db import Database
 from doorway.seed_demo import seed
 from doorway.server import serve
@@ -46,6 +47,30 @@ TUNDE = "t.imani@clausewerk"
 SAM = "s.reed@clausewerk"
 
 DEAL = "AG-0001"
+
+
+def test_content_addressed_pin_mismatch_is_refused():
+    snapshot = {
+        "snapshot": [{"snapshot_id": "hash", "taken_on": "2026-07-31"}],
+        "snapshot_member": [{"snapshot_id": "hash", "clause_id": "C-1",
+                             "version": 1, "selectable": True}],
+        "snapshot_ladder_rung": [],
+    }
+    ruleset = {
+        "ruleset": [{"ruleset_id": "rules"}],
+        "ruleset_member": [],
+    }
+
+    class PoisonedPin:
+        def rows(self, statement, _params):
+            table = statement.split("from cw.", 1)[1].split(" ", 1)[0]
+            rows = {**snapshot, **ruleset}[table]
+            if table == "snapshot_member":
+                return [{**rows[0], "selectable": False}]
+            return rows
+
+    with pytest.raises(runs.SharedContentMismatch, match="snapshot_member"):
+        runs._verify_shared_content(PoisonedPin(), snapshot, ruleset)
 
 
 class Client:

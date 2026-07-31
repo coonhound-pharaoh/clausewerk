@@ -252,6 +252,9 @@ def run(db: Database, caller: Caller, body: dict | None) -> Answer:
                        authored_chars=0,
                        ai_origin_chars=_ai_origin_chars(checked, resolution)))
 
+    except SharedContentMismatch as mismatch:
+        return Answer(409, {"error": "refused", "reason": str(mismatch),
+                            "kind": "refused_on_merits"})
     except psycopg.Error as error:
         database_said: Refused = classify(error)
         return Answer(database_said.status, database_said.as_body())
@@ -302,6 +305,49 @@ def _insert(request, table: str, rows: list[dict], *, shared: bool = False) -> N
             + (" on conflict do nothing" if shared else ""), row)
 
 
+class SharedContentMismatch(Exception):
+    """A content-addressed id already names different stored content."""
+
+
+_SHARED_CONTENT = {
+    "snapshot": ("snapshot_id", ("snapshot_id", "taken_on")),
+    "snapshot_member": (
+        "snapshot_id", ("snapshot_id", "clause_id", "version", "selectable")),
+    "snapshot_ladder_rung": (
+        "snapshot_id", ("snapshot_id", "category_key", "severity", "rung",
+                        "clause_id", "version", "is_floor")),
+    "ruleset": ("ruleset_id", ("ruleset_id",)),
+    "ruleset_member": (
+        "ruleset_id", ("ruleset_id", "rule_id", "version")),
+}
+
+
+def _verify_shared_content(request, snapshot_tables: dict,
+                           ruleset_tables: dict) -> None:
+    """Prove that every shared id still names exactly the emitted pin.
+
+    The run parent has already been inserted when this executes, so its RLS
+    visibility makes both pins readable to this requester. A mismatch raises
+    out of the request transaction and rolls the run back with it.
+    """
+    emitted = {**snapshot_tables, **ruleset_tables}
+    for table, (id_column, columns) in _SHARED_CONTENT.items():
+        expected_rows = emitted[table]
+        parent_id = (snapshot_tables["snapshot"][0]["snapshot_id"]
+                     if id_column == "snapshot_id"
+                     else ruleset_tables["ruleset"][0]["ruleset_id"])
+        stored_rows = request.rows(
+            f"select {', '.join(columns)} from cw.{table} "
+            f"where {id_column} = %s", (parent_id,))
+        expected = {tuple(row[column] for column in columns)
+                    for row in expected_rows}
+        stored = {tuple(row[column] for column in columns)
+                  for row in stored_rows}
+        if stored != expected:
+            raise SharedContentMismatch(
+                f"{table} content does not match its content-addressed id")
+
+
 def _store(request, run_id: str, snapshot_tables: dict, ruleset_tables: dict,
            run_tables: dict) -> None:
     """Everything a run is, in the order the foreign keys require.
@@ -327,10 +373,11 @@ def _store(request, run_id: str, snapshot_tables: dict, ruleset_tables: dict,
     keyed on the content-addressed parent plus the content — cw.snapshot_member
     on (snapshot_id, clause_id, version), cw.snapshot_ladder_rung on
     (snapshot_id, category_key, severity, rung), cw.ruleset_member on
-    (ruleset_id, rule_id, version). Identical parent id means identical
-    members; that is what content-addressing MEANS. A conflict on any of them
-    is therefore a row identical to the one being written, and doing nothing is
-    the correct answer rather than a shrug.
+    (ruleset_id, rule_id, version). Identical parent id is SUPPOSED to mean
+    identical members. Because the database cannot derive these hashes itself,
+    the equality check below proves that claim after the run makes its pins
+    visible and before the transaction may commit. A poisoned collision can
+    refuse a run, never silently change the provenance it records.
 
     AND NO READ-THEN-SKIP GUARD, deliberately. Checking whether the snapshot is
     already there and skipping the block would be a second rule saying the same
@@ -353,6 +400,7 @@ def _store(request, run_id: str, snapshot_tables: dict, ruleset_tables: dict,
     # chain. A caller with no audit grant is refused there, and that is the
     # correct answer rather than a problem to route around.
     _insert(request, "run", run_tables["run"])
+    _verify_shared_content(request, snapshot_tables, ruleset_tables)
     _insert(request, "run_decision", run_tables["run_decision"])
     _insert(request, "run_finding", run_tables["run_finding"])
 
