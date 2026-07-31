@@ -66,6 +66,7 @@ Channel = Callable[[str, str, str], None]
 # Administrator tick can spend that timeout once for every account in the
 # database. Deferred people remain unsent and therefore eligible next tick.
 MAX_DELIVERY_ATTEMPTS_PER_TICK = 4
+MAX_DIGEST_ITEMS = 200
 
 
 def channel_from_env() -> Channel:
@@ -122,6 +123,7 @@ class Answered:
 
 def _digest(waiting: list[dict]) -> tuple[str, str, str]:
     """Subject, body, and the refs JSON — references and dates, nothing else."""
+    waiting = waiting[:MAX_DIGEST_ITEMS]
     lines = []
     refs = []
     for item in waiting:
@@ -152,6 +154,7 @@ def tick(db: Database, caller: Caller, channel: Channel,
         return Answered(refused.status, refused.as_body())
 
     digested = sent = failed = already = in_progress = unreachable = deferred = 0
+    digests_truncated = 0
     delivery_attempts = 0
 
     for person in people:
@@ -161,11 +164,12 @@ def tick(db: Database, caller: Caller, channel: Channel,
             waiting = request.rows(
                 "select kind, subject_ref, due_on::text as due_on, since "
                 "from cw.waiting_for(%s, %s) "
-                "order by due_on nulls last, kind, subject_ref",
-                (person["person"], person["role"]))
+                "order by due_on nulls last, kind, subject_ref limit %s",
+                (person["person"], person["role"], MAX_DIGEST_ITEMS + 1))
             if not waiting:
                 continue
             digested += 1
+            digest_is_truncated = len(waiting) > MAX_DIGEST_ITEMS
             sent_today = request.rows(
                 "select 1 from cw.notification_outbox "
                 "where person = %s and channel = 'email' and sent_on = %s "
@@ -210,6 +214,9 @@ def tick(db: Database, caller: Caller, channel: Channel,
             continue
 
         delivery_attempts += 1
+        if digest_is_truncated:
+            digests_truncated += 1
+            waiting = waiting[:MAX_DIGEST_ITEMS]
         subject, body, refs = _digest(waiting)
         outcome, failure = "sent", None
         try:
@@ -248,4 +255,5 @@ def tick(db: Database, caller: Caller, channel: Channel,
         "delivery_in_progress": in_progress,
         "unreachable": unreachable,
         "deferred_by_delivery_limit": deferred,
+        "digests_truncated": digests_truncated,
     })
