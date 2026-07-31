@@ -288,6 +288,14 @@ class Handler(BaseHTTPRequestHandler):
         return path[4:] if path.startswith("/api/") else path
 
     def _parse_target(self, target: str) -> tuple[ParseResult | None, Response | None]:
+        # HTTP request-target syntax is ASCII. Raw controls, DEL and raw
+        # non-ASCII bytes are interpreted inconsistently across servers; NUL is
+        # especially dangerous because native components may truncate at it.
+        # UTF-8 data remains available through ordinary percent encoding, but
+        # an encoded NUL is still not a representable path or database value.
+        if (any(ord(char) < 33 or ord(char) > 126 for char in target)
+                or re.search(r"%00", target, re.IGNORECASE)):
+            return None, Response(400, {"error": "the request target is malformed"})
         try:
             parsed = urlparse(target)
         except ValueError:

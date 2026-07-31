@@ -4001,3 +4001,13 @@ reserved characters before routing while the doorway keeps them in the path,
 so the hops can disagree about both endpoint and selector. Target parsing now
 rejects encoded query and fragment delimiters before dispatch, with fast
 protocol coverage for case variants.
+
+## S155 — Request targets reject raw controls and encoded NUL — 2026-07-31
+
+Target parsing accepted raw control/non-ASCII bytes and percent-encoded NUL.
+Different HTTP and native components may reject, normalize or truncate those
+forms, while API and query routing could carry them deeper than the static
+layer's later NUL check. The origin boundary now requires printable ASCII in
+the raw target and rejects `%00` anywhere; ordinary percent-encoded UTF-8 stays
+valid. Fast protocol tests cover raw NUL, encoded NUL, DEL, raw non-ASCII and a
+valid encoded UTF-8 control.

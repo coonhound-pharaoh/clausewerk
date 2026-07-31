@@ -296,6 +296,25 @@ def test_request_targets_cannot_hide_query_or_fragment_delimiters():
         assert parsed is None, ambiguous
         assert refused is not None and refused.status == 400, ambiguous
 
+
+def test_request_targets_reject_raw_non_ascii_and_nul():
+    handler = handler_with_headers()
+
+    for ambiguous in (
+        "/api/sign-in\x00suffix",
+        "/api/sign-in%00suffix",
+        "/api/sign-in?run=%00",
+        "/caf\u00e9",
+        "/api/\x7fsign-in",
+    ):
+        parsed, refused = handler._parse_target(ambiguous)
+        assert parsed is None, repr(ambiguous)
+        assert refused is not None and refused.status == 400, repr(ambiguous)
+
+    parsed, refused = handler._parse_target("/caf%C3%A9")
+    assert parsed is not None
+    assert refused is None
+
     parsed, refused = handler._parse_target("/api/me?run=RUN-1")
     assert refused is None
     assert parsed is not None and parsed.path == "/api/me"
