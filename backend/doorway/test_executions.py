@@ -212,6 +212,16 @@ def test_wrong_execution_scalar_types_are_boundary_errors(field, wrong):
     assert answered.status == 400
 
 
+@pytest.mark.parametrize("field", ["name", "party", "method", "signed_on", "title"])
+def test_wrong_signatory_scalar_types_are_boundary_errors(field):
+    signatory = {**filing("RUN-BOUNDARY")["signatories"][0], field: 42}
+
+    answered = executions.execute(
+        None, None, filing("RUN-BOUNDARY", signatories=[signatory]))
+
+    assert answered.status == 400
+
+
 # ── Gate 1 · the deal binding ───────────────────────────────────────────────
 
 

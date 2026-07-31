@@ -4216,3 +4216,11 @@ driver or database coercion during an irreversible filing. All declared text
 fields now require strings when present, and `byte_size` requires a non-boolean
 integer before signatory processing or database work. Representative required
 and optional scalar mismatches prove clean 400 responses.
+
+## S178 — Signatory scalar types are checked before filing — 2026-07-31
+
+After container rejection, numeric signatory names, parties, methods, dates, or
+titles still passed the `str(value).strip()` presence check and reached text/date
+columns during an irreversible filing. Required signatory fields and optional
+title now require strings before the nonblank check and before database work.
+Five scalar mismatch controls prove clean 400 responses.

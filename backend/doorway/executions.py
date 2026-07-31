@@ -197,6 +197,10 @@ def execute(db: Database, caller: Caller, body: dict) -> Answer:
                     refuse_structured(f"signatory {index} {field}", who[field])
         except WrongShape as wrong:
             return _rejected(str(wrong))
+        for field in (*SIGNATORY_FIELDS, "title"):
+            if field in who and who[field] is not None \
+                    and not isinstance(who[field], str):
+                return _rejected(f"signatory {index} {field} must be text")
         for field in SIGNATORY_FIELDS:
             if not str(who.get(field) or "").strip():
                 return _rejected(f"signatory {index} names no {field}")
