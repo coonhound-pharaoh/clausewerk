@@ -4437,3 +4437,11 @@ now preflight the current session after parsing their small query and before
 reading the body. Dispatch resolves identity again after the read so revocation
 between the two checks still takes effect. A socket regression advertises a
 1,000,000,000-byte body, sends none, and receives 401 without app dispatch.
+
+## S201 — Huge session durations fall back instead of breaking sign-in — 2026-07-31
+
+Session-duration parsing handled numeric overflow but not Python's integer
+digit-limit `ValueError`. A governance value containing thousands of digits
+therefore broke every new sign-in instead of using the parser's documented
+eight-hour fallback. Both conversion failures now fall back; the duration
+control includes a 5,000-digit value that reaches the previously uncaught path.

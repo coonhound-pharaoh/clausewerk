@@ -213,12 +213,17 @@ def test_a_nonsense_session_length_falls_back_rather_than_to_zero(people, db: Da
     assert session_length(db) == 8 * 3600.0
 
 
-@pytest.mark.parametrize("configured", ["0s", "9" * 400 + "d"])
+@pytest.mark.parametrize("configured", [
+    "0s",
+    "9" * 400 + "d",   # conversion to float overflows
+    "9" * 5_000 + "d",  # Python refuses the integer conversion itself
+])
 def test_a_non_working_session_length_falls_back(configured):
     """A syntactically shaped setting must still produce a usable duration.
 
     Zero would issue an already-expired session. An unrepresentably large
-    number used to raise OverflowError and turn every sign-in into a 500.
+    number can raise OverflowError or Python's digit-limit ValueError and turn
+    every sign-in into a 500.
     """
     assert parse_duration(configured) == EIGHT_HOURS
 
@@ -241,4 +246,3 @@ def test_structured_or_nontext_identity_is_a_boundary_error(wrong):
     answered = App(object()).sign_in(wrong)
 
     assert answered.status == 400
-
