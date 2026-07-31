@@ -4503,3 +4503,12 @@ before clearing React's visible identity. The workspace remained on screen with
 no usable credential. Remote session cleanup is now best-effort and local
 sign-out resolves after destroying the token, allowing the root to clear the
 workspace. The rejecting-fetch control now also proves sign-out does not throw.
+
+## S208 — Rejected browser fetches settle as transport failures — 2026-07-31
+
+The API adapter normalized HTTP errors but let network-level fetch rejection
+escape. Pane hooks then remained in `loading`, and action handlers stopped before
+clearing their busy state. Record calls, downloads, and sign-in now return the
+same status-zero unreachable shape when fetch rejects. The shell executes all
+three real transport paths with a rejecting fetch and proves each promise
+settles as a classified failure rather than throwing.

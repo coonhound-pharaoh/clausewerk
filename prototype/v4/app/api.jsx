@@ -24,15 +24,23 @@ const API = (() => {
   let token = null;
   let identity = null;
 
+  const unreachable = () => ({
+    ok: false, status: 0, reason: 'the service could not be reached',
+    unreachable: true,
+  });
+
   async function call(method, path, body) {
-    const res = await fetch(base + path, {
-      method,
-      headers: {
-        'content-type': 'application/json',
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    let res;
+    try {
+      res = await fetch(base + path, {
+        method,
+        headers: {
+          'content-type': 'application/json',
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch { return unreachable(); }
     let payload = null;
     try { payload = await res.json(); } catch { payload = null; }
 
@@ -66,9 +74,12 @@ const API = (() => {
   // the viewer no export path, and it survives precisely because the saving
   // step lives in one screen instead of in the transport every screen uses.
   async function download(path) {
-    const res = await fetch(base + path, {
-      headers: { ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    });
+    let res;
+    try {
+      res = await fetch(base + path, {
+        headers: { ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      });
+    } catch { return unreachable(); }
     if (!res.ok) {
       const payload = await res.json().catch(() => null);
       return {
@@ -88,11 +99,14 @@ const API = (() => {
     get signedIn() { return token !== null; },
 
     async signIn(person) {
-      const res = await fetch(base + '/sign-in', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ person }),
-      });
+      let res;
+      try {
+        res = await fetch(base + '/sign-in', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ person }),
+        });
+      } catch { return unreachable(); }
       const payload = await res.json().catch(() => null);
       if (!res.ok) return { ok: false, reason: payload?.reason ?? 'sign-in failed' };
       token = payload.token;

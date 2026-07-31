@@ -225,6 +225,24 @@ await test('sign-out forgets the bearer token even when the service is down', as
   eq(context.API.session, null, 'the signed-out identity remained in memory');
 });
 
+await test('network failures settle every API transport as an unreachable result', async () => {
+  const context = { fetch: async () => { throw new Error('network down'); } };
+  const source = read('api.jsx').replace('const API =', 'globalThis.API =');
+  runInNewContext(source, context);
+
+  const results = await Promise.all([
+    context.API.signIn('person@example.test'),
+    context.API.me(),
+    context.API.contract('RUN-1'),
+  ]);
+
+  for (const result of results) {
+    assert(result.ok === false, 'a rejected fetch did not become a failure result');
+    assert(result.status === 0, 'an unreachable service claimed an HTTP status');
+    assert(result.unreachable === true, 'the result does not identify transport failure');
+  }
+});
+
 await test('no pane holds an array of example rows', async () => {
   // The shape canned data takes: a literal array of objects sitting in the
   // module, ready to render. Real rows arrive from usePane and are never
