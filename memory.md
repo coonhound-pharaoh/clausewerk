@@ -4064,3 +4064,12 @@ element ceiling could therefore consume substantial CPU while opening no
 tickets at all. Ingest now refuses more than 5,000 nonblank paragraphs before
 hashing, database access or classification. A monkeypatched 5,001-paragraph
 regression proves no ticket or received-document row is written.
+
+## S162 — Supplier category terms match whole words — 2026-07-31
+
+The deterministic supplier-paper classifier used substring membership and
+always included category keys. A short key such as `ip` therefore matched
+ordinary words like `supplier` and `ship`, opening false immutable tickets and
+potentially hiding a baseline gap. Classification now tokenizes alphabetic
+words and matches exact tokens, preserving standalone short acronyms. Synthetic
+controls prove both the false-positive refusal and the standalone-key match.

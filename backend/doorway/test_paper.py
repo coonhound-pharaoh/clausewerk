@@ -92,6 +92,13 @@ ABOUT_DATA = "Zorblefax handling: all zorblefax records stay with Vendor."
 ABOUT_NOTHING = "The parties met for lunch and enjoyed it."
 
 
+def test_short_category_keys_match_words_not_substrings():
+    vocabulary = {"ip": frozenset({"ip"})}
+
+    assert paper._classify("Supplier will ship promptly.", vocabulary) is None
+    assert paper._classify("IP ownership is addressed.", vocabulary) == "ip"
+
+
 @pytest.fixture
 def db(schema: str):
     database = Database(schema, min_size=1, max_size=5)

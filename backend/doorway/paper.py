@@ -91,10 +91,14 @@ def _classify(paragraph: str, vocabulary: dict[str, frozenset[str]]) -> str | No
     same document always files the same tickets and a re-ingest is comparable
     with the first.
     """
-    text = paragraph.lower()
+    # Exact word tokens. Substring matching made short category keys explosive:
+    # `ip` matched ordinary words such as `supplier` and `ship`, filing false
+    # immutable tickets. Short keys still work when the document actually says
+    # them as a standalone token.
+    words = frozenset(re.findall(r"[a-z]+", paragraph.lower()))
     best_key, best_hits = None, 0
     for key in sorted(vocabulary):
-        hits = sum(1 for term in vocabulary[key] if term in text)
+        hits = sum(1 for term in vocabulary[key] if term in words)
         if hits > best_hits:
             best_key, best_hits = key, hits
     return best_key
