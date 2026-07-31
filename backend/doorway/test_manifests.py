@@ -135,6 +135,22 @@ def test_structured_manifest_text_is_not_stringified(location, wrong):
         manifest_from(body)
 
 
+@pytest.mark.parametrize("location", [
+    "vendor", "source", "category", "severity", "justification",
+])
+def test_nontext_manifest_scalars_are_not_stringified(location):
+    from doorway.manifests import Malformed, manifest_from
+
+    body = manifest("Data Privacy")
+    if location in ("vendor", "source"):
+        body[location] = 42
+    else:
+        body["risks"][0][location] = 42
+
+    with pytest.raises(Malformed):
+        manifest_from(body)
+
+
 def chain(client: Client) -> list[dict]:
     status, body = client.call("GET", "/api/record")
     assert status == 200, body

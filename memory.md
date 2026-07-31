@@ -4224,3 +4224,12 @@ titles still passed the `str(value).strip()` presence check and reached text/dat
 columns during an irreversible filing. Required signatory fields and optional
 title now require strings before the nonblank check and before database work.
 Five scalar mismatch controls prove clean 400 responses.
+
+## S179 — Manifest text fields require text scalars — 2026-07-31
+
+Container rejection still allowed numeric vendor, source, category, severity,
+and justification values to pass through `str()`. That misreported numeric
+categories as missing library content and could silently coerce numeric
+severities rather than identify malformed model output. All five declared text
+locations now require strings when present, before normalization or engine
+classification. Five numeric controls prove the boundary refusal.

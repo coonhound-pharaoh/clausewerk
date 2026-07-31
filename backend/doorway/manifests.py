@@ -93,6 +93,10 @@ def manifest_from(body: dict) -> Manifest:
         refuse_structured("source", body.get("source"))
     except WrongShape as wrong:
         raise Malformed(str(wrong)) from wrong
+    for field in ("vendor", "source"):
+        if field in body and body[field] is not None \
+                and not isinstance(body[field], str):
+            raise Malformed(f"{field} must be text")
 
     vendor = str(body.get("vendor") or "").strip()
     if not vendor:
@@ -114,6 +118,10 @@ def manifest_from(body: dict) -> Manifest:
                 refuse_structured(f"risk {index} {field}", entry.get(field))
         except WrongShape as wrong:
             raise Malformed(str(wrong)) from wrong
+        for field in ("category", "severity", "justification"):
+            if field in entry and entry[field] is not None \
+                    and not isinstance(entry[field], str):
+                raise Malformed(f"risk {index} {field} must be text")
         category = str(entry.get("category") or "").strip()
         if not category:
             raise Malformed(f"risk {index} names no category")
