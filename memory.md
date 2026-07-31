@@ -4028,3 +4028,12 @@ attributes on one element. A compact tag can force a large attribute map while
 remaining shallow and under every existing ceiling. The streaming tree builder
 now refuses more than 1,024 attributes on an element before adding it to the
 tree. A sub-20 KB attribute-bomb fixture proves the refusal.
+
+## S158 — Advisory model inputs have a character ceiling — 2026-07-31
+
+Both model adapters bounded timeout, concurrency and response bytes but
+JSON-encoded and transmitted input texts without a size limit. Supplier paper
+can contain very large paragraphs, multiplying memory and provider load across
+concurrent judgments. Each adapter now records an absence before encoding or
+network access when the pair exceeds 200,000 characters. Parameterized tests
+prove neither provider path is called for oversized input.

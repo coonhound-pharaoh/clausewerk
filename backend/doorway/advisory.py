@@ -74,6 +74,7 @@ DEFAULT_MODEL = "gpt-4o-mini"
 ENDPOINT = "https://api.openai.com/v1/chat/completions"
 TIMEOUT_SECONDS = 20
 MAX_RESPONSE_BYTES = 1_000_000
+MAX_INPUT_CHARACTERS = 200_000
 
 # How many judgments may be in flight at once. The second belt, and it is not
 # the same belt as the transaction split below.
@@ -165,6 +166,10 @@ def judge_semantic_difference(baseline: str, compared: str) -> Judgment:
             f"no model key is configured: {KEY_VARIABLE} is not set in the "
             "environment, so no judgment was obtained",
             model=model, prompt=prompt, inputs=inputs)
+
+    if len(baseline) + len(compared) > MAX_INPUT_CHARACTERS:
+        return _absent("the texts were too large to send to the model provider",
+                       model=model, prompt=prompt, inputs=inputs)
 
     body = json.dumps({
         "model": model,
@@ -294,6 +299,10 @@ def judge_risk_exposure(baseline: str, compared: str) -> Judgment:
             f"no model key is configured: {KEY_VARIABLE} is not set in the "
             "environment, so no judgment was obtained",
             model=model, prompt=prompt, inputs=inputs)
+
+    if len(baseline) + len(compared) > MAX_INPUT_CHARACTERS:
+        return _absent("the texts were too large to send to the model provider",
+                       model=model, prompt=prompt, inputs=inputs)
 
     body = json.dumps({
         "model": model,

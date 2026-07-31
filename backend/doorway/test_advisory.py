@@ -240,6 +240,26 @@ def test_the_adapter_bounds_the_providers_response(monkeypatch):
     assert oversized.tell() == advisory.MAX_RESPONSE_BYTES + 1
 
 
+@pytest.mark.parametrize("judge", [
+    advisory.judge_semantic_difference,
+    advisory.judge_risk_exposure,
+])
+def test_the_adapters_refuse_oversized_inputs_before_calling_provider(
+    monkeypatch, judge
+):
+    monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
+
+    def provider_must_not_be_called(*args, **kwargs):
+        raise AssertionError("oversized text reached the provider")
+
+    monkeypatch.setattr(
+        advisory.urllib.request, "urlopen", provider_must_not_be_called)
+    judgment = judge("x" * advisory.MAX_INPUT_CHARACTERS, "y")
+
+    assert judgment.outcome == "absent"
+    assert "too large" in judgment.absent_reason
+
+
 def test_the_adapter_refuses_excessively_nested_provider_json(monkeypatch):
     monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
     nested = BytesIO(b"[" * 2_000 + b"]" * 2_000)
