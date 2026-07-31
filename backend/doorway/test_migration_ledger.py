@@ -30,12 +30,41 @@ from concurrent.futures import ThreadPoolExecutor
 import psycopg
 import pytest
 
+from doorway import migrate as migrate_module
 from doorway.migrate import (
     MigrationChanged,
     digest_of,
     migrate,
     migration_files,
 )
+
+
+def test_an_unlock_failure_cannot_mask_the_migration_failure(monkeypatch):
+    class BrokenConnection:
+        def execute(self, statement, _parameters):
+            if "unlock" in statement:
+                raise RuntimeError("unlock failed")
+
+    def migration_failed(_conn, _directory):
+        raise ValueError("migration failed")
+
+    monkeypatch.setattr(migrate_module, "_migrate_locked", migration_failed)
+
+    with pytest.raises(ValueError, match="migration failed"):
+        migrate(BrokenConnection())
+
+
+def test_an_unlock_failure_after_success_is_not_hidden(monkeypatch):
+    class BrokenUnlock:
+        def execute(self, statement, _parameters):
+            if "unlock" in statement:
+                raise RuntimeError("unlock failed")
+
+    monkeypatch.setattr(migrate_module, "_migrate_locked",
+                        lambda _conn, _directory: ["applied.sql"])
+
+    with pytest.raises(RuntimeError, match="unlock failed"):
+        migrate(BrokenUnlock())
 
 
 def _ledger(owner_url: str) -> dict[str, str | None]:

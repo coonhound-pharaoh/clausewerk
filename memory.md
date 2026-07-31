@@ -4466,3 +4466,12 @@ and row-lock work before the indexed fingerprint lookup. Expiry already lives
 in `LIVE_SESSION_SQL`, while issuance retains the growth-control sweep, so the
 lookup-side DELETE was removed. A fixture-free control supplies a read-only
 request object and proves invalid-token resolution performs only the lookup.
+
+## S204 — Migration cleanup cannot mask the primary failure — 2026-07-31
+
+`migrate()` released its session advisory lock in `finally`. If the connection
+failed during migration and failed again during unlock, Python reported only
+the cleanup exception and hid the failure that actually stopped installation.
+Unlock is now best-effort only while another exception is active; after a
+successful migration, an unlock failure still surfaces. Fixture-free controls
+prove both exception paths.

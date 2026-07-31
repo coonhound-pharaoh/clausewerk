@@ -179,9 +179,20 @@ def migrate(conn: psycopg.Connection, directory: Path = MIGRATIONS_DIR) -> list[
     """Serialize ledger inspection and application across service instances."""
     conn.execute("select pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
     try:
-        return _migrate_locked(conn, directory)
-    finally:
+        applied = _migrate_locked(conn, directory)
+    except BaseException:
+        # A broken connection commonly makes both the migration and the cleanup
+        # fail. The migration error is the cause an operator needs; do not mask
+        # it with a second failure from best-effort unlock. PostgreSQL releases
+        # the session lock when that broken connection closes.
+        try:
+            conn.execute("select pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        except Exception:
+            pass
+        raise
+    else:
         conn.execute("select pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+        return applied
 
 
 def _migrate_locked(conn: psycopg.Connection,
