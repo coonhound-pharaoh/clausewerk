@@ -19,6 +19,7 @@ WHAT IS BEING PROVED
 from __future__ import annotations
 
 import json
+import http.client
 import socket
 import threading
 import urllib.error
@@ -1027,6 +1028,34 @@ def test_incomplete_client_cannot_hold_a_server_thread_forever():
     finally:
         server_module.REQUEST_TIMEOUT_SECONDS = held
 
+    assert not app.seen
+
+
+def test_live_server_rejects_an_attacker_controlled_host(monkeypatch):
+    app = Records(Response(200, {"ok": True}))
+    database = type("Database", (), {"close": lambda self: None})()
+    monkeypatch.setattr(server_module, "Database", lambda _url: database)
+    monkeypatch.setattr(server_module, "App", lambda _db: app)
+    server = server_module.serve("stub", port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        port = server.server_address[1]
+        parsed = urllib.parse.urlparse(f"http://127.0.0.1:{port}")
+        connection = http.client.HTTPConnection(parsed.hostname, parsed.port)
+        connection.putrequest("GET", "/api/anything", skip_host=True)
+        connection.putheader("Host", f"attacker.example:{parsed.port}")
+        connection.endheaders()
+        reply = connection.getresponse()
+        try:
+            assert reply.status == 400
+        finally:
+            reply.read()
+            connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
     assert not app.seen
 
 

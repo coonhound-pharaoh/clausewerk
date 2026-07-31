@@ -199,6 +199,25 @@ def test_http_11_requires_one_unambiguous_host():
     assert not ipv6._host_is_ambiguous()
 
 
+def test_a_bound_server_rejects_dns_rebinding_hostnames():
+    class Server:
+        server_address = ("127.0.0.1", 8787)
+
+    hostile = handler_with_headers(("Host", "attacker.example:8787"))
+    hostile.request_version = "HTTP/1.1"
+    hostile.allowed_hostnames = frozenset({"localhost", "127.0.0.1"})
+    hostile.server = Server()
+
+    assert hostile._host_is_ambiguous()
+
+    local = handler_with_headers(("Host", "localhost:8787"))
+    local.request_version = "HTTP/1.1"
+    local.allowed_hostnames = hostile.allowed_hostnames
+    local.server = Server()
+
+    assert not local._host_is_ambiguous()
+
+
 def test_cross_origin_read_access_is_not_granted_by_default(monkeypatch):
     monkeypatch.delenv("CW_ORIGIN", raising=False)
     handler = handler_with_headers()

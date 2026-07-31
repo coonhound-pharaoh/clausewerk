@@ -4322,3 +4322,14 @@ One tick now attempts at most four external deliveries. Reachable people beyond
 that ceiling remain unclaimed and unsent for the next tick, and the response
 counts them as `deferred_by_delivery_limit`. A fixture-free six-person control
 proves four channel calls and two explicit deferrals.
+
+## S189 — The loopback server accepts only its own Host names — 2026-07-31
+
+The HTTP handler validated Host syntax but accepted every hostname. Because the
+service binds to loopback and development sign-in names an account without an
+external identity provider, an attacker-controlled hostname rebound to
+127.0.0.1 could make an attacker page same-origin with the doorway and bypass
+CORS. A live server now accepts only `localhost` and `127.0.0.1`, and requires
+any supplied port to equal its actual listening port. An isolated regression
+proves an attacker hostname is rejected while the local authority remains
+valid.

@@ -186,6 +186,7 @@ class Handler(BaseHTTPRequestHandler):
     # Set by serve() before the server starts.
     app: App = None  # type: ignore[assignment]
     static_root: Path | None = None
+    allowed_hostnames: frozenset[str] | None = None
 
     server_version = "clausewerk"
     sys_version = ""
@@ -372,8 +373,7 @@ class Handler(BaseHTTPRequestHandler):
             return len(values) != 1 or invalid
         return invalid
 
-    @staticmethod
-    def _valid_host_authority(value: str) -> bool:
+    def _valid_host_authority(self, value: str) -> bool:
         if (not value or value != value.strip() or "," in value
                 or any(ord(char) < 33 or ord(char) > 126 for char in value)):
             return False
@@ -382,7 +382,7 @@ class Handler(BaseHTTPRequestHandler):
             _ = parsed.port
         except ValueError:
             return False
-        return bool(
+        syntactically_valid = bool(
             parsed.netloc == value
             and parsed.hostname
             and parsed.username is None
@@ -392,6 +392,14 @@ class Handler(BaseHTTPRequestHandler):
             and not parsed.query
             and not parsed.fragment
         )
+        if not syntactically_valid:
+            return False
+        if self.allowed_hostnames is None:
+            return True
+        if parsed.hostname.casefold() not in self.allowed_hostnames:
+            return False
+        listening_port = self.server.server_address[1]
+        return parsed.port is None or parsed.port == listening_port
 
     def _content_length(self) -> tuple[int | None, Response | None]:
         """Return one unambiguous request length.
@@ -802,6 +810,10 @@ def serve(
 
         BoundHandler.app = app
         BoundHandler.static_root = static_root
+        # CORS cannot stop DNS rebinding: once an attacker-controlled hostname
+        # resolves to loopback, their page and this service appear same-origin
+        # to the browser. Accept only the names this loopback server owns.
+        BoundHandler.allowed_hostnames = frozenset({"localhost", "127.0.0.1"})
 
         server = _bound_inflight_connections(
             ThreadingHTTPServer(("127.0.0.1", port), BoundHandler))
