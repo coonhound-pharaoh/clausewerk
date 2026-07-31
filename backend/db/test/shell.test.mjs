@@ -278,6 +278,22 @@ await test('an unreadable 401 still expires the browser session', async () => {
   assert(result.expired === true, 'an unreadable 401 did not expire the session');
 });
 
+await test('a successful rows response must actually carry an array', async () => {
+  const context = {
+    fetch: async () => ({
+      ok: true, status: 200,
+      json: async () => ({ rows: { disguised: 'not a list' } }),
+    }),
+  };
+  const source = read('api.jsx').replace('const API =', 'globalThis.API =');
+  runInNewContext(source, context);
+
+  const result = await context.API.me();
+
+  assert(result.ok === false, 'a non-array rows field was accepted');
+  assert(result.invalidResponse === true, 'the wrong response shape was not identified');
+});
+
 await test('no pane holds an array of example rows', async () => {
   // The shape canned data takes: a literal array of objects sitting in the
   // module, ready to render. Real rows arrive from usePane and are never

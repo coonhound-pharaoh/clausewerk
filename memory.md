@@ -4521,3 +4521,12 @@ could therefore render as “nothing is waiting” instead of “could not load.
 Successful record and sign-in responses now require a readable JSON object;
 otherwise they return a classified invalid-response failure while preserving
 the HTTP status. The real adapter is tested with a 200 whose JSON parser throws.
+
+## S210 — Browser row responses require an array — 2026-07-31
+
+A successful readable JSON object was accepted even when its `rows` member was
+an object or string. Shared panes then called array methods and crashed instead
+of rendering the service response as invalid. The adapter now requires an own
+`rows` property, when present, to be an array; other successful record-shaped
+responses remain valid. The real adapter is tested with an object disguised as
+rows and returns the classified invalid-response path.

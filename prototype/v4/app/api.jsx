@@ -55,6 +55,8 @@ const API = (() => {
 
     if (res.ok && (payload === null || typeof payload !== 'object'
         || Array.isArray(payload))) return unreadable(res.status);
+    if (res.ok && Object.prototype.hasOwnProperty.call(payload, 'rows')
+        && !Array.isArray(payload.rows)) return unreadable(res.status);
 
     if (res.ok) return { ok: true, rows: payload?.rows ?? [], body: payload };
 
