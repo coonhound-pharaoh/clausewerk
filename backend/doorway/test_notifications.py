@@ -37,6 +37,24 @@ LEAH = "leah@clausewerk"
 TICKET_TEXT = "Supplier shall notify Customer within seventy-two (72) hours."
 
 
+@pytest.mark.parametrize("configured", [
+    "smtp://[broken",
+    "smtp://mail.example:not-a-port",
+    "https://mail.example:443",
+    "smtp://user:secret@mail.example:25",
+    "smtp://mail.example:25/unexpected/path",
+])
+def test_invalid_smtp_configuration_becomes_a_channel_failure(
+    monkeypatch, configured
+):
+    monkeypatch.setenv("CW_SMTP_URL", configured)
+
+    channel = notifications.channel_from_env()
+
+    with pytest.raises(RuntimeError, match="configured email channel"):
+        channel("person@example.com", "subject", "body")
+
+
 @pytest.fixture
 def db(schema: str):
     database = Database(schema, min_size=1, max_size=5)

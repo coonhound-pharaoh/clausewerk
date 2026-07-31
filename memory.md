@@ -3834,3 +3834,14 @@ waiting; when four calls are already active, additional judgments immediately
 return an honest `absent` outcome naming provider capacity. The 12-worker test
 now proves exactly four calls enter the provider and all eight excess calls
 return the capacity absence without entering it.
+
+## S138 — Invalid SMTP configuration does not crash startup — 2026-07-31
+
+`channel_from_env` parsed `CW_SMTP_URL` during app construction. Invalid IPv6
+or port text raised `ValueError` and stopped the entire service; unsupported
+schemes were silently treated as plaintext SMTP. The factory now accepts only
+an `smtp://host:port` origin without credentials, query, fragment or meaningful
+path. Invalid configuration returns a channel that fails when used, allowing
+the notification tick to record the failure through its existing outbox path.
+Five focused cases cover malformed URLs, protocol confusion and embedded
+credentials.

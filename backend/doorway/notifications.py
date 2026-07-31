@@ -77,8 +77,23 @@ def channel_from_env() -> Channel:
             raise RuntimeError("no email channel is configured (CW_SMTP_URL is unset)")
         return unconfigured
 
-    parsed = urlparse(url)
-    host, port = parsed.hostname or "localhost", parsed.port or 25
+    def unavailable(reason: str) -> Channel:
+        def fail(address: str, subject: str, body: str) -> None:
+            raise RuntimeError(reason)
+        return fail
+
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname
+        port = parsed.port or 25
+    except ValueError:
+        return unavailable("the configured email channel URL is malformed")
+    if (parsed.scheme != "smtp" or not host
+            or parsed.username is not None or parsed.password is not None
+            or parsed.path not in ("", "/") or parsed.params
+            or parsed.query or parsed.fragment):
+        return unavailable(
+            "the configured email channel must be an smtp://host:port URL")
     sender = os.environ.get("CW_SMTP_FROM", "clausewerk@localhost")
 
     def send(address: str, subject: str, body: str) -> None:
