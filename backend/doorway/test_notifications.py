@@ -95,6 +95,53 @@ def recording_channel():
     return sends, send
 
 
+def test_one_tick_bounds_external_delivery_attempts():
+    total = notifications.MAX_DELIVERY_ATTEMPTS_PER_TICK + 2
+    people = [{"person": f"person-{index}@example.com", "role": "requester"}
+              for index in range(total)]
+
+    class Request:
+        def rows(self, sql, values=()):
+            if "assert_may_run_notifications" in sql:
+                return [{}]
+            if "from cw.effective_role" in sql:
+                return people
+            if "from cw.waiting_for" in sql:
+                return [{"kind": "review_ticket", "subject_ref": "1",
+                         "due_on": None, "since": None}]
+            if "from cw.notification_outbox" in sql:
+                return []
+            if "from cw.notification_address" in sql:
+                return [{"address": values[0]}]
+            if "insert into cw.notification_delivery_claim" in sql:
+                return [{"claim_token": values[2]}]
+            raise AssertionError(sql)
+
+        def write_one(self, _sql, _values):
+            pass
+
+    class Context:
+        def __enter__(self):
+            return Request()
+
+        def __exit__(self, *_args):
+            return False
+
+    class StubDatabase:
+        def as_person(self, *_args):
+            return Context()
+
+    sends, channel = recording_channel()
+    answered = notifications.tick(
+        StubDatabase(), Caller(ADMIN, "administrator"), channel,
+        today=date(2026, 7, 31))
+
+    assert answered.status == 200
+    assert len(sends) == notifications.MAX_DELIVERY_ATTEMPTS_PER_TICK
+    assert answered.body["sent"] == notifications.MAX_DELIVERY_ATTEMPTS_PER_TICK
+    assert answered.body["deferred_by_delivery_limit"] == 2
+
+
 def outbox(db: Database) -> list[dict]:
     with db.as_person(ADMIN, "administrator") as request:
         return request.rows(

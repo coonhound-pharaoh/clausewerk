@@ -4312,3 +4312,13 @@ calls per request. Every remaining item still receives an append-only `absent`
 assessment whose reason says the request limit prevented a model call. A
 fixture-free regression supplies six eligible analyses, proves only four calls
 reach the provider seam, and proves all six outcomes remain on the record.
+
+## S188 — One notification tick attempts at most four deliveries — 2026-07-31
+
+The notification tick bounded each SMTP connection to 30 seconds but placed no
+bound on how many people one tick would contact sequentially. A large directory
+or slow mail server could therefore hold one request for 30 seconds per person.
+One tick now attempts at most four external deliveries. Reachable people beyond
+that ceiling remain unclaimed and unsent for the next tick, and the response
+counts them as `deferred_by_delivery_limit`. A fixture-free six-person control
+proves four channel calls and two explicit deferrals.

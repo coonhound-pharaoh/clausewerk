@@ -62,6 +62,11 @@ from doorway.refusals import classify
 # (address, subject, body) -> None; raises on failure. The whole seam.
 Channel = Callable[[str, str, str], None]
 
+# SMTP has a 30-second timeout per person. Without an invocation ceiling, one
+# Administrator tick can spend that timeout once for every account in the
+# database. Deferred people remain unsent and therefore eligible next tick.
+MAX_DELIVERY_ATTEMPTS_PER_TICK = 4
+
 
 def channel_from_env() -> Channel:
     """The email channel the deployment configured, or an honest refusal.
@@ -146,7 +151,8 @@ def tick(db: Database, caller: Caller, channel: Channel,
         refused = classify(error)
         return Answered(refused.status, refused.as_body())
 
-    digested = sent = failed = already = in_progress = unreachable = 0
+    digested = sent = failed = already = in_progress = unreachable = deferred = 0
+    delivery_attempts = 0
 
     for person in people:
         # Read everything this person's attempt needs, then LEAVE the
@@ -180,6 +186,9 @@ def tick(db: Database, caller: Caller, channel: Channel,
             # the one fact.
             unreachable += 1
             continue
+        if delivery_attempts >= MAX_DELIVERY_ATTEMPTS_PER_TICK:
+            deferred += 1
+            continue
 
         # Claim before the outside call. The upsert may replace only an expired
         # lease, and RETURNING is empty for a live competing claim. No database
@@ -200,6 +209,7 @@ def tick(db: Database, caller: Caller, channel: Channel,
             in_progress += 1
             continue
 
+        delivery_attempts += 1
         subject, body, refs = _digest(waiting)
         outcome, failure = "sent", None
         try:
@@ -237,4 +247,5 @@ def tick(db: Database, caller: Caller, channel: Channel,
         "already_sent_today": already,
         "delivery_in_progress": in_progress,
         "unreachable": unreachable,
+        "deferred_by_delivery_limit": deferred,
     })
