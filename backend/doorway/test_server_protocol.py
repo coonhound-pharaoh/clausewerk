@@ -268,6 +268,21 @@ def test_request_targets_cannot_hide_path_separators_from_routing():
         assert parsed is None, ambiguous
         assert refused is not None and refused.status == 400, ambiguous
 
+
+def test_request_targets_cannot_carry_dot_segments_between_hops():
+    handler = handler_with_headers()
+
+    for ambiguous in (
+        "/api/../sign-in",
+        "/api/./sign-in",
+        "/api/%2e%2e/sign-in",
+        "/api/%2E/sign-in",
+        "/api/.%2e/sign-in",
+    ):
+        parsed, refused = handler._parse_target(ambiguous)
+        assert parsed is None, ambiguous
+        assert refused is not None and refused.status == 400, ambiguous
+
     parsed, refused = handler._parse_target("/api/me?run=RUN-1")
     assert refused is None
     assert parsed is not None and parsed.path == "/api/me"

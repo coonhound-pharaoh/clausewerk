@@ -3983,3 +3983,12 @@ doorway chose API versus static handling on the encoded path; Windows also
 treats a decoded backslash as a filesystem separator. Target parsing now
 rejects all three separator-confusion forms before dispatch. Fast protocol
 tests cover raw and case-varied encoded spellings.
+
+## S153 — Request targets cannot carry dot segments — 2026-07-31
+
+The static layer contained path traversal after resolution, but target parsing
+still accepted raw and percent-encoded `.` or `..` segments. A proxy may remove
+those segments before choosing API routing while the doorway routed the
+unnormalized form, creating cross-hop endpoint ambiguity even without escaping
+the static root. Origin-form parsing now rejects raw, encoded and mixed dot
+segments before dispatch. Fast protocol tests cover all three forms.
