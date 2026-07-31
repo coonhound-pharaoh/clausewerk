@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import pytest
 
+from doorway.app import App
+
 from doorway.db import Database
 from doorway.identity import (
     Caller,
@@ -234,3 +236,9 @@ def test_no_token_is_no_session(people, db: Database):
     for token in (None, "", "made-up-token"):
         with pytest.raises(NoSession):
             caller_for(db, sessions, token)
+@pytest.mark.parametrize("wrong", [{"person": "rita"}, ["rita"], True, 42])
+def test_structured_or_nontext_identity_is_a_boundary_error(wrong):
+    answered = App(object()).sign_in(wrong)
+
+    assert answered.status == 400
+

@@ -125,10 +125,10 @@ class App:
     # taken from the request: the person names themselves, and the database says
     # what that person may do.
     def sign_in(self, person: str | None) -> Response:
-        if not person or not str(person).strip():
+        if not isinstance(person, str) or not person.strip():
             return Response(400, {"error": "name yourself"})
 
-        who = identity_of(self._db, str(person).strip())
+        who = identity_of(self._db, person.strip())
         if who is None:
             return Response(403, {
                 "error": "refused",

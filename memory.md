@@ -4198,3 +4198,12 @@ structured severity could be silently coerced and recorded. Those declared text
 fields now use the shared plain-value guard before normalization and engine
 classification. Five synthetic shapes prove malformed structure stays a 400
 boundary error rather than becoming content.
+
+## S176 — Sign-in identity must be text — 2026-07-31
+
+`App.sign_in` stringified every truthy `person` value before lookup. JSON
+objects, arrays, numbers, and booleans therefore became made-up account names
+and answered with a misleading inactive-account 403 after database work instead
+of a malformed-request 400. Sign-in now requires a nonblank string before any
+identity query. Four direct boundary cases run with no database and prove the
+early refusal.
