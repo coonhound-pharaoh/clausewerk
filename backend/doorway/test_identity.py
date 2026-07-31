@@ -19,7 +19,7 @@ from doorway.identity import (
     session_length,
     sign_in,
 )
-from doorway.sessions import Sessions
+from doorway.sessions import EIGHT_HOURS, Sessions, parse_duration
 
 
 @pytest.fixture
@@ -209,6 +209,16 @@ def test_a_nonsense_session_length_falls_back_rather_than_to_zero(people, db: Da
             "where key = 'session_length'")
 
     assert session_length(db) == 8 * 3600.0
+
+
+@pytest.mark.parametrize("configured", ["0s", "9" * 400 + "d"])
+def test_a_non_working_session_length_falls_back(configured):
+    """A syntactically shaped setting must still produce a usable duration.
+
+    Zero would issue an already-expired session. An unrepresentably large
+    number used to raise OverflowError and turn every sign-in into a 500.
+    """
+    assert parse_duration(configured) == EIGHT_HOURS
 
 
 def test_signing_out_ends_the_session(people, db: Database):

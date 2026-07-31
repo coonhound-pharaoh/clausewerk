@@ -3727,3 +3727,12 @@ generic 500 before sending download headers otherwise. A socket-level,
 parameterized test covers quotes, CRLF, backslash and non-ASCII input. This is
 defence in depth at the boundary, not filename rewriting: the producer's value
 is either carried unchanged or refused.
+
+## S127 — Broken session durations fall back safely — 2026-07-31
+
+`parse_duration` treated `0s` as valid even though its stated failure behavior
+is to preserve a working sign-in; the issued session was expired immediately.
+A duration with hundreds of digits also matched the syntax and then raised
+`OverflowError`, turning sign-in into a 500. Non-positive and non-representable
+durations now use the existing eight-hour fallback. No new maximum session
+policy was invented. Direct regression cases cover both failure shapes.

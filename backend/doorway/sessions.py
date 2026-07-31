@@ -124,7 +124,11 @@ def parse_duration(text: str | None, fallback: float = EIGHT_HOURS) -> float:
     match = _DURATION.match(text or "")
     if not match:
         return fallback
-    return int(match.group(1)) * _UNIT_SECONDS[match.group(2)]
+    try:
+        seconds = int(match.group(1)) * _UNIT_SECONDS[match.group(2)]
+    except OverflowError:
+        return fallback
+    return seconds if seconds > 0 else fallback
 
 
 @dataclass(frozen=True)
