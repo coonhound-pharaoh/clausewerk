@@ -211,13 +211,18 @@ obligation sources, and its non-obligation sources can land first.*
 - **Evidence:** Python-side tests: tick twice, one send; missed day recovered by next tick;
   provider failure recorded not raised; the digest for a past day derivable after the fact.
 
-### OB-11 — The in-app inbox
+### OB-11 — The in-app inbox — **BUILT 2026-08-02**
 
 *Serves OA §4.4. Prereq: OB-09. Small, late, optional until the shell work resumes.*
 
 Bounded outline: a workspace read over the same outbox and derivation — one source, two
 renderings, so screen and email cannot disagree. Shell-target mutation rows where the empty-state
 and no-canned-data rules apply.
+
+*Delivered as part of the `obligations` pane ([](prototype/v4/app/obligations.jsx)): the
+waiting-on-you panel renders `GET /waiting` (the digest's own derivation) and the inbox renders
+the outbox record — what was actually sent, never the intention. Shared tab, requester and Legal
+admin; the obligation table's own policy does the scoping.*
 
 ---
 
@@ -258,10 +263,16 @@ out of the schedulable set so the rest of the capability does not look blocked w
 When the system has a public URL: DocuSign Connect events through `verify_event`
 (HMAC-authenticated), polling retained as the fallback. Nothing else changes shape.
 
-### OB-15 — The lifecycle surfaces
+### OB-15 — The lifecycle surfaces — **BUILT 2026-08-02**
 
 *Serves OA §8. Prereq: OB-03, OB-08; envelope strip needs OB-12. Shell work — sequenced with,
 not inside, the paused WP-U set.*
+
+*Delivered in the same `obligations` pane: the calendar (grouped by due month, with an honest
+"no date yet" bucket for termination-anchored duties — visible, never invented), the
+per-agreement panel with the source clause adjacent and entitlements as prominent as duties,
+the envelope strip over the new `GET /envelopes` read, and the coverage-gap line. A shell test
+pins the structure and a mutation row breaks the unanchored bucket.*
 
 Bounded outline: the Calendar (obligations and entitlements over time, by owner), the Agreement
 view's obligations panel (source clause always adjacent; entitlements as prominent as duties;

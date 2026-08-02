@@ -1,8 +1,11 @@
 # UI & Administration Architecture (the UIA)
 
-*Proposed 2026-07-26. **Status: accepted 2026-07-26, being built** — the four
-decisions in §6 are settled; `U5` amended this document and §4 has been trued to
-the amendment. Companion mockup:
+*Proposed 2026-07-26. **Status: accepted 2026-07-26; BUILT** — the six
+workspaces, the role-scoped tab sets, and the acting halves (D-5, 2026-08-02)
+are all implemented in `prototype/v4` against the Python doorway. §3's tab
+sets were amended 2026-08-02: an `obligations` tab (OB-11/OB-15) for the
+requester and the Legal admin. The four decisions in §6 are settled; `U5`
+amended this document and §4 has been trued to the amendment. Companion mockup:
 [`prototype/v4-concept/Clausewerk V4 Concept.html`](prototype/v4-concept/Clausewerk%20V4%20Concept.html)
 — open it in a browser, no build step, and switch roles in the top-right corner.*
 
@@ -54,9 +57,9 @@ door; the role on your connection decides which one you get.
 
 | Role | Workspace | What it opens on | Its tabs |
 |---|---|---|---|
-| **Requester** | *My deals* | Their engagements only, each with its pipeline stage, plus what's waiting on them vs. on others | my deals · intake · negotiate · vendors · my record |
+| **Requester** | *My deals* | Their engagements only, each with its pipeline stage, plus what's waiting on them vs. on others | my deals · intake · negotiate · obligations · vendors · my record |
 | **Legal reviewer** | *Review desk* | Everything waiting on Legal judgement, oldest first: tickets, override requests, concession approvals | review desk · tickets · routing · approvals · negotiations · holds |
-| **Legal admin** | *The library* | The vault (today's Ledger), plus ladders & rules, owner decisions, holds & retention — and everything a reviewer sees | the library · ladders & rules · governance · holds & retention · review desk · routing · reporting |
+| **Legal admin** | *The library* | The vault (today's Ledger), plus ladders & rules, owner decisions, holds & retention — and everything a reviewer sees | the library · ladders & rules · governance · holds & retention · obligations · review desk · routing · reporting |
 | **Auditor** | *The record* | The full chain, verified status, quality and origin-mix measures, and the history of who was granted what | the record · quality · origin mix · access history · reporting |
 | **Viewer** | *Reading room* | Just the agreements shared with them — built for the socialisation audience ADR-0008 created this role for | reading room |
 | **Administrator** | *Administration* | People & access — see §4 | people & access · settings · system health · watchers & notices |

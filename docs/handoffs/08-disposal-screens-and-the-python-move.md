@@ -153,18 +153,24 @@ work and are tested; no screen or endpoint calls them.
 as its reading surfaces plus a named follow-on?
 [`docs/open-questions.md`](../open-questions.md) §9b.
 
-### `WP-U15` — the acceptance sweep. **Not started, and it has real work in it.**
+### `WP-U15` — the acceptance sweep. **RUN 2026-08-02; both named gaps closed.**
 
-Two named gaps it must actually close rather than re-run:
+1. **The reading room's per-clause render has been seen on screen**, behind a
+   real run. `doorway/acceptance_walkthrough.py` performs every act through
+   the doorway over HTTP as the real people — accounts and countersign,
+   category, ticket → claim → verify (the minting door), deal, run (snapshot,
+   ruleset, decisions recorded), execution filed, share — and the viewer's
+   browser then renders the clause with its wording, approver and origin.
+   Nothing was faked; the script is kept so the walk is re-runnable.
+2. **Execution is filed through the act now** — `POST /agreements/execute`
+   exists and the walkthrough uses it as Legal; the owner-inserted fixture
+   shape is retired.
 
-1. **The reading room's per-clause render has never been seen on screen.** The
-   share list is walked and the scoping proved, but `cw.reading_room_clause`
-   joins through `cw.run_decision`, so it needs a real run behind the agreement —
-   manifest, snapshot, ruleset, resolution, decisions. **Do not fake one**; a
-   seeded system that looks busy is the thing the seeding principle rejects.
-2. **The executed agreement in the demo fixture was inserted as the owner**,
-   because there is no execution endpoint — that is the document service and it
-   is not built.
+   The sweep also found and closed two things: the reading-room SHARE had no
+   doorway act (the 07-27 walkthrough created its share below the doorway) —
+   `POST /shares` and `POST /shares/revoke` exist now; and the ladders pane's
+   empty-state early return was hiding the rules and promotion sections —
+   trap 5.2's shape, caught in the browser.
 
 ### `WP-U14` — **closed 2026-07-27.** Both read-only workspaces built.
 

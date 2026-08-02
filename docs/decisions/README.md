@@ -31,6 +31,7 @@ That is the section to read.
 | [0009](ADR-0009-concession-is-not-supersession.md) | Concession, promotion, and supersession are three separate acts | Three concepts where operators saw one; promotion has no natural trigger |
 | [0010](ADR-0010-ai-drafted-clause-candidates.md) | AI may draft candidate clauses; only a human publishes them | The simplest form of the headline claim is gone; review quality becomes the binding control |
 | [0011](ADR-0011-the-administrator-is-a-steward.md) *(amends 0008)* | A sixth role runs the machine: reads content, changes none of it, and grants Legal roles only with a countersign | One more role to administer; the Administrator can read every deal, and reads are not recorded |
+| [0012](ADR-0012-the-doorway-runs-on-standard-postgresql-in-python.md) | The service layer is Python on standard PostgreSQL; the database keeps every permission decision | Two languages in the backend; PGlite tests cannot exercise real roles, so a second suite must |
 
 ## Format
 

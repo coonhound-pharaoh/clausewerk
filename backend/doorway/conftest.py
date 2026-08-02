@@ -80,9 +80,19 @@ OWNER_URL = os.environ.get(
 # the owner for the same reason the serving path does — a test that connects as
 # the owner measures the owner's privileges, not the system's, and that is
 # precisely how finding D1 survived a full suite once already.
+# The HOST comes from the owner URL rather than being written out again.
+# It was the literal `localhost` here, and on a Windows host talking to a
+# dockerised PostgreSQL that name stalls ~2 minutes per connection (::1 is
+# tried first against the Docker proxy) — every pool hit its 30-second
+# timeout and the whole suite crawled while looking merely slow. Pointing
+# CW_TEST_OWNER_URL at 127.0.0.1 must carry the app connection with it, or
+# the fix fixes half the suite. memory.md S223.
+_owner_parts = urlsplit(OWNER_URL)
 APP_URL = os.environ.get(
     "CW_DATABASE_URL",
-    f"postgresql://cw_app:clausewerk-dev@localhost:5432/{TEST_DATABASE}")
+    f"postgresql://cw_app:clausewerk-dev@"
+    f"{_owner_parts.hostname or 'localhost'}:{_owner_parts.port or 5432}"
+    f"/{TEST_DATABASE}")
 
 
 def _ensure_database_exists() -> None:

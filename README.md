@@ -71,23 +71,34 @@ in a browser — React, Babel, Tailwind, and JSZip load from CDNs, so it needs n
 
 ## Status
 
-**Prototype built. Backend deterministic core built and tested. No service layer, no user
-interface on the backend, nothing deployed.**
+**Built and tested end to end on a developer's machine: database, engine, service layer (the
+doorway), and the six role-scoped workspaces. Not deployed; no identity provider wired; the AI
+front half is designed but not built.** *(Status trued 2026-08-02 — the paragraph below replaces
+one that had lagged the build by fifty migrations.)*
 
 What exists and is tested:
 
-- **The database** — twelve migrations covering the clause library, ladders and concessions,
-  conflict rules, the run store, executed agreements, the audit chain, the Review queue, clause
-  origin, governance, the negotiation record, and departures from a master. Eleven test suites.
+- **The database** — sixty-two migrations (as of 2026-08-02) covering the clause library, ladders
+  and concessions, conflict rules, the run store, executed agreements, the audit chain, the Review
+  queue, clause origin, governance, the negotiation record, departures from a master, obligations
+  and their notifications, the signature-envelope record, database-backed sessions, disposal
+  (redact/purge), and the governed Legal-admin acts. Thirty-seven SQL test suites.
 - **The Python engine** — resolution, validation, snapshot fingerprinting, run storage and rebuild,
-  document assembly, and redline parsing. 161 tests.
+  document assembly, and redline parsing.
+- **The doorway** — the Python service layer: 63 reads, 55 writes, sign-in/sign-out, and the
+  special acts (runs, execution filing, paper ingest, notifications), each deferring every
+  permission to the database. Serves the v4 shell statically.
+- **The v4 shell** — one workspace per role, every pane reading a real endpoint or saying plainly
+  it is not built.
 - **Mutation testing on both stacks.** Every protection is deliberately broken in turn and must be
   caught **by the test that names it** — a break caught by some other test is reported as a failure,
   not a pass, because it means the named test was never exercised.
 
-What does not exist: any service or API layer, backend user interface, identity integration,
-e-signature integration, SharePoint sync, vector index, or deployment of any kind. Obligations —
-the heart of lifecycle management — are architected but not built.
+What does not exist: identity-provider integration (sign-in names a person and trusts it), the
+DocuSign adapter (the envelope record exists; the adapter waits on credentials), a scheduler
+(nothing runs on its own), the AI front half (architecture written 2026-08-02 —
+[`AI-FRONT-HALF-ARCHITECTURE-2026-08-02.md`](AI-FRONT-HALF-ARCHITECTURE-2026-08-02.md)), a vector
+index, or deployment of any kind.
 
 Two things to know before building on it:
 
@@ -107,10 +118,10 @@ Two things to know before building on it:
 cd backend && npm run verify
 ```
 
-That runs everything: eleven database suites, 161 engine tests, and both mutation harnesses — 121
-deliberate breakages, each of which must be caught by the test that names it. It takes about five
-minutes, because every mutation applies a broken copy of the schema and re-runs a whole suite
-against it. The mutations run in parallel; they were sequential once and took over ten.
+That runs everything: the SQL suites, the engine tests, the doorway tests (these need PostgreSQL
+running — `docker compose up -d` from `backend/`) and both mutation harnesses — several hundred
+deliberate breakages, each of which must be caught by the test that names it. The doorway half
+takes the longest, around fifteen minutes; do not run two doorway suites at once.
 
 For a fast loop while working, skip the mutation harnesses:
 

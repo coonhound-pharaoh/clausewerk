@@ -54,6 +54,10 @@ const PANES = {
   'negotiate': () => <NotBuiltYet what="The negotiate inbox is not built." lands="a later package" />,
   'vendors':   () => <FrictionPane />,
   'my-record': (me) => <MyRecordPane me={me} />,
+  // OB-11/OB-15: one pane, whoever holds the tab — the scoping is the
+  // obligation table's own policy, so a requester sees their book and Legal
+  // admin the whole one, from the same render.
+  'obligations': () => <ObligationsPane />,
 
   // Legal reviewer
   'review-desk':  (me) => <ReviewDeskPane me={me} />,
@@ -66,8 +70,8 @@ const PANES = {
   // Legal admin
   'library':    () => <LibraryPane />,
   'ladders':    () => <LaddersPane />,
-  'governance': () => <NotBuiltYet what="Owner decisions are not editable here yet." lands="WP-U13" />,
-  'retention':  () => <NotBuiltYet what="Holds and retention are not built." lands="WP-U13" />,
+  'governance': () => <GovernancePane />,
+  'retention':  () => <RetentionPane />,
 
   // Legal admin and auditor share this one; the grant behind its endpoints is
   // the control, and a refusal renders as the database's sentence.

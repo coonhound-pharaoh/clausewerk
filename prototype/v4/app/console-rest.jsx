@@ -145,8 +145,10 @@ function SettingsPane({ me }) {
 function HealthPane() {
   const tiles = usePane(() => API.health());
   const due   = usePane(() => API.retentionDue());
+  const pipeline = usePane(() => API.redactionState());
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(null);
+  const [disposing, setDisposing] = useState(null); // { id, verb }
 
   if (tiles.status === 'loading') return <Loading />;
   if (tiles.status === 'failed') return <LoadFailed reason={tiles.reason} />;
@@ -218,15 +220,13 @@ function HealthPane() {
 
       {/* ── Retention: visible here, and yours to action ───────────────────
           Owner decision U9 (0022) moved destruction to the Administrator and
-          REVOKED Legal admin's right rather than sharing it. This copy said
-          "Legal admin's recorded act" until 2026-07-27 — telling the one
-          person who can act that they cannot, which is exactly the mistake
-          0022 was written to stop. No screen performs the act yet; what is
-          corrected here is who it belongs to. */}
+          REVOKED Legal admin's right rather than sharing it. The act itself
+          is offered below (D-5, 2026-08-02), behind the strongest
+          confirmation idiom in the product: the record's own id, typed. */}
       <div className="mt-8">
         <PanelHead
           title="Retention coming due"
-          sub="You can see what is due. Destroying it is your own recorded act — no screen offers it yet."
+          sub="What is due, and the destroy act itself — never automatic, always yours, always recorded."
         />
         {due.status === 'failed' ? <LoadFailed reason={due.reason} /> : (
           <WaitingList
@@ -262,6 +262,22 @@ function HealthPane() {
                       if (!n.ok) setError(n.reason);
                     }}
                   >record a reminder</button>
+                  {r.under_hold ? (
+                    /* Blocked BECAUSE HELD, and rendered that way — not a
+                       greyed destroy that says "you could, but not now". The
+                       hold is somebody else's decision to release. */
+                    <span className="caption" data-testid={`blocked-${r.agreement_id}`}>
+                      destroy is blocked while held — Legal knows the matter
+                    </span>
+                  ) : (
+                    <button
+                      className="btn btn-sm"
+                      data-testid={`destroy-${r.agreement_id}`}
+                      onClick={() => setDisposing(
+                        disposing?.id === r.agreement_id && disposing?.verb === 'destroy'
+                          ? null : { id: r.agreement_id, verb: 'destroy' })}
+                    >destroy…</button>
+                  )}
                 </>
               ),
             }))}
@@ -269,13 +285,241 @@ function HealthPane() {
                           sub="When something is, it appears here for you to act on." />}
           />
         )}
+        {disposing?.verb === 'destroy' && (
+          <IrreversibleConfirm
+            verb="destroy" agreementId={disposing.id}
+            description={`Destroying ${disposing.id} is the retention decision, taken and
+              recorded — the first of the two disposal acts. It is refused under any
+              hold and before the retention date, and it cannot be undone.`}
+            action={() => API.destroyRetention({ agreement_id: disposing.id })}
+            onDone={(did) => { setDisposing(null); if (did) { due.reload(); pipeline.reload(); } }} />
+        )}
         <div className="caption mt-2">
           <strong>The reminder records that this was seen.</strong> It changes no
           retention state and destroys nothing — nothing here destroys anything
-          on a timer, by decision, so this button could not become a delete even
-          if somebody rewired it.
+          on a timer, by decision. The destroy act is separate, confirmed with
+          the record's own id, and lands on the chain under your name.
         </div>
       </div>
+
+      <DisposalPipeline pipeline={pipeline} due={due} disposing={disposing}
+                        setDisposing={setDisposing} />
+      <DelegatesDesk />
+    </div>
+  );
+}
+
+// ── The strongest confirmation idiom in the product ───────────────────────
+// Typing the record's own id is deliberate friction proportionate to an
+// irreversible act (WP-U13's anti-pattern: destruction must never be cheaper
+// than a clause retirement). The refusal, if one comes, is the database's
+// sentence — including the matter names on a hold, which is where U13 says
+// they belong.
+function IrreversibleConfirm({ verb, agreementId, description, action, onDone }) {
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  return (
+    <div className="panel p-3 mt-3" data-testid={`confirm-${verb}`}>
+      <div className="section-label">{verb} {agreementId}</div>
+      <div className="caption mt-1" style={{ whiteSpace: 'pre-wrap' }}>{description}</div>
+      <div className="flex gap-2 mt-3 items-end">
+        <div>
+          <label className="section-label">Type the id to confirm</label>
+          <input className="mt-1.5 font-mono" value={typed} placeholder={agreementId}
+                 onChange={(e) => setTyped(e.target.value)}
+                 data-testid={`type-to-${verb}`} />
+        </div>
+        <button className="btn" onClick={() => onDone(false)}>cancel</button>
+        <button className="btn btn-primary"
+                disabled={busy || typed.trim() !== agreementId}
+                data-testid={`really-${verb}`}
+                onClick={async () => {
+                  setBusy(true); setError(null);
+                  const r = await action();
+                  setBusy(false);
+                  if (!r.ok) { setError(r.reason); return; }
+                  onDone(true);
+                }}>
+          {busy ? `${verb}ing…` : `✓ ${verb}, permanently`}
+        </button>
+      </div>
+      {error && (
+        <div className="panel p-3 mt-3" data-testid="disposal-error">
+          <div className="section-label">refused</div>
+          <div className="caption mt-1">{error}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── The disposal pipeline: destroyed → redact → purge ─────────────────────
+function DisposalPipeline({ pipeline, due, disposing, setDisposing }) {
+  return (
+    <div className="mt-8">
+      <PanelHead
+        title="Disposal pipeline"
+        sub="Destroy decides, redact removes content but keeps the fact, purge removes the record. In that order, only." />
+      {pipeline.status === 'loading' ? <Loading /> :
+       pipeline.status === 'failed' ? <LoadFailed reason={pipeline.reason} /> :
+       pipeline.rows.length === 0 ? (
+        <Empty kicker="disposal" line="Nothing is in the disposal pipeline."
+               sub="Records appear here once destroyed under retention, for the
+                    redaction review and — only after it — the purge." />
+      ) : (
+        <div className="panel">
+          {pipeline.rows.map((d) => (
+            <div className="waiting-row" key={d.agreement_id} style={{ alignItems: 'flex-start' }}>
+              <div className="min-w-0">
+                <div className="text-[13px]" style={{ color: 'var(--ink)' }}>
+                  {d.agreement_id}
+                  <span className="caption">
+                    {d.destroyed_on ? ` · destroyed ${d.destroyed_on}` : ''}
+                    {d.redacted_on ? ` · redacted ${d.redacted_on} by ${d.redacted_by}` : ''}
+                    {d.purged_on ? ` · purged ${d.purged_on}` : ''}
+                  </span>
+                </div>
+                {d.external_bytes_pending && (
+                  <div className="caption mt-0.5" data-testid="external-bytes-admin">
+                    <strong>Bytes may survive outside.</strong> Redaction cleared this
+                    system's pointer; it does not reach into an external store.
+                  </div>
+                )}
+                {disposing?.id === d.agreement_id && disposing?.verb === 'redact' && (
+                  <IrreversibleConfirm
+                    verb="redact" agreementId={d.agreement_id}
+                    description={`Redacting ${d.agreement_id} clears the document bytes and
+                      the storage pointer. The filename, size, hash, dates and every audit
+                      row stay — the fact survives the content.`}
+                    action={() => API.redactAgreement({ agreement_id: d.agreement_id })}
+                    onDone={(did) => { setDisposing(null); if (did) pipeline.reload(); }} />
+                )}
+                {disposing?.id === d.agreement_id && disposing?.verb === 'purge' && (
+                  <IrreversibleConfirm
+                    verb="purge" agreementId={d.agreement_id}
+                    description={`Purging ${d.agreement_id} deletes the executed agreement,
+                      its documents, certificate and signatories. The audit chain survives
+                      it — evidence of correct disposal outlives the thing disposed of.
+                      Yours alone; this one cannot be delegated.`}
+                    action={() => API.purgeAgreement({ agreement_id: d.agreement_id })}
+                    onDone={(did) => { setDisposing(null); if (did) pipeline.reload(); }} />
+                )}
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className={`chip ${d.state === 'live' ? 'chip-ok'
+                  : d.state === 'purged' ? 'chip-err' : 'chip-pending'}`}>
+                  {d.state}
+                </span>
+                {d.state === 'destroyed' && (
+                  <button className="btn btn-sm" data-testid={`redact-${d.agreement_id}`}
+                          onClick={() => setDisposing(
+                            disposing?.id === d.agreement_id && disposing?.verb === 'redact'
+                              ? null : { id: d.agreement_id, verb: 'redact' })}>
+                    redact…
+                  </button>
+                )}
+                {d.state === 'redacted' && (
+                  <button className="btn btn-sm" data-testid={`purge-${d.agreement_id}`}
+                          onClick={() => setDisposing(
+                            disposing?.id === d.agreement_id && disposing?.verb === 'purge'
+                              ? null : { id: d.agreement_id, verb: 'purge' })}>
+                    purge…
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Redaction delegates (U12): one person, one authority, revocable ───────
+function DelegatesDesk() {
+  const pane = usePane(() => API.recordsDelegates());
+  const people = usePane(() => API.people());
+  const [person, setPerson] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  if (pane.status === 'loading') return <Loading />;
+  if (pane.status === 'failed') return <LoadFailed reason={pane.reason} />;
+
+  const live = pane.rows.filter((d) => !d.revoked_at);
+
+  return (
+    <div className="mt-8">
+      <PanelHead
+        title="Redaction delegates"
+        sub="You may delegate the redact act — named, reasoned, revocable, on the record. Never the purge." />
+      {live.length === 0 ? (
+        <div className="caption">No delegation is live. Redaction is yours alone until one is.</div>
+      ) : (
+        <div className="panel">
+          {live.map((d) => (
+            <div className="waiting-row" key={d.delegate_id}>
+              <div className="min-w-0">
+                <div className="text-[13px]" style={{ color: 'var(--ink)' }}>
+                  {d.person}
+                  <span className="caption"> · granted {String(d.granted_at).slice(0, 10)} · {d.reason}</span>
+                </div>
+              </div>
+              <button className="btn btn-sm" disabled={busy}
+                      data-testid={`revoke-delegate-${d.person}`}
+                      onClick={async () => {
+                        setBusy(true); setError(null);
+                        const r = await API.revokeRecordsDelegate({ person: d.person });
+                        setBusy(false);
+                        if (!r.ok) { setError(r.reason); return; }
+                        pane.reload();
+                      }}>
+                revoke
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2 mt-3 items-end">
+        <div style={{ width: 240 }}>
+          <label className="section-label">Person</label>
+          <select className="mt-1.5 w-full font-mono" value={person}
+                  onChange={(e) => setPerson(e.target.value)}>
+            <option value="">choose a person</option>
+            {(people.rows ?? []).map((p) => (
+              <option key={p.person} value={p.person}>{p.person}</option>
+            ))}
+          </select>
+        </div>
+        <div className="grow">
+          <label className="section-label">Why</label>
+          <input className="mt-1.5 w-full" value={reason}
+                 placeholder="a reason of substance — it is reviewed later"
+                 onChange={(e) => setReason(e.target.value)} />
+        </div>
+        <button className="btn btn-primary" disabled={busy || !person || reason.trim().length < 5}
+                data-testid="grant-delegate"
+                onClick={async () => {
+                  setBusy(true); setError(null);
+                  const r = await API.grantRecordsDelegate({
+                    person, reason: reason.trim(),
+                  });
+                  setBusy(false);
+                  if (!r.ok) { setError(r.reason); return; }
+                  setPerson(''); setReason(''); pane.reload();
+                }}>
+          ✓ delegate redaction
+        </button>
+      </div>
+      {error && (
+        <div className="panel p-3 mt-3">
+          <div className="section-label">refused</div>
+          <div className="caption mt-1">{error}</div>
+        </div>
+      )}
     </div>
   );
 }

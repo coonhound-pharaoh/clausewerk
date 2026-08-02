@@ -1615,10 +1615,15 @@ grant insert on cw.override_socialisation, cw.override_notified to cw_requester;
   // caught by a test requiring that title's words. It now removes the
   // confirmation step itself — minting straight from the button — which is the
   // break that matters and cannot be reworded away.
+  // RE-ANCHORED 2026-08-02: the bare onClick pattern gained lookalikes when
+  // the library's own confirm forms landed (D-5) — substring matching found
+  // them inside deeper indentation. The verify button's testid pins the site.
   { target: 'shell', suite: 'shell.test.mjs',
     name: 'verify mints without a confirmation step',
-    find: `                onClick={() => setConfirming(true)}>`,
-    repl: `                onClick={async () => { await API.verifyTicket({ ticket_id: ticket.ticket_id, approved_text: approved.trim(), new_clause_id: clauseId.trim(), title: title.trim(), rationale: rationale.trim() }); onDone(); }}>`,
+    find: `                data-testid="verify"
+                onClick={() => setConfirming(true)}>`,
+    repl: `                data-testid="verify"
+                onClick={async () => { await API.verifyTicket({ ticket_id: ticket.ticket_id, approved_text: approved.trim(), new_clause_id: clauseId.trim(), title: title.trim(), rationale: rationale.trim() }); onDone(); }}>`,
     expect: 'verify goes through a confirmation before it mints' },
 
   { target: 'shell', suite: 'shell.test.mjs',
@@ -1826,11 +1831,16 @@ grant usage, select on sequence cw.agreement_share_share_id_seq to cw_requester;
 
   // Null reads as "unknown" on a screen; the truth is "none". This is trap 5.2
   // in miniature — an absent answer and a zero answer rendering the same.
+  // REPOINTED 2026-08-02: 0062 re-created cw.library_entry (live-ladder
+  // filtering), so the 0018 text this row used to patch is no longer the last
+  // definition to run — trap 5.4a, caught by the harness the same day.
   { suite: 'library-ladder-views.test.mjs',
     name: 'a version on no ladder reports null instead of false',
     find: `  (select coalesce(bool_or(r.is_floor), false) from cw.ladder_rung r
+     join cw.ladder l on l.ladder_id = r.ladder_id and l.retired_on is null
     where r.clause_id = s.clause_id and r.version = s.version)      as is_a_floor,`,
     repl: `  (select bool_or(r.is_floor) from cw.ladder_rung r
+     join cw.ladder l on l.ladder_id = r.ladder_id and l.retired_on is null
     where r.clause_id = s.clause_id and r.version = s.version)      as is_a_floor,`,
     expect: 'a version on no ladder reports zero, not null' },
 
@@ -2651,9 +2661,12 @@ grant update on cw.obligation_template to cw_legal_reviewer;`,
     repl: `  where false`,
     expect: 'the workspace panel answers for the caller alone' },
 
+  // REPOINTED 2026-08-02: 0059 re-created cw.waiting_for and reworded this
+  // line (`is not null and` joined it), so the row was patching the 0041/0044
+  // text that 0059's definition then overwrote — trap 5.4a, again.
   { suite: 'obligations.test.mjs',
     name: 'the renewal window never reaches the person who owns the deal',
-    find: `    and ea.term_end <= current_date + 90`,
+    find: `    and ea.term_end is not null and ea.term_end <= current_date + 90`,
     repl: `    and false`,
     expect: 'the workspace panel answers for the caller alone' },
 
@@ -2740,10 +2753,13 @@ grant usage, select on sequence cw.notification_outbox_outbox_id_seq to cw_legal
 
   // The escalation goes quiet: the named owner is never told about work
   // nobody took, and the queue's oldest tickets wait on nobody in particular.
+  // REPOINTED 2026-08-02: 0059 merged the from and where onto one line when it
+  // re-created cw.waiting_for, stranding this row on the 0044 text — the same
+  // trap 5.4a as the renewal-window row above, found in the same sweep.
   { suite: 'routing.test.mjs',
     name: 'the escalation never reaches the named owner',
-    find: `  where r.escalated and r.category_owner = p_person`,
-    repl: `  where false`,
+    find: `  from cw.ticket_route r where r.escalated and r.category_owner = p_person;`,
+    repl: `  from cw.ticket_route r where false;`,
     expect: 'the named owner is told about work nobody took — review_escalation reaches cw.waiting_for' },
 
   // ── The received-document store (0047, NC-07, U15) ────────────────────────
@@ -2831,6 +2847,72 @@ group by d.category_key, c.label, d.severity;`,
     find: `  ('edit_similarity_threshold', '', 'owner_decision', true, false,`,
     repl: `  ('edit_similarity_threshold', '0.85', 'owner_decision', true, false,`,
     expect: 'the threshold row ships with an EMPTY value and owner-decision true' },
+
+  // ── The governed library acts (0062, D-5) ──
+  // Superseding stops being an act with a gate: anybody with a connection
+  // reaches it if the inner role check goes soft.
+  { suite: 'governed-library-acts.test.mjs',
+    name: 'anybody may supersede',
+    find: `  if cw.app_role() is distinct from 'legal_admin' then
+    raise exception 'superseding a clause is a legal admin''s act'`,
+    repl: `  if false then
+    raise exception 'superseding a clause is a legal admin''s act'`,
+    expect: 'the database owner without a role cannot reach it as an act' },
+
+  // A replacement that forgets to retire its predecessor either double-lists
+  // the pair or trips the live-pair index — never silently succeeds.
+  { suite: 'governed-library-acts.test.mjs',
+    name: 'publishing a replacement leaves the old ladder live',
+    find: `  if old_id is not null then
+    update cw.ladder
+       set retired_on = current_date, retired_reason = p_reason
+     where ladder_id = old_id;
+  end if;`,
+    repl: ``,
+    expect: 'publishing again replaces: the old ladder retires, readable forever' },
+
+  // The floor move goes back to leaving no trace — the exact gap 0062 closed.
+  { suite: 'governed-library-acts.test.mjs',
+    name: 'the floor moves silently again',
+    find: `  when (new.is_floor and not old.is_floor)`,
+    repl: `  when (false)`,
+    expect: 'moving the floor is recorded on the chain' },
+
+  // A new concession judged against a RETIRED ladder's floor: the one-word
+  // filter that keeps the authority lookup on the live path.
+  { suite: 'governed-library-acts.test.mjs',
+    name: 'a concession is judged against a retired ladder',
+    find: `  where l.category_key = new.category_key
+    and l.severity = sev
+    and l.retired_on is null`,
+    repl: `  where l.category_key = new.category_key
+    and l.severity = sev`,
+    expect: 'a new concession is judged against the live ladder, not the retired one' },
+
+  // ── The acting library shell (D-5) ──
+  // The irreversible acts keep their preview step; losing a confirm testid is
+  // the act getting cheaper, which the allow-list test names.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'superseding loses its confirmation step',
+    find: `                    data-testid="confirm-supersede"`,
+    repl: ``,
+    expect: 'the library offers no way to edit approved wording' },
+
+  // Destruction one click cheaper: the typed-id gate is what the health-pane
+  // test hangs on.
+  // ── The obligations surfaces (OB-11/OB-15) ──
+  // A duty with no due date yet silently disappears from the calendar.
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'the unanchored duty vanishes from the calendar',
+    find: `            <div className="panel p-3 mb-3" data-testid="calendar-unanchored">`,
+    repl: `            <div className="panel p-3 mb-3">`,
+    expect: 'the obligations pane shows the whole book, including what has no date' },
+
+  { target: 'shell', suite: 'shell.test.mjs',
+    name: 'destruction stops demanding the record\'s own id',
+    find: '                 data-testid={`type-to-${verb}`} />',
+    repl: ' />',
+    expect: 'the nudge notifies and cannot destroy' },
 ];
 
 const files = readdirSync(SRC).filter(f => f.endsWith('.sql')).sort();

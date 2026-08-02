@@ -4586,3 +4586,102 @@ old request returned 401 after sign-out and a replacement sign-in, it could
 forget the replacement credential. The effect now invalidates pending results
 on cleanup and permits only one check at a time. The shell locks both lifetime
 and overlap guards to the actual polling effect.
+
+## S218 — Owner decision session, 2026-08-02: D-5 in scope; the rest deferred or commissioned — 2026-08-02
+
+Mike answered the roadmap questions in one sitting:
+
+- **D-5 — the six governed Legal-admin acts are IN SCOPE for this effort** (activate/retire
+  a clause, supersede, edit a conflict rule, promote a concession, reorder a rung / move a
+  floor, release a legal hold, destroy under retention). This unblocks NC-21, NC-22, NC-23
+  and lets WP-U13 close. Where an individual act still needs a design choice that is not an
+  owner decision, make the choice, record it, and flag it — warn, don't gate (Mike's
+  standing rule).
+- **Confidential deals: deferred.** The settled shape (marked-but-listed, §12) stands;
+  the three residual approval questions wait with it.
+- **D-2 / D-6: research commissioned**, not decided. Deliverable is a memo for Mike and
+  counsel. D-6 must be re-put with the corrected framing (the AI-use record survives an
+  erasure request; deletion reaches signed-contract records only).
+- **Procurements deferred** — DocuSign credentials and the identity-provider choice. OB-13
+  and the sign-in hardening stay gated on these.
+- **Finish what is started: yes** — WP-U15 acceptance sweep, OB-11/OB-15 screens, the
+  WP-U13 acting halves, documentation trueing.
+- **AI front half: architecture and plan commissioned** (WS-2). Design only; the provider,
+  budget, and intake-vs-matcher sequencing decisions remain Mike's, to be put with the
+  plan.
+- **Launch hardening: deferred for now** (scheduler, checkpoint signing, deployment, the
+  U15 S3 move). Unchanged: raise the S3 move again when launch planning starts.
+
+## S219 — Date rot: a fixture the calendar walked past — 2026-08-02
+
+`obligations.test.mjs` hardcoded an execution date of 2026-08-01 while its
+templates are approved on the day the suite runs. From 2026-08-02 the
+approved-before-executed pin (0036) refused the registration — the guard
+working exactly as pinned, against the test's own fixture. Six tests failed
+and one crash stopped the suite; the mutation harness reported 16 misses, all
+tracing here. Fixed by computing the fixture's dates from `current_date`
+(executed today, effective the first of the month after next, a six-month
+term), with the expected due dates computed the same way.
+
+**Why:** a fixture date in the future of the suite's writing day is a time
+bomb; the suite was green for five days and rotted on the sixth.
+**How to apply:** seed dates relative to today unless the test is ABOUT a
+fixed date; if a pin compares two dates, derive both from the same anchor.
+
+## S220 — Trap 5.4a again, three times in one day — 2026-08-02
+
+Three mutation rows were stranded by later migrations re-creating the object
+they patch: two by `0059` (waiting_for reworded the renewal-window line and
+merged the ticket_route from/where), one by my own `0062` (library_entry).
+All three reported MISS — "suite passed with the guarantee broken". Also:
+`administrator.test.mjs`'s write allow-list was never repointed when `0054`
+deliberately granted the administrator the notification delivery-claim lease
+table. All repointed the same day.
+
+**Why:** the harness deliberately patches every file carrying a pattern, but a
+REWORDED line in the last definition to run silently un-guards the check.
+**How to apply:** when a migration re-creates a function or view, grep
+mutation-check.mjs (and mutation_check.py) for patterns anchored on the old
+text before committing — the harness preflight only catches VANISHED text,
+not text that survives in a superseded copy. See [[clausewerk-mutation-harness-after-migrations]].
+
+## S221 — D-5 built: the six governed acts, same day as the decision — 2026-08-02
+
+Migration 0062 (supersession as one act; ladder replacement with retirement;
+the floor move audited), fifteen doorway writes + three reads, and the acting
+screens. Design choices recorded in open-questions §9b: reorder = replace (a
+new ladder; the old retires and stays readable, because concessions name rung
+numbers); rule edit = next version; destruction confirms by typing the
+record's own id. Every live-ladder lookup gained the retired filter
+(concession authority trigger, open_renewal, ticket_route, ladder views,
+analysis.py) — and the historical concession-wording lookup in analysis.py
+was repointed at the concession's OWN stored ladder_id, which is where a
+historical question belonged all along. WP-U13 closed. All SQL suites green,
+mutation harness 274/274.
+
+## S222 — WP-U15 run: the reading room is real on screen; OB-11/15 built — 2026-08-02
+
+The acceptance walkthrough (`doorway/acceptance_walkthrough.py`, kept and
+re-runnable) performed the whole front-to-back path through the doorway over
+HTTP as the seeded people — accounts + U6 countersign, category, ticket →
+claim → verify, deal, recorded run, execution FILED THROUGH THE ACT, share —
+and the viewer's browser rendered the per-clause paper with approver and
+origin. Both of handoff 08 §3's named gaps closed. Found on the way: the
+share had no doorway act (POST /shares added), and the ladders pane's empty
+early-return hid the rules and promotion sections (fixed; the trap-5.2 shape
+again). OB-11/OB-15 landed as one obligations pane (waiting-on-you, calendar
+with an honest no-date-yet bucket, per-agreement panel with envelope strip,
+inbox) on a shared tab for requester and legal admin; GET /envelopes added.
+
+## S223 — `localhost` costs two minutes a connection on this machine — 2026-08-02
+
+psycopg connecting to the dockerised PostgreSQL via `localhost` stalls ~2
+minutes per connection (IPv6 ::1 tried first against the Docker proxy);
+`127.0.0.1` connects in 0.04s. This is why the doorway pytest run crawled for
+an hour with zero output and why seed/server pools threw PoolTimeout.
+
+**Why:** the pool's 30-second timeout is shorter than the ::1 stall, so every
+symptom looks like an unreachable or overloaded database.
+**How to apply:** on this machine always use 127.0.0.1 in database URLs
+(CW_TEST_OWNER_URL, CW_DATABASE_URL, CW_OWNER_DATABASE_URL); if a doorway
+anything hangs ~30s per operation, check the host in the URL first.
