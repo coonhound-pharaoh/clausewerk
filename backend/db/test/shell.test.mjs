@@ -63,12 +63,16 @@ const stripComments = (s) =>
 // Transcribed from UI-AND-ADMINISTRATION-ARCHITECTURE.md §3. Deliberately NOT
 // imported from shell.jsx: a check that reads its expectation from the thing it
 // is checking agrees with itself no matter what either of them says.
+// Amended 2026-08-02: OB-11/OB-15 add an obligations tab to the requester and
+// the Legal admin (memory.md S218; the architecture doc's §3 is trued with it).
 const SPEC = {
-  requester:      ['my deals', 'intake', 'negotiate', 'vendors', 'my record'],
+  requester:      ['my deals', 'intake', 'negotiate', 'obligations',
+                   'vendors', 'my record'],
   legal_reviewer: ['review desk', 'tickets', 'routing', 'approvals',
                    'negotiations', 'holds'],
   legal_admin:    ['the library', 'ladders & rules', 'governance',
-                   'holds & retention', 'review desk', 'routing', 'reporting'],
+                   'holds & retention', 'obligations', 'review desk',
+                   'routing', 'reporting'],
   auditor:        ['the record', 'quality', 'origin mix', 'access history',
                    'reporting'],
   viewer:         ['reading room'],
@@ -125,7 +129,12 @@ await test('no role can reach another role\'s tab', async () => {
   // and the reviewer claim path are one board. reporting: the auditor examines
   // the same figures the admin manages by — one surface, so they cannot
   // disagree (RP-01/RP-02).
-  const deliberatelyShared = new Set(['review-desk', 'routing', 'reporting']);
+  // obligations: one pane, two books — the obligation table's own policy
+  // scopes a requester to their deals and hands Legal admin the whole record,
+  // so sharing the tab is the same surface answering differently, never a leak
+  // (OB-11/OB-15, 2026-08-02).
+  const deliberatelyShared = new Set(['review-desk', 'routing', 'reporting',
+                                      'obligations']);
   const seen = new Map();
   for (const [role, ws] of Object.entries(WORKSPACES)) {
     for (const t of ws.tabs) {
@@ -770,16 +779,25 @@ await test('the nudge notifies and cannot destroy', async () => {
   // "delete" fails on the pane's own copy explaining that it destroys nothing —
   // a check that cannot tell a warning from the thing it warns about punishes
   // writing the warning down. So the assertion enumerates the calls instead.
+  // REWRITTEN 2026-08-02 for D-5. The old list asserted the administrator
+  // "holds no privilege to destroy anything" — false since U9 (0022) moved
+  // the destroy authority to exactly this role, and the endpoint now exists.
+  // What SURVIVES: the list is still an allow-list, and the destroy is a
+  // separate act behind the strongest confirmation in the product — the nudge
+  // itself still cannot destroy, because it still only calls the nudge.
   const pane = /function HealthPane[\s\S]*?\n\}/.exec(src)[0];
   const calls = [...pane.matchAll(/API\.(\w+)/g)].map((m) => m[1]).sort();
-  const allowed = ['health', 'nudgeRetention', 'retentionDue', 'runCheck', 'takeCheckpoint'];
+  const allowed = ['destroyRetention', 'health', 'nudgeRetention',
+                   'redactionState', 'retentionDue', 'runCheck', 'takeCheckpoint'];
   eq([...new Set(calls)], allowed.filter((a) => calls.includes(a)),
-    'the health pane calls something outside its list — the administrator holds '
-    + 'no privilege to destroy anything, and this screen must not attempt it');
-  const api = read('api.jsx');
-  assert(!/retentionDestroy|destroyRetention/.test(api),
-    'the API module offers a retention destroy, which the administrator holds '
-    + 'no privilege for and must not be able to attempt');
+    'the health pane calls something outside its allow-list');
+  // The destroy is never one click: the record's own id must be typed.
+  assert(/data-testid={`type-to-\$\{verb\}`}/.test(src),
+    'the type-the-id confirmation disappeared — destruction got cheaper than '
+    + 'a clause retirement, which is WP-U13\'s critical anti-pattern');
+  // And the purge act exists only inside the same confirm idiom.
+  assert(/API\.purgeAgreement/.test(src) && /API\.redactAgreement/.test(src),
+    'the disposal pipeline lost an act');
 });
 
 await test('a held record is distinguishable from a due one, and never names the matter', async () => {
@@ -1496,24 +1514,64 @@ await test('a coverage gap is surfaced, never framed as a system failure', async
 
 await test('the library offers no way to edit approved wording', async () => {
   // WP-U13's critical anti-pattern: an in-place edit affordance would be the
-  // mutation-surface invariant broken in the UI. Every change to approved
-  // wording is a new version with its history intact.
-  //
-  // Enumerated by what each control does, not by searching for a word.
+  // mutation-surface invariant broken in the UI. The acting halves are BUILT
+  // now (D-5, 2026-08-02), so the invariant is held as an ALLOW-LIST: every
+  // API call in this file is either a read or one of the governed acts, and
+  // none of the acts is an update of wording in place — retire withdraws,
+  // supersede MINTS, a ladder is replaced, a rule version is published.
   const src = stripComments(libSrc());
-  const handlers = [...src.matchAll(/onClick=\{([^}]*)\}/g)].map((m) => m[1].trim());
-  for (const h of handlers) {
-    assert(/^\(\) => set[A-Z]/.test(h),
-      `the library offers an act that is not a filter or a drawer: ${h}`);
-  }
+  const allowed = new Set([
+    // reads
+    'library', 'ladders', 'rules', 'concessions', 'settings', 'holds',
+    'redactionState',
+    // the governed acts (D-5)
+    'retireClause', 'supersedeClause', 'publishRule', 'retireRule',
+    'promoteConcession', 'moveFloor', 'publishLadder', 'releaseHold',
+    'decideSetting',
+  ]);
   const calls = [...src.matchAll(/API\.([a-zA-Z]+)\(/g)].map((m) => m[1]);
   for (const c of calls) {
-    assert(['library', 'ladders'].includes(c),
-      `the library pane calls API.${c}(), which is not one of its two reads`);
+    assert(allowed.has(c),
+      `the library workspace calls API.${c}(), which is not on its allow-list — `
+      + 'if this is a new governed act, add it here DELIBERATELY; if it edits '
+      + 'approved wording in place, it must not exist');
   }
-  assert(/<NotBuiltYet/.test(src),
-    'the absent acts are no longer declared — a surface that is silent about '
-    + 'what it cannot do reads as a surface that does everything');
+  // The acts that exist are the ones D-5 released — their loss would be the
+  // package quietly re-pausing.
+  for (const act of ['retireClause', 'supersedeClause', 'promoteConcession',
+                     'moveFloor', 'publishLadder', 'releaseHold']) {
+    assert(calls.includes(act), `the ${act} act disappeared from the workspace`);
+  }
+  // Friction sits where the irreversibility is: the two wording acts and the
+  // ladder replacement confirm with a preview before acting.
+  for (const confirm of ['confirm-retire', 'confirm-supersede', 'confirm-replace']) {
+    assert(src.includes(`data-testid="${confirm}"`),
+      `the ${confirm} confirmation step disappeared — an irreversible act got cheaper`);
+  }
+});
+
+await test('the obligations pane shows the whole book, including what has no date', async () => {
+  // OB-15's honesty rules, pinned by structure rather than prose: the
+  // waiting-on-you panel reads the SAME derivation the digest reads; a duty
+  // anchored to an event that has not happened renders in its own bucket
+  // rather than vanishing; an entitlement renders as prominently as a duty;
+  // and the envelope strip exists.
+  const src = read('obligations.jsx');
+  assert(/API\.waiting\(/.test(src),
+    'the waiting panel no longer reads the shared derivation');
+  assert(/data-testid="calendar-unanchored"/.test(src),
+    'the unanchored bucket disappeared — a duty with no date yet would vanish');
+  assert(/data-testid="entitlement"/.test(src),
+    'entitlements lost their rendering — what the counterparty owes us went dark');
+  assert(/data-testid="envelope-strip"/.test(src),
+    'the envelope strip disappeared');
+  // And the pane never invents scoping: no agreement_id parameter reaches any
+  // fetch — the API surface it uses takes none.
+  for (const call of [...src.matchAll(/API\.([a-zA-Z]+)\(([^)]*)\)/g)]) {
+    assert(call[2].trim() === '',
+      `obligations.jsx passes an argument to API.${call[1]} — scoping belongs `
+      + 'to the policies, never the browser');
+  }
 });
 
 await test('an empty ladder is rendered, not filtered away', async () => {

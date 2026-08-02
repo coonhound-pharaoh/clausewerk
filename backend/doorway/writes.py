@@ -224,6 +224,200 @@ WRITES: dict[str, Write] = {
         fields=(Field("key"), Field("label"), Field("short")),
     ),
 
+    # ── The governed library acts (D-5, NC-21/22/23) ────────────────────────
+    # Six acts the frozen 52 never carried, released by owner decision D-5
+    # (2026-08-02, memory.md S218). Every one defers to authority the schema
+    # already holds; none of these entries decides anything.
+
+    # Retiring wording is withdrawal, not replacement — state stays derived
+    # (0002), retired_on is bound by trigger, and un-retiring is refused there.
+    "POST /library/retire": Write(
+        sql="""update cw.clause_version
+          set retired = true, retired_reason = %(reason)s
+        where clause_id = %(clause_id)s and version = %(version)s
+          and not retired
+        returning clause_id, version, retired, retired_reason, retired_on""",
+        rule="cw.clause_version admin_writes policy — legal_admin only; "
+             "cw.clause_version_immutable() binds retired_on and refuses "
+             "everything else",
+        fields=(Field("clause_id"), Field("version"), Field("reason")),
+    ),
+
+    # One recorded act: mint the successor through the library's one minting
+    # door and record the supersession, inside cw.supersede_clause() (0062).
+    # The approver is bound from the session by trigger, whatever is proposed.
+    "POST /library/supersede": Write(
+        sql="""select cw.supersede_clause(
+         %(clause_id)s, %(version)s, %(title)s, %(body)s, %(rationale)s,
+         coalesce((select array_agg(t.v order by t.o)
+                     from jsonb_array_elements_text(%(citations)s::jsonb)
+                          with ordinality t(v, o)), '{}'),
+         %(expires_on)s, %(reason)s,
+         coalesce(%(disposition)s, 'run_off')) as successor_version""",
+        rule="cw.supersede_clause() (0062) — execute granted to legal_admin "
+             "alone; U10: mints a new version, never rewrites, and in-flight "
+             "deals are flagged by cw.run_drift rather than corrected",
+        fields=(Field("clause_id"), Field("version"), Field("title"),
+                Field("body"), Field("rationale"),
+                Field("citations", required=False, as_json=True, default="[]"),
+                Field("expires_on", required=False), Field("reason"),
+                Field("disposition", required=False)),
+    ),
+
+    # Publishing a rule VERSION. cw.active_conflict_rule takes the latest
+    # effective one per rule_id, so a new version supersedes in force without
+    # touching its predecessor — the same never-edit shape as clause wording.
+    # The approver is bound from the session by cw.bind_conflict_rule_approver().
+    "POST /rules": Write(
+        sql="""insert into cw.conflict_rule
+         (rule_id, version, name, severity, title, detail, predicate, approved_by)
+       values (%(rule_id)s,
+               (select coalesce(max(version), 0) + 1 from cw.conflict_rule
+                 where rule_id = %(rule_id)s),
+               %(name)s, %(severity)s, %(title)s, %(detail)s,
+               %(predicate)s::jsonb, current_setting('cw.actor'))
+       returning rule_id, version, name, severity, approved_by, effective_on""",
+        rule="cw.conflict_rule admin_writes policy — legal_admin only; the "
+             "predicate_grammar constraint refuses anything but the three "
+             "primitives, each non-empty",
+        fields=(Field("rule_id"), Field("name"), Field("severity"),
+                Field("title"), Field("detail"),
+                Field("predicate", as_json=True)),
+    ),
+
+    "POST /rules/retire": Write(
+        sql="""update cw.conflict_rule
+          set retired = true, retired_reason = %(reason)s
+        where rule_id = %(rule_id)s and version = %(version)s
+          and not retired
+        returning rule_id, version, retired, retired_reason""",
+        rule="cw.conflict_rule admin_writes policy — legal_admin only; "
+             "cw.conflict_rule_immutable() permits exactly this one mutation",
+        fields=(Field("rule_id"), Field("version"), Field("reason")),
+    ),
+
+    # The one act of the six that always had its function (0003). The reviewer
+    # argument is the session, never the body — it lands on the minted version
+    # as its named reviewer.
+    "POST /concessions/promote": Write(
+        sql="""select cw.promote_concession(
+         %(concession_id)s, %(new_clause_id)s, %(title)s, %(rationale)s,
+         current_setting('cw.actor'), %(expires_on)s) as minted""",
+        rule="cw.promote_concession() — execute granted to legal_admin alone; "
+             "one of the library's two recorded entrances (0008), refuses "
+             "double promotion and unsettled concessions itself",
+        fields=(Field("concession_id"), Field("new_clause_id"), Field("title"),
+                Field("rationale"), Field("expires_on", required=False)),
+    ),
+
+    # Moving the floor is the policy call 0003 deliberately left mutable; what
+    # 0062 added is the audit trail. One UPDATE: the floor lands where named,
+    # and leaves every other rung — a rung that does not exist changes nothing,
+    # which surfaces as the 409 a silent no-op deserves.
+    "POST /ladders/floor": Write(
+        sql="""update cw.ladder_rung
+          set is_floor = (rung = %(rung)s)
+        where ladder_id = %(ladder_id)s
+          and exists (select 1 from cw.ladder_rung f
+                       where f.ladder_id = %(ladder_id)s and f.rung = %(rung)s)
+        returning ladder_id, rung, is_floor""",
+        rule="cw.ladder_rung admin_writes policy — legal_admin only; "
+             "cw.ladder_rung_immutable() keeps everything but is_floor frozen, "
+             "and cw.audit_ladder_floor() (0062) puts the move on the chain",
+        fields=(Field("ladder_id"), Field("rung")),
+    ),
+
+    # Reordering rungs IS replacement — past concessions are recorded as "we
+    # went to rung 2" and rung order is immutable in place (0003). One recorded
+    # act: the live ladder retires, its replacement publishes, both audited.
+    "POST /ladders/publish": Write(
+        sql="""select cw.publish_ladder(
+         %(category_key)s, %(severity)s,
+         (select array_agg(c.v order by c.o)
+            from jsonb_array_elements_text(%(clause_ids)s::jsonb)
+                 with ordinality c(v, o)),
+         (select array_agg(n.v::int order by n.o)
+            from jsonb_array_elements_text(%(versions)s::jsonb)
+                 with ordinality n(v, o)),
+         %(floor_rung)s, %(reason)s, %(owner)s) as ladder_id""",
+        rule="cw.publish_ladder() (0062) — execute granted to legal_admin "
+             "alone; every 0003 rung rule still stands underneath it, and the "
+             "retired ladder stays readable forever",
+        fields=(Field("category_key"), Field("severity"),
+                Field("clause_ids", as_json=True),
+                Field("versions", as_json=True),
+                Field("floor_rung"), Field("reason"),
+                Field("owner", required=False)),
+    ),
+
+    # Releasing a hold. The release columns are bound from the session by
+    # cw.bind_legal_hold_actor(), whatever this statement proposes; a hold
+    # already released (or never opened) changes nothing and 409s.
+    "POST /holds/release": Write(
+        sql="""update cw.legal_hold
+          set released_by = current_setting('cw.actor'),
+              released_on = current_date
+        where hold_id = %(hold_id)s and released_on is null
+        returning hold_id, agreement_id, matter_ref, released_by, released_on""",
+        rule="cw.legal_hold admin_releases policy (0010) — legal_admin only; "
+             "opening is Legal's act, releasing is the admin's, and a released "
+             "hold can never reopen",
+        fields=(Field("hold_id"),),
+    ),
+
+    # ── Disposal (U9, U12): destroy, then redact, then purge ────────────────
+    # Three functions, three grants, one escalation enforced twice in the
+    # schema. Every one demands its actor argument EQUAL the session and
+    # refuses while any hold is open, naming the matters to the person acting.
+    "POST /retention/destroy": Write(
+        sql="""select cw.retention_destroy(
+         %(agreement_id)s, current_setting('cw.actor'))""",
+        rule="cw.retention_destroy() — execute moved to the administrator alone "
+             "by U9 (0022), revoked from legal_admin rather than shared; "
+             "refused before the retention date and under any hold",
+        fields=(Field("agreement_id"),),
+    ),
+
+    "POST /agreements/redact": Write(
+        sql="""select cw.redact_agreement(
+         %(agreement_id)s, current_setting('cw.actor'))""",
+        rule="cw.may_redact() inside cw.redact_agreement() (0023) — the "
+             "administrator, or a person holding a live recorded delegation; "
+             "only after destruction, never under a hold",
+        fields=(Field("agreement_id"),),
+    ),
+
+    "POST /agreements/purge": Write(
+        sql="""select cw.purge_agreement(
+         %(agreement_id)s, current_setting('cw.actor'))""",
+        rule="cw.purge_agreement() (0023) — the administrator alone, "
+             "undelegable, and only on a record already redacted; the audit "
+             "chain survives it by privilege",
+        fields=(Field("agreement_id"),),
+    ),
+
+    # The delegation that makes redaction delegable (U12): one person, one
+    # authority, revocably, on the record. The person is WHO IS AUTHORISED —
+    # the granting actor is the session, bound by column default and trigger.
+    "POST /records-delegates": Write(
+        sql="""insert into cw.records_delegate (person, reason)
+       values (%(person)s, %(reason)s)
+       returning delegate_id, person, granted_by, granted_at, reason""",
+        rule="cw.records_delegate administrator_delegates policy (0023) — one "
+             "live delegation per person, a reason of substance required",
+        fields=(Field("person"), Field("reason")),
+    ),
+
+    "POST /records-delegates/revoke": Write(
+        sql="""update cw.records_delegate
+          set revoked_by = current_setting('cw.actor'), revoked_at = now()
+        where person = %(person)s and revoked_at is null
+        returning delegate_id, person, revoked_by, revoked_at""",
+        rule="cw.records_delegate administrator_revokes policy (0023); revoking "
+             "a delegation that is not live changes nothing and 409s",
+        fields=(Field("person"),),
+    ),
+
     # ── The review queue ────────────────────────────────────────────────────
     "POST /tickets": Write(
         sql="""insert into cw.review_ticket
@@ -390,6 +584,30 @@ WRITES: dict[str, Write] = {
         rule="cw.record_override_gate() — refuses unless that finding is actually "
              "in cw.override_passes",
         fields=(Field("request_id"), Field("finding_ref")),
+    ),
+
+    # ── The reading-room share (0017) ───────────────────────────────────────
+    # Found missing by WP-U15's acceptance sweep: the 2026-07-27 walkthrough
+    # created its share below the doorway, because no act existed. Sharing a
+    # signed contract with a named viewer is Legal's recorded act; the purpose
+    # is not optional, and unsharing is recorded rather than deleted.
+    "POST /shares": Write(
+        sql="""insert into cw.agreement_share (agreement_id, shared_with, purpose)
+       values (%(agreement_id)s, %(shared_with)s, %(purpose)s)
+       returning share_id, agreement_id, shared_with, shared_by, purpose""",
+        rule="cw.agreement_share legal_shares policy (0017) — the two Legal "
+             "roles; one live share per person per agreement",
+        fields=(Field("agreement_id"), Field("shared_with"), Field("purpose")),
+    ),
+
+    "POST /shares/revoke": Write(
+        sql="""update cw.agreement_share
+          set revoked_by = current_setting('cw.actor'), revoked_at = now()
+        where share_id = %(share_id)s and revoked_at is null
+        returning share_id, agreement_id, shared_with, revoked_by, revoked_at""",
+        rule="cw.agreement_share legal_unshares policy (0017); revoking a share "
+             "that is not live changes nothing and 409s",
+        fields=(Field("share_id"),),
     ),
 
     # ── Holds ───────────────────────────────────────────────────────────────

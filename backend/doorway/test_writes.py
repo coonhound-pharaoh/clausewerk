@@ -136,6 +136,45 @@ BODIES: dict[str, dict] = {
     "POST /obligations/waive": {
         "obligation_id": 1, "note": "vendor in liquidation", "override_ref": 1,
     },
+    "POST /library/retire": {
+        "clause_id": "DP-H-014", "version": 1, "reason": "withdrawn, not replaced",
+    },
+    "POST /library/supersede": {
+        "clause_id": "DP-H-014", "version": 1, "title": "A Title",
+        "body": "the successor wording", "rationale": "why it changed",
+        "reason": "rewritten after guidance",
+    },
+    "POST /rules": {
+        "rule_id": "DP-001", "name": "no-conflict", "severity": "High",
+        "title": "A Rule", "detail": "what it asks",
+        "predicate": {"all_present": ["a", "b"]},
+    },
+    "POST /rules/retire": {
+        "rule_id": "DP-001", "version": 1, "reason": "superseded by policy",
+    },
+    "POST /concessions/promote": {
+        "concession_id": 1, "new_clause_id": "DP-S-009", "title": "A Title",
+        "rationale": "used three times this quarter",
+    },
+    "POST /ladders/floor": {"ladder_id": 1, "rung": 1},
+    "POST /ladders/publish": {
+        "category_key": "data", "severity": "Standard",
+        "clause_ids": ["DP-S-001", "DP-S-002"], "versions": [1, 1],
+        "floor_rung": 1, "reason": "positions hardened",
+    },
+    "POST /holds/release": {"hold_id": 1},
+    "POST /retention/destroy": {"agreement_id": "AG-1"},
+    "POST /agreements/redact": {"agreement_id": "AG-1"},
+    "POST /agreements/purge": {"agreement_id": "AG-1"},
+    "POST /records-delegates": {
+        "person": "leah@clausewerk", "reason": "records officer this quarter",
+    },
+    "POST /records-delegates/revoke": {"person": "leah@clausewerk"},
+    "POST /shares": {
+        "agreement_id": "AG-1", "shared_with": "sam@clausewerk",
+        "purpose": "diligence request from the counterparty",
+    },
+    "POST /shares/revoke": {"share_id": 1},
 }
 
 
@@ -1064,3 +1103,85 @@ def test_a_conditional_only_field_is_demanded_only_when_the_condition_holds():
     conditional.bind({"decision": "approve"})    # not demanded
     with pytest.raises(Missing):
         conditional.bind({"decision": "reject"})  # demanded
+
+
+# ── 9. The governed acts (D-5, NC-21/22/23): the boundary both ways ─────────
+
+
+def test_retention_destruction_is_refused_to_legal_admin(people, db: Database):
+    """U9 (0022) MOVED the authority to the administrator — revoked from
+    legal_admin, never shared. The refusal lands before any happy path, per
+    NC-21: destruction is irreversible and a wrong endpoint is worse than no
+    endpoint. This guards the revocation itself."""
+    shaped = answer(db, LEGAL_ADMIN, "POST /retention/destroy",
+                    BODIES["POST /retention/destroy"])
+    assert shaped.refused, "legal_admin was allowed to reach the destroy function"
+    assert shaped.status == 403, (
+        f"the refusal should be the grant's (403), not a merits argument: "
+        f"{shaped.status} {shaped.body!r}")
+
+
+def test_purge_is_the_administrators_and_undelegable(people, db: Database):
+    """U12: redaction is delegable, the purge is not. legal_admin holds a
+    redaction grant (behind a live delegation) and must still be refused the
+    purge outright."""
+    shaped = answer(db, LEGAL_ADMIN, "POST /agreements/purge",
+                    BODIES["POST /agreements/purge"])
+    assert shaped.refused
+    assert shaped.status == 403, f"{shaped.status} {shaped.body!r}"
+
+
+def test_the_librarys_acting_half_is_legal_admins_alone(people, db: Database):
+    """The administrator is content-visible and content-POWERLESS (U5). Every
+    content-side act refuses the role that runs the machine — the boundary
+    from the other direction than the viewer sweep above."""
+    for key in ("POST /library/retire", "POST /library/supersede",
+                "POST /rules", "POST /rules/retire",
+                "POST /concessions/promote", "POST /ladders/floor",
+                "POST /ladders/publish", "POST /holds/release"):
+        shaped = answer(db, ADMINISTRATOR, key, BODIES[key])
+        assert shaped.refused, f"{key} let the administrator act on content"
+        assert shaped.body.get("kind") != "rejected", (
+            f"{key} refused the administrator for a missing field, proving "
+            f"nothing about the boundary: {shaped.body!r}")
+
+
+def test_releasing_a_hold_binds_the_actor_and_lands_on_the_chain(people, db: Database):
+    """The release columns come from the session by trigger, whatever the
+    statement proposes — and the act is on the chain under the right name."""
+    run(db, REQUESTER, "POST /deals",
+        {"agreement_id": "AG-H", "counterparty": "Northwind"})
+    opened = run(db, LEGAL_ADMIN, "POST /holds",
+                 {"agreement_id": "AG-H", "matter_ref": "M-77"})
+    hold_id = opened[0]["hold_id"]
+
+    released = run(db, LEGAL_ADMIN, "POST /holds/release",
+                   {"hold_id": hold_id, "released_by": "someone@else"})
+    assert released[0]["released_by"] == LEGAL_ADMIN.person, (
+        "the release must name the session, whatever a body smuggles")
+
+    events = [r for r in chain(db) if r["event_type"] == "legal_hold_released"]
+    assert events, "the release never reached the audit chain"
+    assert events[0]["actor"] == LEGAL_ADMIN.person
+
+    again = answer(db, LEGAL_ADMIN, "POST /holds/release", {"hold_id": hold_id})
+    assert again.status == 409, (
+        f"releasing a released hold must be the honest changed-nothing 409, "
+        f"got {again.status} {again.body!r}")
+
+
+def test_a_delegation_is_a_recorded_revocable_act(people, db: Database):
+    """U12's delegation: the administrator grants it, the administrator revokes
+    it, both under the session's name — and Legal cannot arrange its own."""
+    granted = run(db, ADMINISTRATOR, "POST /records-delegates",
+                  {"person": "leah@clausewerk",
+                   "reason": "records officer this quarter"})
+    assert granted[0]["granted_by"] == ADMINISTRATOR.person
+
+    revoked = run(db, ADMINISTRATOR, "POST /records-delegates/revoke",
+                  {"person": "leah@clausewerk"})
+    assert revoked[0]["revoked_by"] == ADMINISTRATOR.person
+
+    shaped = answer(db, LEGAL_ADMIN, "POST /records-delegates",
+                    {"person": "leah@clausewerk", "reason": "self-arranged cover"})
+    assert shaped.refused, "legal_admin arranged its own redaction delegation"

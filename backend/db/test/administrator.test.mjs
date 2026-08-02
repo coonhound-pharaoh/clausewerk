@@ -150,6 +150,12 @@ await test('the read really is content, not a redacted shadow of it', async () =
 const ADMIN_MAY_WRITE = {
   // The administrator's own record of people. Its whole point.
   'account':     ['INSERT','UPDATE'],
+  // Coordination leases for the notification sender (0054): mutable
+  // OPERATIONAL state, not an outcome record — claims expire and are
+  // recovered, which needs update and delete. Running the machine is exactly
+  // the steward's boundary (U5); the outcome record itself stays append-only
+  // in notification_outbox, which this list still refuses.
+  'notification_delivery_claim': ['INSERT','UPDATE','DELETE'],
   // Appending to the audit log, like every other acting role. Never update or
   // delete: nobody edits history, and that has never had an exception.
   'audit_event': ['INSERT'],

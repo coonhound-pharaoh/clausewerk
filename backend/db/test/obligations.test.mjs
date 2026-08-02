@@ -253,16 +253,29 @@ await mustWrite('legal_admin', `
   update cw.obligation_template set state='approved'
    where clause_id='DP-H-052' and state='proposed'`, [], ROSS);
 
+// AG-OB1's dates are computed from TODAY, never written down. The fixture
+// used to hardcode an execution of 2026-08-01 while the templates above are
+// approved on the day the suite runs — so from 2026-08-02 the
+// approved-before-executed pin (0036) refused the registration, exactly as
+// pinned, against the test's own fixture. Date rot, not a defect. Executed
+// today, effective the first of the month after next, a six-month term: the
+// same nine instances, whichever day the suite runs.
+const D = await one(`select
+  current_date::text as executed_on,
+  (date_trunc('month', current_date) + interval '2 months')::date::text as effective_on,
+  (date_trunc('month', current_date) + interval '8 months')::date::text as term_end,
+  ((date_trunc('month', current_date) + interval '2 months')::date + 10)::text as once_due`);
+
 await test('execution registers obligations from the pinned decision set', async () => {
   // The term ends well inside any registration horizon, so the recurring
   // count is a fixed fact rather than a function of the day the suite runs.
   await db.exec(`
     insert into cw.executed_agreement
       (agreement_id,run_id,executed_on,effective_on,term_end)
-      values ('AG-OB1','RUN-OB1','2026-08-01','2026-09-01','2027-03-01');
+      values ('AG-OB1','RUN-OB1','${D.executed_on}','${D.effective_on}','${D.term_end}');
     insert into cw.executed_document
       (agreement_id,doc_seq,kind,filename,byte_size,sha256,storage_uri,signed_on)
-      values ('AG-OB1',0,'agreement','MSA.docx',1000,'${SIG}','s3://x/0.docx','2026-08-01');`);
+      values ('AG-OB1',0,'agreement','MSA.docx',1000,'${SIG}','s3://x/0.docx','${D.executed_on}');`);
   const inst = await rows(`
     select kind, occurrence, due_on::text as due, owner_person
     from cw.obligation_instance where agreement_id='AG-OB1'
@@ -270,9 +283,9 @@ await test('execution registers obligations from the pinned decision set', async
   // once: effective + 10 days. recurring: monthly, capped by the term end.
   const once = inst.filter(i => i.kind === 'notify');
   const monthly = inst.filter(i => i.kind === 'deliver');
-  eq(once.length, 1); eq(once[0].due, '2026-09-11');
-  eq(monthly.length, 7, 'Sep 2026 through Mar 2027, one per month, capped at term end');
-  eq(monthly[0].due, '2026-09-01'); eq(monthly[6].due, '2027-03-01');
+  eq(once.length, 1); eq(once[0].due, D.once_due);
+  eq(monthly.length, 7, 'the effective month through term end, one per month, capped there');
+  eq(monthly[0].due, D.effective_on); eq(monthly[6].due, D.term_end);
   eq(inst.every(i => i.owner_person === 'buyer@clausewerk'), true,
      'the accountable person defaults to the deal requester');
 });

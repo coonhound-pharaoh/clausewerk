@@ -238,6 +238,16 @@ const API = (() => {
     // ── The library and the ladders (WP-U13) ────────────────────────────
     library:          () => call('GET', '/library'),
     ladders:          () => call('GET', '/ladders'),
+    rules:            () => call('GET', '/rules'),
+    recordsDelegates: () => call('GET', '/records-delegates'),
+    redactionState:   () => call('GET', '/redaction-state'),
+    // The obligations surfaces (OB-11/OB-15). One derivation feeds the panel
+    // and the digest, so screen and email cannot disagree.
+    waiting:          () => call('GET', '/waiting'),
+    obligationsBook:  () => call('GET', '/obligations'),
+    obligationGaps:   () => call('GET', '/obligations/gaps'),
+    outbox:           () => call('GET', '/notifications/outbox'),
+    envelopes:        () => call('GET', '/envelopes'),
 
     // ── Assembly runs ───────────────────────────────────────────────────
     // NONE OF THESE THREE TAKES A PARAMETER, for the reading room's reason:
@@ -293,6 +303,23 @@ const API = (() => {
     decideOverride:    (b) => call('POST', '/overrides/decide', b),
     openOverrideGate:  (b) => call('POST', '/overrides/gate', b),
     nudgeRetention:(b) => call('POST', '/retention/nudge', b),
+    // The governed library acts (D-5, NC-21/22/23). Each one act; the
+    // authority is the schema's, and every refusal renders as its sentence.
+    retireClause:      (b) => call('POST', '/library/retire', b),
+    supersedeClause:   (b) => call('POST', '/library/supersede', b),
+    publishRule:       (b) => call('POST', '/rules', b),
+    retireRule:        (b) => call('POST', '/rules/retire', b),
+    promoteConcession: (b) => call('POST', '/concessions/promote', b),
+    moveFloor:         (b) => call('POST', '/ladders/floor', b),
+    publishLadder:     (b) => call('POST', '/ladders/publish', b),
+    releaseHold:       (b) => call('POST', '/holds/release', b),
+    destroyRetention:  (b) => call('POST', '/retention/destroy', b),
+    redactAgreement:   (b) => call('POST', '/agreements/redact', b),
+    purgeAgreement:    (b) => call('POST', '/agreements/purge', b),
+    grantRecordsDelegate:  (b) => call('POST', '/records-delegates', b),
+    revokeRecordsDelegate: (b) => call('POST', '/records-delegates/revoke', b),
+    shareAgreement:        (b) => call('POST', '/shares', b),
+    revokeShare:           (b) => call('POST', '/shares/revoke', b),
     takeCheckpoint:() => call('POST', '/checkpoints', {}),
     runCheck:      (which) => call('POST', `/health-checks/${which}`, {}),
   };

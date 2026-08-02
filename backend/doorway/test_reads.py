@@ -98,7 +98,7 @@ def test_the_read_count_moves_only_on_purpose():
     Asserted so the number moves deliberately. An endpoint appearing without
     anybody noticing is how a surface grows past what was reviewed.
     """
-    assert len(READS) == 59, (
+    assert len(READS) == 63, (
         f"{len(READS)} reads are registered; 25 ported, 4 added for the reading "
         "room and the library boards, 3 for assembly runs, 1 for the metrics "
         "board that shows the measurement beside the AI estimate (NC-25), "
@@ -111,9 +111,12 @@ def test_the_read_count_moves_only_on_purpose():
         "library-wide, by category, per contract, 4 for obligations "
         "(OB-07): the book, the coverage gaps, the unowned-defect surface, "
         "and close eligibility, 2 for the portfolio's certain half "
-        "(NC-16): positions and unresolved, and 2 for round analysis and "
-        "risk estimates (NC-17/NC-26). If that changed deliberately, "
-        "move this number with it."
+        "(NC-16): positions and unresolved, 2 for round analysis and "
+        "risk estimates (NC-17/NC-26), and 3 for the governed Legal-admin "
+        "acts (D-5, NC-21/22/23): the rule catalogue, the records "
+        "delegations, and the disposal review queue, and 1 for the envelope "
+        "strip (OB-15). If that changed deliberately, move this number "
+        "with it."
     )
 
 

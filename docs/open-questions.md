@@ -257,7 +257,7 @@ widened, and no write of any kind added. `library-ladder-views.test.mjs` asserts
 the read; `administrator.test.mjs`'s whole-schema sweep still asserts the role
 can write nothing.
 
-## 9b. WP-U13 cannot close: six governed acts have no endpoint — **two now decided**
+## 9b. WP-U13 cannot close: six governed acts have no endpoint — **IN SCOPE, D-5 settled 2026-08-02**
 
 Found 2026-07-27 while building the Legal admin's workspace. Its **reading**
 halves are built ([`library.jsx`](../prototype/v4/app/library.jsx) — the library
@@ -302,9 +302,23 @@ the owner rather than engineering time:**
   obsolete language rather than corrected. The flagging half is built in `0022`
   (`cw.run_drift`); **the superseding endpoint is still absent.**
 
-**Still open:** the four remaining acts (conflict-rule editing, concession
-promotion, rung/floor reordering, hold release), and whether the six endpoints
-are in scope for this effort at all or become a named follow-on.
+**SETTLED 2026-08-02 (D-5): the six acts are IN SCOPE — and BUILT the same
+day.** Mike's decision, recorded in `memory.md` S218. Migration `0062`, the
+doorway writes, and the screens landed together; WP-U13 is closed. Design
+choices made and recorded rather than waited on (flagged here per the rule):
+
+- **"Reorder a rung" is delivered as ladder REPLACEMENT.** Rung order stays
+  immutable in place — past concessions are recorded as "we went to rung 2",
+  and reordering under them would rewrite what they meant. `cw.publish_ladder`
+  retires the live ladder and publishes its successor in one recorded act; the
+  retired ladder stays readable forever. This also built the door 0003's own
+  refusal message pointed at ("publish a new ladder instead") — which had
+  never existed.
+- **"Edit a conflict rule" is publishing its next version.** The rule table
+  was already immutable per version; `cw.active_conflict_rule` takes the
+  latest effective one, so no in-place edit was needed or built.
+- **Destruction's confirmation idiom**: the record's own id, typed — costlier
+  than any other act in the product, per WP-U13's anti-pattern.
 
 **And one new question the owner has been asked** — see the note below on what
 "destroy" should mean.

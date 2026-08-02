@@ -103,6 +103,7 @@ def _rank(request, category_key: str, severity: str,
         """select r.rung, r.clause_id, r.version, r.is_floor
            from cw.ladder l join cw.ladder_rung r using (ladder_id)
            where l.category_key = %s and l.severity = %s
+             and l.retired_on is null
            order by r.rung""", (category_key, severity))
     ladder = ladders.read_ladder(category_key, severity, rows)
     if ladder.refused:
@@ -470,12 +471,13 @@ def assess_concessions(db: Database, caller: Caller, query: dict) -> Answer:
                    left join cw.clause_version sv
                      on sv.clause_id = c.standard_clause_id
                     and sv.version = c.standard_version
-                   left join cw.clause cl on cl.clause_id = c.standard_clause_id
-                   left join cw.ladder l
-                     on l.category_key = c.category_key
-                    and l.severity = cl.severity
+                   -- The concession's OWN ladder (bound by the authority
+                   -- trigger at the moment of concession), not a lookup by
+                   -- category — ladders retire and are replaced (0062), and a
+                   -- historical rung number means what it meant on the ladder
+                   -- it was conceded against.
                    left join cw.ladder_rung r
-                     on r.ladder_id = l.ladder_id and r.rung = c.conceded_rung
+                     on r.ladder_id = c.ladder_id and r.rung = c.conceded_rung
                    left join cw.clause_version rv
                      on rv.clause_id = r.clause_id and rv.version = r.version
                    where c.agreement_id = %s

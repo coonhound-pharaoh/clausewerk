@@ -372,6 +372,55 @@ READS: dict[str, Read] = {
              "empty-ladder row is load-bearing and must not be filtered out",
     ),
 
+    # The whole rule catalogue, retired versions included — the Legal admin's
+    # screen shows history, and cw.active_conflict_rule is the engine's cut,
+    # not the governance surface's. Which versions are IN FORCE is derivable
+    # (latest effective, not retired), and the screen derives it rather than
+    # asking a second endpoint.
+    "GET /rules": Read(
+        sql="""select rule_id, version, name, severity, title, detail, predicate,
+                 approved_by, approved_on, effective_on, retired, retired_reason
+          from cw.conflict_rule order by rule_id, version""",
+        rule="cw.conflict_rule read_all policy — a rule is a legal judgement "
+             "expressed as data, readable by every signed role",
+    ),
+
+    # Who may redact under a live delegation (U12). The administrator's
+    # console needs the list to grant and revoke against; Legal reads it to
+    # know who holds the authority.
+    "GET /records-delegates": Read(
+        sql="""select delegate_id, person, granted_by, granted_at, reason,
+                 revoked_by, revoked_at
+          from cw.records_delegate order by delegate_id""",
+        rule="cw.records_delegate read_all policy (0023) — the delegation is on "
+             "the record by design; only granting and revoking are the "
+             "administrator's",
+    ),
+
+    # The envelope strip (OB-15): where each signature envelope stands. The
+    # scoping is the table's own read policy — a requester sees their deals'
+    # envelopes, Legal and the examiners see all.
+    "GET /envelopes": Read(
+        sql="""select envelope_id, agreement_id, provider, provider_envelope_id,
+                 document_sha256, sent_by, sent_at, state
+          from cw.signature_envelope order by sent_at desc, envelope_id desc""",
+        rule="cw.signature_envelope read_scoped policy (0040) — Legal, auditor "
+             "and administrator see all; a requester their own deals' envelopes",
+    ),
+
+    # Where each record is in its end of life — the disposal review queue U12
+    # asks for, including the honest external_bytes_pending caveat, which a
+    # screen must render rather than smooth over.
+    "GET /redaction-state": Read(
+        sql="""select agreement_id, retention_until, destroyed_on, destroyed_by,
+                 redacted_on, redacted_by, purged_on, purged_by, state,
+                 external_bytes_pending
+          from cw.redaction_state order by agreement_id""",
+        rule="cw.redaction_state grant (0023) — legal_reviewer, legal_admin, "
+             "auditor, administrator; a viewer or requester has no business in "
+             "the disposal queue",
+    ),
+
     # ── Assembly runs (migration 0025) ──────────────────────────────────────
     #
     # NO PARAMETERS, ON ANY OF THE THREE, FOR THE REASON THE READING ROOM GAVE.

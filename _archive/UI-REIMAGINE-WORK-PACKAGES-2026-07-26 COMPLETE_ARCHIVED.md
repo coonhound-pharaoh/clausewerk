@@ -755,7 +755,23 @@ blocking finding means, how requesting works and what it does not promise).
 
 ---
 
-## WP-U13 · The Legal admin's workspace — **READ HALVES BUILT; the acting halves have no endpoints**
+## WP-U13 · The Legal admin's workspace — **CLOSED 2026-08-02**
+
+*The acting halves landed the day D-5 settled (memory.md S218). Migration
+`0062` built the two missing database acts — supersession as ONE recorded act
+(`cw.supersede_clause`) and ladder replacement (`cw.publish_ladder`, ladders
+now retire; rung order stays immutable in place because past concessions name
+rungs) — plus the audit trail the floor move never had. Fifteen new doorway
+writes (library retire/supersede, rule publish/retire, concession promotion,
+floor move, ladder replacement, hold release, destroy/redact/purge, the
+records delegation pair, and the reading-room share found missing by WP-U15),
+three new reads (the rule catalogue, the delegations, the disposal queue).
+Screens: the library's retire/supersede forms, the ladder acts, conflict
+rules, promotion, the governance pane (owner decisions with the demanded
+rationale), holds & retention for Legal, and the Administrator's disposal desk
+behind the strongest confirmation in the product — the record's own id, typed.
+`governed-library-acts.test.mjs` (16 tests), doorway boundary tests, and seven
+new mutation rows, all caught by their named tests.*
 
 *Screens paused by owner decision 2026-07-26, on the same grounds as `WP-U14`: the service is moving
 to Python and its endpoints do not serve HTTP until `WP-P4`. The database half is built now, because
