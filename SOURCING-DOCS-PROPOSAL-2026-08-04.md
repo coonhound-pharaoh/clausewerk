@@ -52,13 +52,20 @@ and is untouched by the model-path decision gates. Sketch, mirroring the AI-plan
 | SRC-3 | Intake asks the event-type question (selectable; "no sourcing event" allowed for renewals/direct awards) | AI-2 | none |
 | SRC-4 | Terms preview: attach the draft clause set to the sourcing package | SRC-2 | **decision 2** |
 
-## The decisions that are Mike's (put, not made)
+## The decisions — MADE by Mike, 2026-08-04 (recorded verbatim in memory.md S225)
 
-1. **Does the strict character-count invariant govern sourcing documents exactly as contracts?**
-   Recommendation: yes — one rule for every document the system emits is easier to sell and easier
-   to prove than a carve-out.
-2. **Is the terms-preview attachment (SRC-4) in the first version?** Recommendation: yes — it is the
-   differentiator; without it this is just a document generator.
-3. **Demo scope:** does the design-partner demo show intake → RFP/RFQ → contract end to end, or
-   intake → contract first with sourcing as the fast-follow? Recommendation: build AI-1/AI-2 first
-   either way; decide this when the intake demo exists and the first conversations are being booked.
+1. **Invariant parity: NO — sourcing documents get a deliberately looser rule.** Mike: "We must use
+   a looser rule for this. The AI will be responsible for authoring of customized questions and/or
+   deliverables. MOST of the document can be deterministically generated but not all of it."
+   What this means in the build: the RFP/RFQ skeleton (instructions, submission rules, terms
+   preview, pricing tables) assembles deterministically from the approved section library, and the
+   AI MAY author the engagement-specific supplier questions and deliverable descriptions directly
+   into the document. **Two clear rules, both honest:** contracts keep the strict
+   zero-AI-characters guarantee unchanged; sourcing documents carry AI-authored spans that are
+   RECORDED as such — the provenance count is still computed and kept on the run record, it is
+   simply not required to be zero for this document class. The requester reviews the document
+   before it goes out, as they always would.
+2. **Terms preview (SRC-4): YES, in version one.** It is the differentiator.
+3. **Demo scope: FULL PIPELINE.** The design-partner demo shows intake → RFP/RFQ → contract end to
+   end. The demo gate therefore includes SRC-1..4, accepted as a longer runway before the first
+   conversations.

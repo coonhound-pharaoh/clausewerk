@@ -4699,3 +4699,36 @@ because it consumes the intake manifest. The pitch it unlocks: the draft
 contract clause set rides along with the RFP/RFQ, so suppliers see the paper
 before they bid. Three decisions put to Mike in the proposal (strict invariant
 parity, terms-preview in v1, demo scope); none made yet.
+
+## S225 — All six pending owner decisions MADE (front half + sourcing) — 2026-08-04
+
+Asked and answered in one sitting.
+
+**Front half (AI-FRONT-HALF-ARCHITECTURE-2026-08-02):**
+1. Provider: **stay with OpenAI** on the existing seam; revisit at launch.
+2. Budget: **proposed defaults accepted** — 200 calls/day, 4,000 tokens/call,
+   administrator-changeable without a release.
+3. Sequencing: **intake first** (AI-1 → AI-2 → AI-3); matcher's deterministic
+   half may proceed in parallel.
+
+**Sourcing documents (SOURCING-DOCS-PROPOSAL-2026-08-04):**
+4. Invariant parity: **NO — looser rule for RFP/RFQ, by design.** Mike,
+   verbatim: "We must use a looser rule for this. The AI will be responsible
+   for authoring of customized questions and/or deliverables. MOST of the
+   document can be deterministically generated but not all of it." Contracts
+   keep the strict zero-AI-characters guarantee untouched; sourcing documents
+   may carry AI-authored spans (supplier questions, deliverable descriptions)
+   recorded as such — the provenance count is computed and kept, just not
+   required to be zero for this document class.
+5. Terms preview: **yes, in version one** — the draft contract clause set
+   rides with the RFP/RFQ.
+6. Demo scope: **full pipeline** — the design-partner demo shows
+   intake → RFP/RFQ → contract end to end (demo gate includes SRC-1..4).
+
+**Why this matters to the pitch:** the product now states two rules instead of
+one, and both are provable: "contracts contain zero AI-authored characters;
+sourcing documents label every AI-authored span." That is still a governance
+story no incumbent tells.
+
+Build order unlocked: AI-1 (deterministic intake) → AI-2 (intake screens) →
+AI-3 (model intake, OpenAI, budget defaults) → SRC-1..4 → full-pipeline demo.
