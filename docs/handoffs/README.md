@@ -17,13 +17,14 @@ handoff.
 | **Frontend** | Specified; a working prototype exists | [`05-frontend.md`](05-frontend.md) |
 | **Service layer & identity** | Built in JavaScript, now **frozen as the specification** the Python replacement must match | [`06-service-layer-and-identity.md`](06-service-layer-and-identity.md) |
 | **Role-based UI & the Administrator** | Fourteen of sixteen closed. History and the long-form traps live here | [`07-role-based-ui.md`](07-role-based-ui.md) |
-| **CURRENT STATE — start here** | The Python move complete, the JavaScript service deleted, four more owner decisions, and **uncommitted work in the tree** | [`08-disposal-screens-and-the-python-move.md`](08-disposal-screens-and-the-python-move.md) |
+| **Disposal screens & the Python move** | Complete; kept for its history and traps | [`08-disposal-screens-and-the-python-move.md`](08-disposal-screens-and-the-python-move.md) |
+| **CURRENT STATE — start here** | Tree clean and pushed; all six owner decisions made; the intake → RFP/RFQ → contract build is the queue | [`09-intake-and-sourcing-build.md`](09-intake-and-sourcing-build.md) |
 
 **Arriving cold? Read
-[`08-disposal-screens-and-the-python-move.md`](08-disposal-screens-and-the-python-move.md)
-first.** It is the current state of play and it opens with the one thing that
-will bite you: there is substantial uncommitted work in the tree, including a
-staged deletion.
+[`09-intake-and-sourcing-build.md`](09-intake-and-sourcing-build.md) first.** It
+is the current state of play: what was decided on 2026-08-04, the build queue in
+order (AI-1 first), and the traps that cost hours — including the second agent
+that works this machine.
 
 **Repository state.** Substantially further along than when reports 01–05 were
 written, and moving — so **do not trust a number in this file. Run
