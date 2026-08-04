@@ -4685,3 +4685,17 @@ symptom looks like an unreachable or overloaded database.
 **How to apply:** on this machine always use 127.0.0.1 in database URLs
 (CW_TEST_OWNER_URL, CW_DATABASE_URL, CW_OWNER_DATABASE_URL); if a doorway
 anything hangs ~30s per operation, check the host in the URL first.
+
+## S224 — Owner addition: sourcing documents (RFP or RFQ, selectable) from the same intake — 2026-08-04
+
+Mike added a second destination for the intake data: alongside the contract,
+the system must generate a sourcing document — an RFP when suppliers are asked
+to propose a solution, an RFQ when the spec is fixed and only price/delivery
+are in question. Selectable by the requester; the interview may later
+recommend a type. Proposal written: `SOURCING-DOCS-PROPOSAL-2026-08-04.md` —
+same one-door language rule (approved section library + review-queue-only AI
+candidates), requester scope prose is human-authored, lands after AI-1/AI-2
+because it consumes the intake manifest. The pitch it unlocks: the draft
+contract clause set rides along with the RFP/RFQ, so suppliers see the paper
+before they bid. Three decisions put to Mike in the proposal (strict invariant
+parity, terms-preview in v1, demo scope); none made yet.
