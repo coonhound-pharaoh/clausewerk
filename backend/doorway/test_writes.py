@@ -132,8 +132,8 @@ BODIES: dict[str, dict] = {
     # not for a missing field. The viewer holds no grant on cw.notice at all,
     # which is the refusal this body is here to reach.
     "POST /notices": {
-        "to_role": "legal_admin", "subject_kind": "intake_probe",
-        "subject_ref": "need", "note": "this question classifies nothing",
+        "to_role": "legal_admin", "subject_kind": "health_tile",
+        "subject_ref": "audit chain", "note": "this check has never run",
     },
     "POST /notices/acknowledge": {"notice_id": 1, "note": "seen"},
     "POST /obligations/satisfy": {"obligation_id": 1, "note": "done; receipt"},

@@ -5031,3 +5031,34 @@ one that holds the grant.
 
 **A mutation row puts back 0065's revoke and requires the sweep to fail** — a lint
 nobody has seen fail is a green light with nothing behind it.
+
+## S239 — A number that cannot fail is not a measure: the intake coverage screen came out — 2026-08-05
+
+Built in the morning (0063), removed the same day (0067). It counted intake
+questions whose plain-word answers matched none of Legal's term lists and showed
+the result to the administrator as gaps in those lists.
+
+**Two defects, and the second one could not be fixed.** Four of the six intake
+questions carry no category at all — what are you buying, from whom, for how much,
+for how long — so they have no term list to match and were reported as gaps they
+could never *not* be. The single "gap" the demo produced was the question asking a
+requester to describe their purchase: a false alarm, and the only reading anybody
+ever got. Narrowed to the two questions that do carry a category, the figure still
+cannot tell "our word lists missed something" from "there was nothing to find" —
+the requester who correctly says there is no personal data looks identical to the
+one describing a serious exposure in words we do not recognise.
+
+**Mike's decision: remove rather than narrow — a weak number on a screen is worse
+than no number.** An administrator who reads a figure they cannot act on learns to
+skip that panel, and the panels beside it must not be skipped.
+
+**The notice record survived intact; only the `intake_probe` subject kind went.**
+It was one of four kinds and the only one whose sole surface was the removed screen.
+The other three — `notification_gap`, `health_tile`, `account` — all still have live
+screens, so the kind was removed rather than repointed: a kind kept alive against a
+future surface is a kind whose visibility rule nobody re-reads. The check constraint
+was re-added NOT VALID, because `cw.notice` is append-only and a validated one would
+have demanded the migration rewrite notices already raised.
+
+**How to apply:** before building a counting surface, ask what its silence means.
+If "zero" and "we are blind" produce the same number, there is nothing to build.

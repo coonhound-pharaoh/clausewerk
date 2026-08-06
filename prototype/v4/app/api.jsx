@@ -267,15 +267,13 @@ const API = (() => {
     readingRoom:        () => call('GET', '/reading-room'),
     readingRoomClauses: () => call('GET', '/reading-room/clauses'),
 
-    // ── Notices, and the intake question set they are raised about ──────
+    // ── Notices ─────────────────────────────────────────────────────────
     notices:         () => call('GET', '/notices'),
     // People being waited on whom no channel can reach. It has existed since
-    // OB-09 with no screen behind it — which is the same shape as the intake
-    // gaps: a fact the record holds and nobody was looking at.
+    // OB-09 with no screen behind it — a fact the record held and nobody was
+    // looking at.
     notificationGap: () => call('GET', '/notifications/gap'),
     noticeRoutes:    () => call('GET', '/notice-routes'),
-    intakeCoverage:  () => call('GET', '/intake/coverage'),
-    intakeCoverageSummary: () => call('GET', '/intake/coverage/summary'),
 
     // ── The negotiation record ──────────────────────────────────────────
     // SIX READS, NONE OF WHICH TAKES A PARAMETER, for the reading room's
