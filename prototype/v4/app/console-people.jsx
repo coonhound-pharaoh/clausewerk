@@ -74,7 +74,7 @@ function activityChip(p) {
 // a screen Legal has no reason to open — is a queue that does not get cleared,
 // and the countersign rule's entire cost is the wait it adds. ADR-0011 leans on
 // this to keep that wait short.
-function CountersignQueue({ me, rows, onDone, onError, showAdminNote }) {
+function CountersignQueue({ me, rows, onDone, onError, showAdminNote, routes }) {
   return (
     <div>
       <PanelHead
@@ -104,6 +104,15 @@ function CountersignQueue({ me, rows, onDone, onError, showAdminNote }) {
                   }}
                 >✓ countersign</button>
               )}
+              {/* THE ADMINISTRATOR'S HALF OF THE SAME ROW (NT-3). They cannot
+                  clear this queue — that is the point of it — and until now
+                  that left them watching a grant confer nothing for a week
+                  with no act available. Now they can raise it to the people
+                  who can clear it. Nothing about the grant changes. */}
+              <RaiseNotice
+                me={me} routes={routes}
+                subject={{ kind: 'account', ref: g.person,
+                           about: `${g.display_name || g.person}'s uncountersigned ${g.role} grant` }} />
             </>
           ),
         }))}
@@ -280,6 +289,9 @@ function PeopleAndAccessConsole({ me }) {
   const summary  = usePane(() => API.accessSummary());
   const queue    = usePane(() => API.countersignQueue());
   const history  = usePane(() => API.accessHistory());
+  // The permitted raiser -> recipient pairs (0064), for the raise controls on
+  // the countersign queue. Read once here rather than per row.
+  const routes   = usePane(() => API.noticeRoutes());
   const [error, setError] = useState(null);
   const [revoking, setRevoking] = useState(null);
 
@@ -345,6 +357,7 @@ function PeopleAndAccessConsole({ me }) {
           <CountersignQueue
             me={me} rows={queue.rows}
             onDone={reloadAll} onError={setError}
+            routes={routes.rows}
             showAdminNote={me.role === 'administrator'}
           />
         </div>

@@ -723,6 +723,10 @@ function ReviewDeskPane({ me }) {
           <CountersignQueue
             me={me} rows={queue.rows}
             onDone={() => queue.reload()} onError={setError}
+            // A Legal reviewer holds no route for an account notice, so the
+            // raise control renders nothing here. The shared component asks
+            // the route table rather than being told which screen it is on.
+            routes={[]}
           />
         </div>
       )}

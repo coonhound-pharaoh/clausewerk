@@ -18,6 +18,13 @@ THE THREE GUARANTEES THESE TESTS PIN
      rule on the document). The auditor and the viewer are refused in the
      database's words, and a deal that is not yours to see answers as if it
      held no negotiation — which is what the screen shows too.
+
+AND READING ONE BACK OUT (NI-4, 2026-08-05). The tests at the bottom cover
+`fetch`, whose whole design is one sentence: the ROUND's read policy decides,
+not the document store's. 0047 gave cw.received_document a `read_all` policy,
+so a test that resolved a document by its own id would pass while handing one
+requester another requester's supplier paper — which is exactly the assertion
+below that would have failed on the obvious implementation.
 """
 
 from __future__ import annotations
@@ -221,3 +228,183 @@ def test_the_route_reaches_the_module_with_the_upload_and_the_selector(seeded, d
                           upload=redline_upload())
     assert response.status == 200, response.body
     assert response.body["round_no"] == 1
+
+
+# ── Reading one back out (NI-4) ─────────────────────────────────────────────
+
+
+def recorded(db: Database, caller: Caller = OWNING_REQUESTER,
+             agreement: str = "AG-100") -> dict:
+    """One redline on the record, and where to ask for it back."""
+    answered = redlines.record(db, caller, redline_upload(), {"agreement": agreement})
+    assert answered.status == 200, answered.body
+    return answered.body
+
+
+def test_the_owning_requester_gets_their_counterpartys_bytes_back(seeded, db):
+    """Byte for byte, under the name the file arrived with. A document that
+    comes back altered is not the document the round attests to."""
+    where = recorded(db)
+    got = redlines.fetch(db, OWNING_REQUESTER, {
+        "negotiation": str(where["negotiation_id"]),
+        "round": str(where["round_no"])})
+    assert got.status == 200, getattr(got, "body", got)
+    assert got.body == MARKUP
+    assert got.content_type == DOCX_TYPE
+    assert got.filename == "redline-r1.docx"
+
+
+def test_legal_reads_the_paper_on_a_deal_they_do_not_own(seeded, db):
+    where = recorded(db)
+    got = redlines.fetch(db, LEGAL, {"negotiation": str(where["negotiation_id"]),
+                                     "round": str(where["round_no"])})
+    assert got.status == 200, getattr(got, "body", got)
+    assert got.body == MARKUP
+
+
+def test_another_requester_gets_a_sentence_and_no_bytes(seeded, db):
+    """THE ASSERTION THIS ENDPOINT EXISTS TO SATISFY. Ben asks for the round
+    on Rita's deal by number. cw.received_document would have shown him the
+    bytes — its read policy is `app_role() is not null` — so if this ever
+    fails, the resolution stopped going through cw.negotiation_round."""
+    where = recorded(db)
+    got = redlines.fetch(db, OTHER_REQUESTER, {
+        "negotiation": str(where["negotiation_id"]),
+        "round": str(where["round_no"])})
+    assert got.status == 403, getattr(got, "body", got)
+    assert isinstance(got.body, dict), "a refusal handed back bytes"
+    assert got.body.get("reason", "").strip()
+
+
+def test_a_viewer_gets_a_sentence_and_no_bytes(seeded, db):
+    """ADR-0008 gave the viewer no export path and this endpoint is not one."""
+    where = recorded(db)
+    got = redlines.fetch(db, VIEWER, {"negotiation": str(where["negotiation_id"]),
+                                      "round": str(where["round_no"])})
+    assert got.status >= 400, getattr(got, "body", got)
+    assert isinstance(got.body, dict)
+    assert got.body.get("reason", "").strip()
+
+
+def test_the_auditor_takes_a_copy_and_the_chain_records_that_they_did(seeded, db):
+    """NI-4 FINISHED (0065). This test was the opposite assertion for half a
+    day: the auditor was refused, because handing a document out is appended to
+    the chain first and cw.audit_event's general append policy (0007) names the
+    requester and the two Legal roles and not them.
+
+    That rule is about the integrity of the record an auditor verifies. It was
+    refusing them a DOCUMENT, which is not what it is about — so 0065 opened
+    one narrow door that writes this event and nothing else. The auditor can
+    now record that they took a copy, and still cannot append anything else at
+    all: the test below this one proves the second half."""
+    where = recorded(db)
+    got = redlines.fetch(db, AUDITOR, {"negotiation": str(where["negotiation_id"]),
+                                       "round": str(where["round_no"])})
+    assert got.status == 200, getattr(got, "body", got)
+    assert got.body == MARKUP
+
+    with db.as_person(LEAH, "legal_admin") as request:
+        [event] = request.rows(
+            "select actor, actor_role, event_type from cw.audit_event "
+            "where event_type = 'received_document_read'")
+    assert event["actor"] == AUDITOR.person
+    assert event["actor_role"] == "auditor", (
+        "the chain recorded the auditor's read without their role. Inside a "
+        "SECURITY DEFINER the role must come from the connection's SET ROLE, "
+        "not from cw.app_role(), which answers null there")
+
+
+def test_the_auditor_still_cannot_append_anything_else(seeded, db):
+    """THE HALF THAT MATTERS. The door 0065 opened is one event type wide. If
+    the auditor ever holds a general INSERT on the chain, this fails — and the
+    record they exist to verify has become a record they can write."""
+    with pytest.raises(psycopg.Error):
+        with db.as_person(AUDITOR.person, AUDITOR.role) as request:
+            request.write(
+                "insert into cw.audit_event "
+                "  (actor, actor_role, actor_kind, event_type, subject) "
+                "values (%s, 'auditor', 'human', 'invented_by_the_auditor', 'x')",
+                (AUDITOR.person,))
+
+    with pytest.raises(psycopg.Error):
+        with db.as_person(AUDITOR.person, AUDITOR.role) as request:
+            request.write(
+                "select cw.audit('invented_by_the_auditor', 'x', '{}'::jsonb)")
+
+
+def test_a_round_whose_document_lives_elsewhere_says_so(seeded, db):
+    """POST /negotiations/rounds records a round for a document held
+    somewhere this service does not keep bytes. That is a true state of the
+    record — the fingerprint and the location are on the row — and it answers
+    a sentence rather than an empty file."""
+    with db.as_person(RITA, "requester") as request:
+        row = request.rows(
+            """insert into cw.negotiation_round
+                 (negotiation_id, round_no, direction, document_sha256,
+                  storage_uri, sent_on, actor)
+               select negotiation_id, 1, 'received', %s,
+                      'https://vault.example/theirs.docx', current_date, %s
+               from cw.negotiation where agreement_id = 'AG-100'
+               returning negotiation_id, round_no""", ("d" * 64, RITA))[0]
+
+    got = redlines.fetch(db, OWNING_REQUESTER, {
+        "negotiation": str(row["negotiation_id"]), "round": str(row["round_no"])})
+    assert got.status == 409, getattr(got, "body", got)
+    assert got.body.get("reason", "").strip()
+
+
+def test_naming_no_round_is_a_400_not_a_crash(seeded, db):
+    got = redlines.fetch(db, OWNING_REQUESTER, {})
+    assert got.status == 400
+    assert isinstance(got.body, dict)
+
+
+def test_a_round_that_is_not_a_number_is_refused_unread(seeded, db):
+    got = redlines.fetch(db, OWNING_REQUESTER,
+                         {"negotiation": "1; drop table cw.agreement", "round": "1"})
+    assert got.status == 400
+    assert isinstance(got.body, dict)
+
+
+def test_the_fetch_is_on_the_chain_before_the_bytes_leave(seeded, db):
+    """A document leaving the system is an act, and an act nobody can see
+    afterwards is the thing this product exists not to do."""
+    where = recorded(db)
+    got = redlines.fetch(db, OWNING_REQUESTER, {
+        "negotiation": str(where["negotiation_id"]),
+        "round": str(where["round_no"])})
+    assert got.status == 200, getattr(got, "body", got)
+
+    with db.as_person(LEAH, "legal_admin") as request:
+        events = request.rows(
+            "select event_type, actor, payload from cw.audit_event "
+            "where event_type = 'received_document_read' order by seq")
+    assert len(events) == 1, f"the read was not recorded once: {events}"
+    assert events[0]["actor"] == RITA
+    assert events[0]["payload"]["sha256"] == where["document_sha256"]
+
+
+def test_a_refused_fetch_records_nothing(seeded, db):
+    recorded(db)
+    where = redlines.record(db, OWNING_REQUESTER, redline_upload(),
+                            {"agreement": "AG-100"}).body
+    redlines.fetch(db, OTHER_REQUESTER, {"negotiation": str(where["negotiation_id"]),
+                                         "round": str(where["round_no"])})
+    with db.as_person(LEAH, "legal_admin") as request:
+        events = request.rows(
+            "select seq from cw.audit_event "
+            "where event_type = 'received_document_read'")
+    assert events == [], "a refused fetch left a record of a read that never happened"
+
+
+def test_the_route_reaches_the_fetch_with_its_selector(seeded, db):
+    """End to end through App.handle, the GET /runs/contract shape: a
+    Download comes back, not a Response, and server.py branches on the type."""
+    app = App(db, email_channel=lambda *_: None)
+    token = app.sign_in(RITA).body["token"]
+    where = recorded(db)
+    response = app.handle("GET", "/negotiations/paper", token=token,
+                          query={"negotiation": str(where["negotiation_id"]),
+                                 "round": str(where["round_no"])})
+    assert response.status == 200, getattr(response, "body", response)
+    assert response.body == MARKUP

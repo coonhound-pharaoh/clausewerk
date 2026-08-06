@@ -38,8 +38,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 from doorway import (
-    advisory, analysis, documents, executions, manifests, notifications, paper,
-    reads, redlines, runs, writes,
+    advisory, analysis, documents, executions, intake, manifests, notifications,
+    paper, reads, redlines, runs, writes,
 )
 from doorway.db import Database
 from doorway.identity import (
@@ -224,6 +224,20 @@ class App:
         # The contract engine's one connection to the outside, and the pattern
         # every further one follows: adapt on this side, call the engine
         # unchanged, pass its own words back out. See manifests.py.
+        # The deterministic intake (AI-1). The probe list is not a READS entry
+        # because it joins a data file to a library read; the classifier is not
+        # a Write because it reads the vocabulary, classifies, and records —
+        # the same three-act shape as POST /runs. Both answer with material for
+        # the requester's screen; nothing proceeds until the requester submits
+        # the proposal themselves through POST /manifests/check.
+        if key == "GET /intake/probes":
+            answered = intake.probes(self._db, caller)
+            return Response(answered.status, answered.body)
+
+        if key == "POST /intake/classify":
+            answered = intake.classify_intake(self._db, caller, body)
+            return Response(answered.status, answered.body)
+
         if key == "POST /manifests/check":
             answered = manifests.check(self._db, caller, body)
             return Response(answered.status, answered.body)
@@ -277,6 +291,14 @@ class App:
         if key == "POST /negotiations/redline":
             answered = redlines.record(self._db, caller, upload, selector)
             return Response(answered.status, answered.body)
+
+        # The other direction (NI-4, 2026-08-05): the counterparty's document
+        # handed back to the people negotiating the deal. A Download for the
+        # reason GET /runs/contract is one, and it names a ROUND rather than a
+        # document — the round's own read policy is the fence. redlines.py's
+        # header carries the rest, including why an auditor is refused.
+        if key == "GET /negotiations/paper":
+            return redlines.fetch(self._db, caller, selector)
 
         # Round analysis (NC-17) and its supplier tail (NC-19). Not Writes
         # for the reason POST /runs is not: each parses a stored document or

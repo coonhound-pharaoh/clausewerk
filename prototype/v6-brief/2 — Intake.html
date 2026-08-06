@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clausewerk V6 — Intake</title>
+<!-- A PICTURE OF AN INTERFACE, NOT A BUILD OF ONE. Never served by the app.
+     Every question, answer, name and figure is INVENTED. Typefaces: S226. -->
+<link rel="stylesheet" href="../v4/app/fonts.css">
+<link rel="stylesheet" href="v6.css">
+<style>
+  /* THE DISCLOSURE. Permanent, plain, and in the reading order — not a tooltip,
+     not an icon, not a footer. It is the first thing read on this screen and it
+     cannot be dismissed, because a labelled machine is a trustworthy one. */
+  .disclose{background:var(--sheet);border:1.5px solid var(--wait);border-left-width:4px;
+    padding:13px 17px;margin-top:18px;
+    background-image:repeating-linear-gradient(45deg,rgba(44,35,24,.03) 0 6px,transparent 6px 12px)}
+  .disclose .h{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--wait)}
+  .disclose p{margin:6px 0 0;font-size:13.5px;line-height:1.65;color:var(--ink-2);max-width:82ch}
+
+  .qa{background:var(--sheet);border:1px solid var(--rule-2);margin-top:8px}
+  .turn{padding:13px 18px;border-bottom:1px solid var(--rule)}
+  .turn:last-child{border-bottom:0}
+  .turn .src{font-family:'Courier Prime',monospace;font-size:9.5px;letter-spacing:.13em;
+    text-transform:uppercase;color:var(--mute)}
+  .turn.asked{background:var(--sheet-2)}
+  .turn.asked .src{color:var(--wait)}
+  .turn p{margin:4px 0 0;font-size:14.5px;line-height:1.7;max-width:74ch}
+  .turn.said p{font-family:'Source Serif 4',Georgia,serif}
+  /* a person's own words, kept as theirs */
+  .quoted{border-left:3px solid var(--rule-2);padding-left:13px;font-style:italic}
+
+  .mani{background:var(--sheet);border:1px solid var(--rule-2)}
+  .mrow{display:grid;grid-template-columns:15px 158px 1fr auto;gap:11px;align-items:start;
+    padding:10px 15px;border-bottom:1px solid var(--rule)}
+  .mrow:last-child{border-bottom:0}
+  .mrow .g{width:7px;align-self:stretch;min-height:20px;margin-top:2px}
+  .mrow .k{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--mute);padding-top:2px}
+  .mrow .v{font-size:13.5px;line-height:1.55}
+  .mrow .v i{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+  .dest{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:9px}
+  .opt{background:var(--sheet);border:1.5px solid var(--rule-2);padding:13px 15px}
+  .opt.picked{border-color:var(--ink);border-width:2px}
+  .opt .t{font-family:'Instrument Serif',Georgia,serif;font-size:18px}
+  .opt .d{font-size:12.5px;color:var(--ink-2);line-height:1.6;margin-top:5px}
+  .opt .r{font-family:'Courier Prime',monospace;font-size:9.5px;letter-spacing:.11em;
+    text-transform:uppercase;color:var(--mute);margin-top:9px;display:block}
+  .budget{display:flex;gap:26px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <nav class="rail">
+    <div class="mark" style="font-size:21px">Clausewerk</div>
+    <div class="desk-of">MY DEALS<br>d.buyer · requester</div>
+    <div class="rl"><span>my deals</span><span class="n">4</span></div>
+    <div class="rl on"><span>intake</span><span class="n">1</span></div>
+    <div class="rl"><span>negotiate</span><span class="n">2</span></div>
+    <div class="rl"><span>obligations</span><span class="n">7</span></div>
+    <div class="rl"><span>vendors</span><span class="n">12</span></div>
+    <div class="rl"><span>my record</span><span class="n zero">0</span></div>
+    <div class="railfoot">
+      Six areas, so a rail rather than a row — the same rule the reviewer and the library get.
+      Six is where a row stops being scannable and starts being a list.
+    </div>
+  </nav>
+
+  <main class="main">
+
+  <div class="mast">
+    <div><div class="t">Intake</div></div>
+    <span class="who">d.buyer · requester</span>
+  </div>
+  <p class="opens">Opening a deal — the interview, and where it goes.</p>
+
+  <p class="lede">The intake interview is the first place a requester meets the model, so it is
+  the screen where the labelling rules matter most. <b>The model asks; the requester answers in
+  their own words; and everything the model then proposes is drawn as waiting until a named
+  person confirms it.</b></p>
+
+  <!-- ═══ THE DISCLOSURE — permanent, plain, in the reading order ═══ -->
+  <div class="disclose">
+    <div class="h">You are being interviewed by a machine</div>
+    <p>The questions below are written by a language model. Your answers are your own and are
+    recorded as yours. The model will propose a structured summary of what you say; nothing it
+    proposes takes effect until you confirm it, and Legal sees the difference between what you
+    wrote and what the machine made of it.</p>
+  </div>
+
+  <h5 class="sec">The interview</h5>
+  <div class="sub">Six questions asked so far. The model may ask fewer or more depending on what you say.</div>
+  <div class="qa">
+    <div class="turn asked">
+      <span class="src">Asked by the model · run 9A11C7</span>
+      <p>What is being bought, and what would count as this going wrong?</p>
+    </div>
+    <div class="turn said">
+      <span class="src">Answered by d.buyer · in their own words</span>
+      <p class="quoted">“Managed backup for the finance systems. It goes wrong if they hold our
+      data outside the UK, or if a restore takes longer than a working day and nobody can tell
+      us why.”</p>
+    </div>
+    <div class="turn asked">
+      <span class="src">Asked by the model · run 9A11C7</span>
+      <p>You mentioned a restore time. Is a working day the commitment you want, or the worst
+      you would tolerate?</p>
+    </div>
+    <div class="turn said">
+      <span class="src">Answered by d.buyer · in their own words</span>
+      <p class="quoted">“The worst I'd tolerate. I want four hours in the contract.”</p>
+    </div>
+  </div>
+
+  <!-- ═══ WHAT THE MODEL MADE OF IT ═══ -->
+  <h5 class="sec">What the model made of your answers</h5>
+  <div class="sub">Nothing here is settled. A proposed field confers nothing until you confirm it — and the mark says which is which.</div>
+  <div class="mani">
+    <div class="mrow">
+      <div class="g g-lib"></div>
+      <div class="k">Counterparty</div>
+      <div class="v">Halvorsen &amp; Co.<i>Typed by you when you opened the deal.</i></div>
+      <span class="stamp s-ok">yours</span>
+    </div>
+    <div class="mrow">
+      <div class="g g-lib"></div>
+      <div class="k">What is bought</div>
+      <div class="v">Managed backup for the finance systems<i>Your words, unchanged.</i></div>
+      <span class="stamp s-ok">yours</span>
+    </div>
+    <div class="mrow">
+      <div class="g g-prop"></div>
+      <div class="k">Data residency</div>
+      <div class="v">United Kingdom only<i>Proposed by the model from “outside the UK”. You have not confirmed it.</i></div>
+      <span class="stamp s-wait">proposed</span>
+    </div>
+    <div class="mrow">
+      <div class="g g-prop"></div>
+      <div class="k">Restore time</div>
+      <div class="v">Four hours, contractual<i>Proposed by the model. It read “four hours” as the commitment, not the tolerance.</i></div>
+      <span class="stamp s-wait">proposed</span>
+    </div>
+    <div class="mrow">
+      <div class="g g-prop"></div>
+      <div class="k">Category</div>
+      <div class="v">Data processing agreement<i>Proposed by the model. A category it invented would be recorded as invented, and refused at the boundary.</i></div>
+      <span class="stamp s-wait">proposed</span>
+    </div>
+    <div class="mrow">
+      <div class="g" style="border:1.5px dashed var(--none)"></div>
+      <div class="k">Personal data</div>
+      <div class="v">—<i>Not asked yet. An unanswered field is shown as unanswered, never as “no”.</i></div>
+      <span class="stamp s-none">never asked</span>
+    </div>
+  </div>
+
+  <div class="acts" style="border:1px solid var(--rule-2)">
+    <div class="act">
+      <button class="btn primary">✓ Confirm these four</button>
+      <div class="reason">
+        <div class="lab" style="font-family:'Courier Prime',monospace;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mute)">What confirming does</div>
+        <div class="why">Each field stamps from waiting to yours, against your name and the
+        minute. The model's proposal stays in the record as what was proposed — confirming does
+        not erase it, and Legal can see where you agreed with the machine and where you did not.</div>
+      </div>
+    </div>
+    <div class="act">
+      <button class="btn">Correct a field</button>
+      <div class="reason">
+        <div class="lab" style="font-family:'Courier Prime',monospace;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mute)">Where the model misread you</div>
+        <div class="field">Restore time — you said four hours was the worst you would tolerate. Correcting it records the disagreement, which is a more useful fact than a quiet edit.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ THE DESTINATION ═══ -->
+  <h5 class="sec">Where this intake goes</h5>
+  <div class="sub">You choose. The interview may recommend, and its recommendation is a proposal like any other.</div>
+  <div class="dest">
+    <div class="opt picked">
+      <div class="t">A contract</div>
+      <div class="d">Assembled from approved library clauses. <b>Zero machine-written
+      characters</b> — the check runs on every build and the build fails if it is ever
+      non-zero.</div>
+      <span class="r">always available</span>
+    </div>
+    <div class="opt">
+      <div class="t">An RFP</div>
+      <div class="d">Suppliers are asked to propose a solution. Machine-written passages are
+      permitted here and every one is labelled.</div>
+      <span class="r">the model recommends this — a proposal, not a decision</span>
+    </div>
+    <div class="opt">
+      <div class="t">An RFQ</div>
+      <div class="d">The specification is fixed and only price and delivery are open.</div>
+      <span class="r">selectable</span>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="panel">
+      <h5>What the machine is allowed to spend</h5>
+      <div class="sub" style="margin-bottom:8px">Shown to the person it is being spent on.</div>
+      <div class="measure"><span class="l">Interview calls used today</span>
+        <span class="v">37 / 200</span><span class="stamp s-ok">within</span></div>
+      <div class="measure"><span class="l">Ceiling per call</span>
+        <span class="v">4,000</span><span class="stamp s-ok">tokens</span></div>
+      <div class="measure"><span class="l">Changed by</span>
+        <span class="v">—</span><span class="stamp s-none">never changed</span></div>
+      <div class="note">An administrator can move these without a release. The figures are shown
+      here rather than hidden in a settings page, because a limit somebody meets mid-interview
+      should not arrive as a mystery.</div>
+    </div>
+
+    <div class="panel">
+      <h5>What this screen will not do</h5>
+      <div class="note">It will not <b>pre-fill your answer</b>. A screen that wrote your words
+      for you would be interviewing itself.</div>
+      <div class="note">It will not <b>hide the label</b>. The disclosure at the top is part of
+      the reading order and cannot be dismissed — not an icon, not a tooltip, not a footer.</div>
+      <div class="note">It will not <b>draw a proposal as a fact</b>. Waiting and confirmed look
+      different at a glance, and they stay different with the colour removed.</div>
+      <div class="note">There are <b>no sparkles</b>, no gradient badge, no wand. Here the model
+      is a labelled participant with a recorded name, exactly like the people.</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    A picture of an interface, not a build of one — never served by the application. Every
+    question, answer, name, figure and category above is <b>invented</b>. Typefaces are served
+    from this repository; opening this page contacts nobody.
+  </div>
+  </main>
+</div>
+</body>
+</html>

@@ -66,10 +66,21 @@ function App() {
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--bg)' }}>
       <Masthead identity={identity} onSignOut={onSignOut} />
-      <Tabs role={identity.role} active={active} onSelect={go} />
-      <div className="flex-1 overflow-auto px-6 py-6" data-testid="workspace">
-        <Workspace me={identity} tab={active} />
-      </div>
+      {usesRail(identity.role) ? (
+        <div className="flex-1 flex min-h-0">
+          <Nav role={identity.role} active={active} onSelect={go} />
+          <div className="flex-1 overflow-auto px-6 py-6 min-w-0" data-testid="workspace">
+            <Workspace me={identity} tab={active} />
+          </div>
+        </div>
+      ) : (
+        <React.Fragment>
+          <Nav role={identity.role} active={active} onSelect={go} />
+          <div className="flex-1 overflow-auto px-6 py-6" data-testid="workspace">
+            <Workspace me={identity} tab={active} />
+          </div>
+        </React.Fragment>
+      )}
       <Footer
         identity={identity}
         note="Every pane here is fed by an endpoint your role can actually read."

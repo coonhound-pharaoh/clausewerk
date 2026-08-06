@@ -4,9 +4,32 @@
     {
       "name": "clausewerk",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "doorway.server", "--port", "8787", "--static", "../prototype/v4"],
+      "runtimeArgs": ["-m", "doorway.server", "--port", "8787", "--static", "../prototype/v4",
+        "--database-url", "postgresql://cw_app:clausewerk-dev@127.0.0.1:5432/clausewerk"],
       "cwd": "backend",
       "port": 8787
+    },
+    {
+      "name": "clausewerk-demo",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "doorway.server", "--port", "8789", "--static", "../prototype/v4",
+        "--database-url", "postgresql://cw_app:clausewerk-dev@127.0.0.1:5432/clausewerk_demo"],
+      "cwd": "backend",
+      "port": 8789
+    },
+    {
+      "name": "clausewerk-negotiate",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "doorway.server", "--port", "8790", "--static", "../prototype/v4",
+        "--database-url", "postgresql://cw_app:clausewerk-dev@127.0.0.1:5432/clausewerk_walk"],
+      "cwd": "backend",
+      "port": 8790
+    },
+    {
+      "name": "prototypes",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8788", "--directory", "prototype"],
+      "port": 8788
     }
   ]
 }

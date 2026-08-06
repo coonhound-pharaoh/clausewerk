@@ -187,9 +187,18 @@ function RequestOverride({ deal, runId, blocking, onDone, onError, onCancel }) {
 // pre-flight says whether the categories are ones the library defines; it
 // records nothing and produces no contract. Assembling records a run that
 // cannot afterwards be edited or removed.
-function AssembleContract({ deal, categories, onAssembled, onError }) {
-  const [source, setSource] = useState('manual');
-  const [risks, setRisks] = useState([{ category: '', severity: 'Standard', justification: '' }]);
+//
+// TWO ENTRANCES, ONE COMPONENT (AI-2). This is reached from an open deal with
+// nothing filled in, and from the intake walk with the classifier's confirmed
+// proposal already in it. The second entrance passes `start` and nothing else
+// changes: same pre-flight, same act, same refusals. A second copy of this
+// panel behind the intake tab is exactly how two paths to one recorded fact
+// start disagreeing about what they recorded.
+function AssembleContract({ deal, categories, onAssembled, onError, start }) {
+  const [source, setSource] = useState(start?.source || 'manual');
+  const [risks, setRisks] = useState(start?.risks?.length
+    ? start.risks
+    : [{ category: '', severity: 'Standard', justification: '' }]);
   const [checked, setChecked] = useState(null);
   const [busy, setBusy] = useState(false);
 

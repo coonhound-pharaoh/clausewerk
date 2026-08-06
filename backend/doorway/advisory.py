@@ -404,6 +404,260 @@ def judge_risk_exposure(baseline: str, compared: str) -> Judgment:
         model=model, model_version=version, prompt=prompt, inputs=inputs)
 
 
+# ── The intake proposal (AI-3) ──────────────────────────────────────────────
+#
+# THE THIRD THING THIS PRODUCT ASKS A MODEL, and the first where the answer is
+# not an opinion about a number but a PROPOSAL a person will act on. A requester
+# describes what they are buying in their own words; the model proposes which
+# risk categories that raises and how severe each is.
+#
+# WHAT IT MAY NOT DO, and none of these is stylistic:
+#
+#   · IT MAY NOT INVENT A CATEGORY. It is told the exact list it may choose
+#     from — the caller's own library, read through the caller's own connection
+#     — and anything outside that list is dropped by intake.py and RECORDED as
+#     dropped. Two faults have to stay apart: "the model invented a category"
+#     and "the library lacks one". Conflating them is how a real coverage gap
+#     gets written off as a hallucination.
+#
+#   · IT MAY NOT AUTHOR CONTRACT LANGUAGE (ADR-0001). It never sees clause text
+#     and is never asked for any. What it writes is one sentence of reasoning
+#     attached to a proposed risk, which the requester reads, edits and adopts
+#     as their own before anything is recorded. The clause wording is chosen
+#     afterwards, by the deterministic engine, from the approved library.
+#
+#   · IT MAY NOT DECIDE ANYTHING. What comes back is a proposal, drawn on the
+#     screen as not-yet-agreed until a named person confirms it.
+#
+# UNLIKE THE TWO JUDGMENTS ABOVE, THIS ONE HAS A DETERMINISTIC TWIN — ADR-0005's
+# ordinary case. When this returns an absence, intake.py runs the keyword
+# classifier and the requester's work continues. Nobody is blocked because a
+# provider was down or a budget was spent.
+
+INTAKE_PROMPT = (
+    "You are helping a procurement buyer describe a purchase so that a "
+    "contract can be assembled. Their answers to a checklist follow, with the "
+    "list of risk categories this organisation actually defines. Decide which "
+    "of those categories the purchase raises, and how severe each is. "
+    "Use ONLY categories from the list given; never invent one. Severity is "
+    'exactly "High" or "Standard". For each, give one sentence of reasoning '
+    "grounded in what they wrote. If the answers raise none of the categories, "
+    "return an empty list — that is a real answer. Reply with JSON only: "
+    '{"risks": [{"category": "<from the list>", '
+    '"severity": "High" or "Standard", "reason": "<one sentence>"}]}.'
+)
+
+# A proposal is bounded for the reason the manifest is bounded: this is a
+# record, not an archive, and an unbounded list from a provider is an unbounded
+# write.
+MAX_PROPOSED_RISKS = 40
+MAX_REASON_CHARACTERS = 500
+
+
+@dataclass(frozen=True)
+class Proposal:
+    """What the model proposed, or honestly what it did not.
+
+    `risks is None` and `absent_reason is not None` are the same fact twice,
+    exactly as Judgment does it — so nothing downstream has to interpret a null.
+
+    AN EMPTY LIST IS A REAL ANSWER: "nothing here raises a risk". `None` means
+    nobody answered. Collapsing those two is the worst bug this file could
+    ship, because one of them means the requester's purchase is genuinely
+    low-risk and the other means the model was never reached.
+    """
+
+    risks: list | None
+    absent_reason: str | None
+    model: str
+    model_version: str
+    prompt: str
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+
+    @property
+    def outcome(self) -> str:
+        return "answered" if self.risks is not None else "absent"
+
+
+def _no_proposal(reason: str, *, model: str, prompt: str,
+                 model_version: str = UNKNOWN_VERSION) -> Proposal:
+    """No proposal, said plainly. `_absent`'s argument, in this shape."""
+    return Proposal(risks=None, absent_reason=reason, model=model,
+                    model_version=model_version, prompt=prompt)
+
+
+def propose_intake_manifest(answers: list, categories: list,
+                            token_ceiling: int) -> Proposal:
+    """Ask the model which risks a requester's own words raise.
+
+    Never raises. Every way this can fail — no key, no network, a refusal, a
+    reply in the wrong shape — comes back as an absence with its reason, and
+    intake.py then runs the keyword classifier instead.
+    """
+    model = os.environ.get(MODEL_VARIABLE) or DEFAULT_MODEL
+    prompt = INTAKE_PROMPT
+
+    if not model.strip() or not _representable_text(model):
+        return _no_proposal(
+            f"the configured model name in {MODEL_VARIABLE} is not usable",
+            model=DEFAULT_MODEL, prompt=prompt)
+
+    key = os.environ.get(KEY_VARIABLE)
+    if not key or not key.strip():
+        return _no_proposal(
+            f"no model key is configured: {KEY_VARIABLE} is not set in the "
+            "environment, so the deterministic classifier answered instead",
+            model=model, prompt=prompt)
+
+    if not categories:
+        # Nothing to choose from. Asking anyway would invite exactly the
+        # invented category the whole design refuses.
+        return _no_proposal(
+            "this library defines no risk categories, so there was nothing "
+            "for a model to choose from",
+            model=model, prompt=prompt)
+
+    asked = json.dumps({
+        "categories": categories,
+        "answers": [{"question": entry.get("probe"), "answer": entry.get("text")}
+                    for entry in answers],
+    })
+    if len(asked) > MAX_INPUT_CHARACTERS:
+        return _no_proposal(
+            "the answers were too large to send to the model provider",
+            model=model, prompt=prompt)
+
+    body = json.dumps({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": asked},
+        ],
+        # The owner's per-call budget (0066). SENT rather than assumed: a
+        # ceiling nobody transmits is a ceiling nobody enforces.
+        "max_tokens": token_ceiling,
+        "temperature": 0,
+    }).encode("utf-8")
+
+    request = urllib.request.Request(
+        ENDPOINT, data=body, method="POST",
+        headers={"content-type": "application/json"})
+    request.add_unredirected_header("Authorization", f"Bearer {key.strip()}")
+
+    if not _JUDGMENT_SLOTS.acquire(blocking=False):
+        return _no_proposal(
+            "the model provider is already at its concurrency limit",
+            model=model, prompt=prompt)
+    try:
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as reply:
+                raw = reply.read(MAX_RESPONSE_BYTES + 1)
+                if len(raw) > MAX_RESPONSE_BYTES:
+                    return _no_proposal(
+                        "the model's reply was too large to accept",
+                        model=model, prompt=prompt)
+                payload = json.loads(raw.decode("utf-8"))
+        finally:
+            _JUDGMENT_SLOTS.release()
+    except urllib.error.HTTPError as refused:
+        return _no_proposal(
+            f"the model provider refused the call (HTTP {refused.code})",
+            model=model, prompt=prompt)
+    except (urllib.error.URLError, http.client.HTTPException,
+            TimeoutError, OSError) as unreachable:
+        return _no_proposal(
+            f"the model could not be reached ({type(unreachable).__name__})",
+            model=model, prompt=prompt)
+    except (ValueError, json.JSONDecodeError, RecursionError):
+        return _no_proposal("the model's reply was not readable",
+                            model=model, prompt=prompt)
+
+    if not isinstance(payload, dict):
+        return _no_proposal(
+            "the model answered, but its response was not a JSON object",
+            model=model, prompt=prompt)
+
+    reported_model = payload.get("model")
+    if reported_model is None:
+        version = model
+    elif (not isinstance(reported_model, str) or not reported_model.strip()
+          or not _representable_text(reported_model)):
+        return _no_proposal("the model answered without usable model provenance",
+                            model=model, prompt=prompt)
+    else:
+        version = reported_model
+
+    usage = payload.get("usage")
+    usage = usage if isinstance(usage, dict) else {}
+
+    def _tokens(name):
+        value = usage.get(name)
+        # Null rather than zero when the provider said nothing. A zero here
+        # understates spend in the exact figure somebody budgets from.
+        return value if isinstance(value, int) and not isinstance(value, bool) \
+            else None
+
+    try:
+        content = payload["choices"][0]["message"]["content"]
+        answered = json.loads(content)
+        raw_risks = answered["risks"]
+        if not isinstance(raw_risks, list):
+            raise TypeError("risks is not a list")
+    except (KeyError, IndexError, TypeError, ValueError, RecursionError):
+        return _no_proposal(
+            "the model answered, but not with a proposal in the shape that "
+            "was asked for",
+            model=model, model_version=version, prompt=prompt)
+
+    if len(raw_risks) > MAX_PROPOSED_RISKS:
+        return _no_proposal(
+            f"the model proposed more than {MAX_PROPOSED_RISKS} risks, which "
+            "is past what a manifest is",
+            model=model, model_version=version, prompt=prompt)
+
+    # SHAPED HERE, JUDGED IN intake.py. This function proves the reply is
+    # well-formed text. Whether a category is one the library defines is a
+    # question about the caller's own library, and it is asked — and its answer
+    # recorded — where that library is already open.
+    proposed = []
+    for entry in raw_risks:
+        if not isinstance(entry, dict):
+            return _no_proposal(
+                "the model proposed something that is not a risk",
+                model=model, model_version=version, prompt=prompt)
+        category = entry.get("category")
+        severity = entry.get("severity")
+        reason = entry.get("reason")
+        if (not isinstance(category, str) or not category.strip()
+                or not _representable_text(category)):
+            return _no_proposal(
+                "the model proposed a risk with no usable category",
+                model=model, model_version=version, prompt=prompt)
+        if severity not in ("High", "Standard"):
+            # NOT coerced to Standard. A severity the model did not choose,
+            # written as though it did, is the manufactured confidence
+            # `_absent` exists to prevent, one shape up.
+            return _no_proposal(
+                "the model proposed a severity outside High and Standard",
+                model=model, model_version=version, prompt=prompt)
+        if reason is not None and (not isinstance(reason, str)
+                                   or not _representable_text(reason)):
+            return _no_proposal(
+                "the model proposed a reason that is not text",
+                model=model, model_version=version, prompt=prompt)
+        proposed.append({
+            "category": category.strip(),
+            "severity": severity,
+            "reason": (reason or "").strip()[:MAX_REASON_CHARACTERS],
+        })
+
+    return Proposal(
+        risks=proposed, absent_reason=None, model=model, model_version=version,
+        prompt=prompt, prompt_tokens=_tokens("prompt_tokens"),
+        completion_tokens=_tokens("completion_tokens"))
+
+
 # ── The pipeline ────────────────────────────────────────────────────────────
 
 

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clausewerk V6 — The Brief · the screen set</title>
+<link rel="stylesheet" href="../v4/app/fonts.css">
+<link rel="stylesheet" href="v6.css">
+<style>
+  .set{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px}
+  .card{background:var(--sheet);border:1px solid var(--rule-2);padding:14px 17px;
+    display:block;text-decoration:none;color:inherit}
+  .card .n{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--mute)}
+  .card .t{font-family:'Instrument Serif',Georgia,serif;font-size:20px;margin-top:3px}
+  .card .r{font-family:'Courier Prime',monospace;font-size:10px;color:var(--ink-2);margin-top:2px}
+  .card .d{font-size:12.5px;color:var(--ink-2);line-height:1.6;margin-top:7px}
+  .card .s{font-size:11.5px;color:var(--mute);line-height:1.55;margin-top:7px;font-style:italic}
+</style>
+</head>
+<body>
+<div class="wrap" style="max-width:1000px">
+
+  <div class="mast">
+    <div><span class="mark">Clausewerk V6</span>
+      <span class="matter">&nbsp;— “The Brief”, the whole screen set</span></div>
+    <span class="who">design concept · 2026-08-05</span>
+  </div>
+
+  <p class="lede">Direction <b>1b</b> from the Legal-Parchment exploration, with the origin
+  gutter rebuilt as a margin that states origin <b>in words</b>. Every screen below is drawn
+  from one stylesheet, <a href="v6.css">v6.css</a> — which is the argument of §3.1 made real:
+  the look is defined once, so a rule that is wrong is wrong in exactly one place.</p>
+
+  <h5 class="sec">The eight screens</h5>
+  <div class="sub">One per workspace, plus the door and the interview.</div>
+  <div class="set">
+    <a class="card" href="1 — The Front Door.html">
+      <div class="n">One</div><div class="t">The Front Door</div>
+      <div class="r">everybody</div>
+      <div class="d">Sign in. No feature list, no illustration, no tagline.</div>
+      <div class="s">Keeps the running app's admission that there is no password yet.</div></a>
+
+    <a class="card" href="2 — Intake.html">
+      <div class="n">Two</div><div class="t">Intake</div>
+      <div class="r">requester · with the model</div>
+      <div class="d">The interview, what the model made of the answers, and the choice of
+      contract, RFP or RFQ.</div>
+      <div class="s">Carries the permanent disclosure and the proposed-until-confirmed rule.</div></a>
+
+    <a class="card" href="3 — My Deals and the Document.html">
+      <div class="n">Three</div><div class="t">My Deals &amp; the Document</div>
+      <div class="r">requester</div>
+      <div class="d">The ruled brief with the origin margin — a contract, and a sourcing
+      document showing the second rule.</div>
+      <div class="s">Where the margin idea is stated in full.</div></a>
+
+    <a class="card" href="4 — The Review Desk.html">
+      <div class="n">Four</div><div class="t">The Review Desk</div>
+      <div class="r">legal reviewer</div>
+      <div class="d">What is waiting, oldest first; the oldest ticket open; the judgement, with
+      a reason field on every act.</div>
+      <div class="s">Judgement, with a reason field on every act — and one act drawn as unavailable.</div></a>
+
+    <a class="card" href="5 — The Library.html">
+      <div class="n">Five</div><div class="t">The Library</div>
+      <div class="r">legal admin</div>
+      <div class="d">A clause and its versions, and the ladder behind it from preferred position
+      down to the floor.</div>
+      <div class="s">Eight areas — the strongest case for the rail.</div></a>
+
+    <a class="card" href="6 — The Record.html">
+      <div class="n">Six</div><div class="t">The Record</div>
+      <div class="r">auditor</div>
+      <div class="d">Both claims as figures, the origin mix, and one contract end to end.</div>
+      <div class="s">Where the two rules become numbers a buyer can check.</div></a>
+
+    <a class="card" href="7 — The Reading Room.html">
+      <div class="n">Seven</div><div class="t">The Reading Room</div>
+      <div class="r">viewer</div>
+      <div class="d">One tab. What was shared, what was not, and what a refusal reads like.</div>
+      <div class="s">The smallest workspace is the clearest test of the rule.</div></a>
+
+    <a class="card" href="8 — People and Access.html">
+      <div class="n">Eight</div><div class="t">People &amp; Access</div>
+      <div class="r">administrator</div>
+      <div class="d">Grants, each with two names, and a pending one that confers nothing.</div>
+      <div class="s">The one screen where pending-never-green <i>is</i> the control.</div></a>
+  </div>
+
+  <h5 class="sec">The rules every screen obeys</h5>
+  <div class="cols">
+    <div class="panel">
+      <h5>Five inks, no sixth</h5>
+      <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:9px">
+        <span class="stamp s-ok">effective</span>
+        <span class="stamp s-wait">pending</span>
+        <span class="stamp s-err">refused</span>
+        <span class="stamp s-none">never ran</span>
+        <span class="stamp s-gone">superseded</span>
+      </div>
+      <div class="note">The words stay open — “awaiting countersign” and “window open” are
+      different sentences in one ink, because they are one state. <b>Red means error.</b> Never
+      “no”, never “severe”, and never an executed contract, however good the wax would look.</div>
+    </div>
+    <div class="panel">
+      <h5>Five origins, five shapes</h5>
+      <div class="legend" style="margin-top:9px">
+        <div class="lrow"><div class="lg g-lib"></div><div class="tx"><b>library</b>solid</div></div>
+        <div class="lrow"><div class="lg g-fall"></div><div class="tx"><b>fallback</b>notched</div></div>
+        <div class="lrow"><div class="lg g-model"></div><div class="tx"><b>model, approved</b>diagonal</div></div>
+        <div class="lrow"><div class="lg g-mach"></div><div class="tx"><b>machine, labelled</b>hollow</div></div>
+        <div class="lrow"><div class="lg g-prop"></div><div class="tx"><b>proposed, undecided</b>rungs</div></div>
+      </div>
+      <div class="note">Set any page in greyscale and all five are still themselves. That is the
+      test the four-pixel gutter failed, and the reason this direction exists.</div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="panel">
+      <h5>Rail or row — one rule, no exemptions</h5>
+      <div class="sub" style="margin-bottom:8px">Counted from the running app, not from taste.</div>
+      <div class="measure"><span class="l">requester · 6 areas</span><span class="stamp s-ok">rail</span></div>
+      <div class="measure"><span class="l">legal reviewer · 6 areas</span><span class="stamp s-ok">rail</span></div>
+      <div class="measure"><span class="l">legal admin · 8 areas</span><span class="stamp s-ok">rail</span></div>
+      <div class="measure"><span class="l">auditor · 5 areas</span><span class="stamp s-ok">row</span></div>
+      <div class="measure"><span class="l">administrator · 4 areas</span><span class="stamp s-ok">row</span></div>
+      <div class="measure"><span class="l">viewer · 1 area</span><span class="stamp s-ok">row</span></div>
+      <div class="note"><b>Six or more gets a rail.</b> The design proposal said “five or fewer
+      keeps tabs” and then exempted the requester, who has six — a contradiction that survived
+      into the first draft of this set and was caught only by looking at all eight together.
+      One threshold now, applied everywhere.</div>
+    </div>
+    <div class="panel">
+      <h5>How to look at the set</h5>
+      <div class="note">Serve it rather than opening the files directly:
+      <b>preview_start {name:"prototypes"}</b>, then
+      <a href="_contact-sheet.html">the contact sheet</a> shows all eight at once.</div>
+      <div class="note">Add <b>?grey</b> to the contact sheet's address to drain the colour from
+      every panel simultaneously — the fastest way to check that no screen has started leaning
+      on hue to say something.</div>
+      <div class="note">The contact sheet is a review tool, not a screen. It is prefixed with an
+      underscore so it never reads as part of the set.</div>
+    </div>
+  </div>
+
+  <div class="rule-note">
+    <b>What is deliberately absent from all eight.</b> No notification bell, no avatars, no
+    onboarding tour, no confetti, no quick-approve, and no chart drawn for the pleasure of
+    drawing one. Nothing blinks, pulses or flies in: two animations exist in the whole product —
+    the stamp, when something becomes recorded, and the strike, when something is superseded.
+    A still interface is the truthful one for a system whose promises are mostly about what it
+    refuses to do.
+  </div>
+
+  <div class="foot">
+    Pictures of an interface, not builds of one — none of these files is ever served by the
+    application. Every name, figure, clause, date and row across the set is <b>invented</b>, and
+    all wording is placeholder. Typefaces are served from this repository (S226); opening any of
+    these pages contacts nobody.
+  </div>
+</div>
+</body>
+</html>

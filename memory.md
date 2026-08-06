@@ -4732,3 +4732,302 @@ story no incumbent tells.
 
 Build order unlocked: AI-1 (deterministic intake) → AI-2 (intake screens) →
 AI-3 (model intake, OpenAI, budget defaults) → SRC-1..4 → full-pipeline demo.
+
+## S226 — The typefaces are served from the repository, not a font CDN — 2026-08-04
+
+Found during the adversarial review of the UI design proposal
+(`PROPOSAL-REVIEW-REPORT-2026-08-04.md`): `prototype/v4/index.html` fetched all
+five typefaces from Google's font CDN on every page load, and so did the v5
+mockup. Two costs, neither of them cosmetic. It reported every page view — the
+customer's IP address — to a third party, which is a question a buyer's security
+team asks during procurement and an awkward one for a contract vault to answer.
+And it failed *silently*: behind a firewall that blocks the call the page still
+worked but fell back to system faces, so the parchment typeset look — the thing
+the product's whole "looks like a system of record" argument rests on —
+disappeared on the machine of the most security-conscious customer.
+
+Fixed at Mike's instruction the same day. Eighteen `.woff2` files now live in
+`prototype/v4/app/fonts/`, 645 KB, latin + latin-ext only; `app/fonts.css` is
+generated and points at them; the mockup borrows the same copies rather than
+keeping a second set. Deduplicating by URL took it from 1,816 KB to 645 KB —
+Google serves ONE variable font per family and repeats it per weight, so six
+Inter weights are one file. Cyrillic, Greek and Vietnamese are deliberately not
+bundled; adding a subset is a re-run of `fonts/fetch-fonts.py`, not a redesign.
+All five families are SIL OFL 1.1, which permits this provided the licence
+travels with the fonts — `fonts/OFL.txt`. Worth a lawyer's glance before a
+paying customer, on the principle that a contract-governance company should be
+able to account for its own licences.
+
+**Inter and JetBrains Mono are kept even though parchment never renders them.**
+They are dark mode's faces, and [[S95]] made dark mode one deleted `<link>` line
+away. That reversal only works if its typefaces are still present.
+
+**Still open, deliberately.** The app also loads React, ReactDOM and Babel from
+`unpkg.com` (`index.html:23-25`). They carry integrity hashes so they cannot be
+altered undetected, but it is the same outbound third-party call — and unlike
+the fonts, the application does not run *at all* if it fails. Larger job, not
+done, recorded in `prototype/v4/app/fonts/README.md`.
+
+## S227 — Five owner decisions on the Intake and Negotiate screens — 2026-08-05
+
+Put to Mike with the plan (`NEGOTIATE-AND-INTAKE-SCREENS-PLAN-2026-08-05.md`) and all five
+answered in one sitting.
+
+- **`NI-1` — the Legal admin gets a NINTH area, `negotiations`.** My recommendation was to
+  leave it at eight and give the admin the numbers through reporting; Mike asked for the desk
+  itself and that is the decision. The workspace table in `shell.jsx` is the specification and
+  the acceptance test asserts it exactly, so this is a deliberate change to a checked contract,
+  made in one commit with its test. The rail is now nine deep — a layout question to revisit
+  when sourcing and obligations grow the admin further, not a reason to withhold the screen.
+- **`NI-2` — the auditor reads the negotiation inside `the record`,** as a section, not a new
+  tab. Keeps the workspace model untouched and puts the negotiation beside the rest of that
+  agreement's chain.
+- **`NI-3` — escalating a position and opening a review ticket stay two buttons.** The backend
+  already keeps them two acts deliberately; one button performing both is how a person ends up
+  having performed a governed act they never saw.
+- **`NI-4` — the supplier's received document becomes downloadable, by everyone who can read
+  the deal** (Legal, the auditor, the owning requester). Built the way `GET /runs/contract` is
+  built: names one artefact, resolves it under the caller's own read rules first, no bytes on
+  any refusing path. **Scoped by the round's own read policy rather than a role list in the
+  doorway** — so the rule stays the database's. The viewer still has no export and gains none;
+  `ADR-0008` is untouched, and the next screen wanting "a download like that one" is its own
+  decision.
+- **`NI-5` — question-set coverage (how often intake answers classified as nothing) belongs to
+  the ADMINISTRATOR, not Legal.** Mike, verbatim: "This sounds like an admin issue not something
+  legal needs to see." It lands with the health tiles, where "something is not working" already
+  lives; the administrator already reads the audit chain, so no new grant.
+
+**Flagged, not blocking** (warn, don't gate): Legal edits `intake_walk.json` but under `NI-5`
+does not see the figure that judges it, so a gap in the questions travels through a second
+person before reaching whoever can fix it. It is one view read twice, so adding a Legal surface
+later is not rework.
+
+**Why the plan is cheap:** both screens sit on machinery already merged — `intake.py` with its
+two endpoints, and the whole negotiation family of reads and writes — with no screen. The only
+gaps found were the negotiation HEADER list (we could read a negotiation's rounds and positions
+but not which deal, whose paper, which baseline) and the received document being recordable but
+never readable. One migration in the whole plan, in `IN-2` alone.
+
+## S228 — The administrator gets acts, not just screens: the notice record — 2026-08-05
+
+Mike, immediately after the S227 decisions: "Give the admin a feature to notify legal about
+intake question gaps when they arise. Indeed, the admin should have a lot of abilities to
+notify different user types based on data they observe. Things have to be escalated somewhere."
+
+The observation behind it is right and had not been named: the administrator watches health
+checks, unreachable people, the outbox and (now) the intake question set, and every one of
+those is a screen they can look at and nothing they can DO. Planned as `NT-1`…`NT-4` in
+`NEGOTIATE-AND-INTAKE-SCREENS-PLAN-2026-08-05.md` §5b — one act, "raise a notice", against a
+`cw.notice` record with its own acknowledgement act and a `cw.notice_route` table of permitted
+raiser-role → recipient-role pairs.
+
+**Four design choices made rather than put back to Mike**, each the guard against this
+becoming a messaging system:
+
+1. **A notice always cites a subject the raiser can already see — no free-standing messages.**
+   The administrator deliberately cannot read contract operations (reporting refuses them); a
+   prose message box would let them narrate operations anyway.
+2. **It appears in the existing `cw.waiting_for` derivation**, so it reaches the workspace
+   panel and the daily digest from ONE derivation — screen and email cannot disagree. No bell
+   and no red dot: the waiting list IS the notification system, and a bell competes with it
+   and wins badly.
+3. **A notice never gates anything** — warn, don't gate on approval. A screen that refuses to
+   proceed because a notice is open is the defect, not the notice.
+4. **Who may notify whom is `cw.notice_route`, a table**, not an `if role ==` in the doorway.
+
+**Named trap for whoever builds it:** `cw.waiting_for` has been re-created four times (0041,
+0044, 0059, and NT-1 makes five). Re-creating it strands mutation-harness patterns anchored on
+the old text — that is [[S220]], which happened three times in one day. Grep the harnesses for
+`waiting_for` patterns BEFORE committing, then run the harness (the migration requires it
+anyway).
+
+**Deliberately not built:** Legal → requester, and auditor → legal admin. Both are obvious once
+the record exists, and both are a row in `cw.notice_route` plus one control — cheap enough to
+wait for somebody actually wanting them rather than being guessed at now.
+
+## S229 — Intake and Negotiate screens built for every role that has one — 2026-08-05
+
+The whole plan (`NEGOTIATE-AND-INTAKE-SCREENS-PLAN-2026-08-05.md`) built the same day it was
+written, decisions and all. What landed:
+
+- **NG-0** — two reads the negotiation family never had: `GET /negotiations` (the header list;
+  four reads described what was happening INSIDE a negotiation and nothing named the
+  negotiations themselves) and `GET /negotiations/movements` (how a position reached its rung).
+  Plus `GET /negotiations/paper`, the supplier's document back out (NI-4).
+- **IN-1** — `prototype/v4/app/intake.jsx`: the probe walk, the proposal drawn PENDING until a
+  named person confirms it, `unmatched` shown as a plain fact, then the same pre-flight and the
+  same recorded act as a hand-typed manifest. `AssembleContract` gained a `start` prop rather
+  than being copied.
+- **NG-1…NG-4** — `negotiate.jsx`: one set of components, three compositions (requester's own
+  deals, the Legal desk, the auditor's read-only section inside the record).
+- **IN-2 / migration 0063** — the intake question set judged, in the administrator's health
+  workspace (NI-5).
+- **NT-1…NT-4 / migration 0064** — the notice record: raise, route, acknowledge, and one branch
+  added to `cw.waiting_for` so it lands in the panel and the digest.
+
+Verified end to end over HTTP by the extended `acceptance_walkthrough.py` and in the browser as
+five different people.
+
+## S230 — The auditor cannot download the supplier's paper, and NI-4 did not change that — 2026-08-05
+
+Owner decision NI-4 said everyone who can read the deal may take a copy of the counterparty's
+document, and the auditor reads every deal. But handing a document out is recorded on the chain
+BEFORE the bytes leave (documents.py's order, and the only thing that makes a download evidence),
+and `cw.audit_event`'s append policy (0007) names the requester and the two Legal roles.
+
+**An auditor reads the whole record and adds nothing to it** — the older rule, left standing.
+Pinned by a named test in `test_redlines.py` rather than discovered later.
+
+**How to apply:** if Mike wants the auditor included, it is a grant on the chain and that test
+moves with it. It is a decision about what an auditor is, not a bug.
+
+## S231 — A document store's read policy is not a fence; resolve through the round — 2026-08-05
+
+`cw.received_document` carries a `read_all` policy (`app_role() is not null`) from 0047, when a
+stored document was only ever reachable by somebody who already held its id. The obvious
+implementation of the supplier-paper download — take a document id, read the row — would have
+handed one requester another requester's supplier paper, and passed every test that only checked
+"the owner gets their bytes".
+
+`GET /negotiations/paper` therefore names a **round**, reads it under the caller's own rules, and
+takes the document id off the row the database was willing to show.
+
+**Why:** the fence has to be the table whose policy expresses the rule you mean ("everyone who
+can read the deal"), not the table the bytes happen to live in.
+**How to apply:** when adding any endpoint that serves stored bytes, ask which table's policy is
+the sentence you want, and resolve through that one first. See [[clausewerk-u15-documents-in-database]].
+
+## S232 — The deterministic intake records `fallback`, never `intake` — 2026-08-05
+
+`POST /intake/classify` answers `source: "intake"` — its own name for the classification event.
+`cw.run.manifest_source` accepts exactly `llm`, `fallback`, `manual` (0005), and ADR-0005 calls
+the keyword classifier the deterministic fallback. A screen forwarding the classifier's own label
+is refused at the FINAL act, after the requester has answered every question, in a sentence about
+a field they never saw.
+
+**How to apply:** the intake screen sends `fallback`. When the model intake (AI-3) lands it sends
+`llm`. The acceptance walkthrough now walks all four steps so this cannot pass a unit test and
+fail a person.
+
+## S233 — cw.waiting_for re-created a FIFTH time; two mutation rows repointed — 2026-08-05
+
+0064 adds the notice branch to `cw.waiting_for` (after 0041, 0044, 0059). Two harness rows were
+anchored on text this changed:
+
+- the ticket-route arm lost its trailing semicolon (it is no longer the last line), so
+  `routing.test.mjs`'s row was repointed to the semicolon-less substring — which now matches
+  BOTH the 0059 and 0064 copies, so every definition is sabotaged.
+- `shell.test.mjs`'s countersign-queue row was repointed after the shared component gained a
+  `routes` prop, and the viewer-approval row after another session re-indented it into the
+  origin-gutter markup. Both reported STALE at preflight rather than silently passing.
+
+**Why:** this is [[S220]] for the fourth and fifth time. The harness preflight catches VANISHED
+text; it cannot catch text that survives in a superseded copy, which is why the repoint has to be
+to a substring common to every copy.
+
+## S234 — Windows line endings broke five source-reading tests — 2026-08-05
+
+A Python patch script rewrote `reviewer.jsx` and `console-people.jsx` with CRLF (`write_text`
+translates `\n` to `os.linesep`). Five `shell.test.mjs` assertions extract a function with
+regexes ending `\n\}\n`, which cannot match `\r\n}\r\n`, so `exec` returned null and the tests
+failed with "Cannot read properties of null" — a message that says nothing about the cause.
+
+**How to apply:** when patching these `.jsx` files from Python, write bytes or pass
+`newline='\n'`. The app sources are LF; the source-reading tests depend on it.
+
+## S235 — Verification of the intake/negotiate build — 2026-08-05
+
+All green, and worth recording what "all" covers so nobody re-runs it hopefully:
+
+- **37/37 SQL suites**, including a new `notices.test.mjs` (16 tests, four rules).
+- **279/279 SQL mutations** caught by their named test. Five new rows for the notice record;
+  two existing rows repointed ([[S233]]).
+- **shell.test.mjs 103/103.**
+- **Doorway pytest: 1163 tests across the five affected files** (`test_reads`, `test_writes`,
+  `test_redlines`, `test_intake`, `test_server`) — 1093 + 70. The FULL doorway suite was not
+  run to completion: it takes over an hour on this machine and PostgreSQL dropped into
+  recovery mode under the load of a pytest run and the mutation harness at once. That is a
+  machine limit, not a result — say so rather than claiming a full green.
+- **The acceptance walkthrough** runs the whole path over HTTP and is re-runnable against a
+  scratch database; it now covers intake (4 steps) and negotiation (open → redline in → bytes
+  back out → contest → escalate → the reviewer's desk sees it).
+- **The browser**, as five different people.
+
+**How to apply:** run the doorway pytest and the mutation harness one at a time on this
+machine. Running both at once crashed PostgreSQL into recovery.
+
+## S236 — AI-3 built: the model proposes the manifest, the word lists fall back — 2026-08-05
+
+Mike, correcting a framing I had let stand: "The system is not supposed to just
+scan for keywords in requestor answers. It's supposed to use AI to categorize risks
+into clause- and risk-severity-buckets." He was right, and the gap was real — AI-1
+(the keyword fallback) and AI-2 (the screens) were built and AI-3 was not, so what
+was on screen was the fallback wearing the intake's clothes.
+
+**My failure, recorded because it will recur:** the plan said the screens were
+scoped to AI-1/AI-2 and Mike's own sequencing decision put AI-3 third — but I never
+said in one plain sentence "the thing behind this screen is the fallback; the real
+one is the next package". He found out by asking why it behaved stupidly. When a
+package ships a deliberate placeholder, say so in the summary, not only in the plan.
+
+**What landed:**
+- `advisory.propose_intake_manifest()` on the existing seam — the third thing this
+  product asks a model, and the first whose answer a person acts on. Never raises;
+  every failure is an absence with its reason.
+- Migration 0066: the budget as two operational settings (200 calls/day, 4,000
+  tokens/call — the defaults Mike accepted, [[S225]]) and `cw.model_call`, an
+  append-only ledger. **Failures are rows too**; a ledger of only successes makes
+  the model look more reliable than it is, in the exact figure somebody budgets from.
+- `intake.classify_intake` tries the model, falls back to the keyword classifier,
+  and returns WHICH PATH RAN plus why the model did not answer.
+- The screen labels the path, and splits the human-voice idiom: the oversized
+  quotation mark (which in this product means A PERSON SAID THIS) stays on the
+  requester's own quoted words on the fallback path, and the model's reasoning is
+  set plainly and labelled. Wrapping a machine's sentence in the human idiom would
+  be this product's own failure mode on its own screen.
+
+**Three rules enforced, not requested:** the model may not invent a category (told
+the library's list; anything outside it is dropped AND recorded in
+`not_in_library`), may not author contract language (ADR-0001 — it never sees clause
+text; the engine picks wording afterwards), and decides nothing.
+
+**The daily count is system-wide, not per caller** — a per-person count would give
+every requester a private 200. But a requester READS only their own calls. Both are
+deliberate and in tension: you may know the budget is spent without being shown
+whose work spent it.
+
+## S237 — `source: "intake"` would have been refused at the last step — 2026-08-05
+
+`POST /intake/classify` answered `source: "intake"`, its own name for the
+classification event. `cw.run.manifest_source` accepts exactly llm, fallback,
+manual (0005). A screen forwarding that label is refused at POST /runs — AFTER the
+requester has answered every question, in a sentence about a field they never saw.
+
+Two tests pinned the wrong value because they were written from the code rather than
+from the record. Both moved; one now asserts the source is in the run store's own
+list, with the list written out rather than imported.
+
+**How to apply:** when an endpoint labels its own output, check the label against
+the constraint of whatever stores it downstream. A vocabulary that only agrees with
+itself is not a vocabulary.
+
+## S238 — A grant with no policy behind it, swept schema-wide — 2026-08-05
+
+Third instance of the silent-zero shape, so it got a sweep:
+`db/test/grants-and-policies.test.mjs`. For every table with row-level security,
+every role holding SELECT must be admissible by some policy — otherwise PostgreSQL
+FILTERS rather than refuses and the screen says "there are none" where the truth is
+"not yours".
+
+**It is a LINT and says so.** The sound test needs a row in every table; that rots
+the first time a migration adds one. This reads policy expressions as text.
+
+**Its first run reported 29 suspects and all 29 were false alarms of one shape:**
+policies that delegate — `exists (select 1 from cw.review_ticket t where ...)` —
+which admit exactly whoever the PARENT's policy admits, naming no role because they
+do not need to. The lint was taught that shape; it was not loosened. It keeps every
+tooth on the shape that actually bit twice: a policy enumerating roles and omitting
+one that holds the grant.
+
+**A mutation row puts back 0065's revoke and requires the sweep to fail** — a lint
+nobody has seen fail is a green light with nothing behind it.

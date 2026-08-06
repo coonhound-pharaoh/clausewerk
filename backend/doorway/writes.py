@@ -987,6 +987,53 @@ WRITES: dict[str, Write] = {
     # redirect their own notifications could silence their own countersign
     # nudges. The setter and remover are bound from the connection by the
     # schema's triggers, whatever a body claims.
+    # ── Raising what you observed (NT-2, over 0064) ─────────────────────────
+    #
+    # ONE ACT, ONE STATEMENT, AND NO RULE RESTATED HERE. Every guard belongs to
+    # the schema: who may raise a notice to whom is cw.notice_route, whether the
+    # subject resolves is cw.notice_subject_visible() run as the caller, and the
+    # raiser's name is bound from the connection by trigger whatever the body
+    # claims. This file's job is to carry the record and let both refusals
+    # travel back in the database's own words.
+    #
+    # `to_role` and `to_person` are both optional HERE and exactly one of them
+    # is demanded by the table's own check constraint. That split is
+    # deliberate: expressing "one or the other" in Python would be a second
+    # copy of a constraint that already exists, and the database's sentence
+    # about it is better than one written here.
+    "POST /notices": Write(
+        sql="""insert into cw.notice
+         (raised_by, to_role, to_person, subject_kind, subject_ref, note)
+       values (current_setting('cw.actor'), %(to_role)s, %(to_person)s,
+               %(subject_kind)s, %(subject_ref)s, %(note)s)
+       returning notice_id, to_role, to_person, subject_kind, subject_ref,
+                 raised_at""",
+        rule="cw.notice raise_notice policy (0064) — any signed role may "
+             "attempt one; cw.notice_route decides whether it lands, and "
+             "cw.notice_subject_visible() decides whether the thing cited is "
+             "something the raiser can actually see",
+        fields=(
+            Field("to_role", required=False),
+            Field("to_person", required=False),
+            Field("subject_kind"), Field("subject_ref"), Field("note"),
+        ),
+    ),
+
+    # Closing one is its own act by a named person. NO BATCH VARIANT, for the
+    # override findings' reason: a helper that acknowledged a list would be the
+    # blanket button with a loop in front of it, and the person pressing it
+    # would not have read each one.
+    "POST /notices/acknowledge": Write(
+        sql="""insert into cw.notice_acknowledgement
+         (notice_id, acknowledged_by, note)
+       values (%(notice_id)s, current_setting('cw.actor'), %(note)s)
+       returning notice_id, acknowledged_by, acknowledged_at""",
+        rule="cw.notice_acknowledgement acknowledge_addressed policy (0064) — "
+             "only somebody the notice was addressed to, by name or by role. A "
+             "notice cleared by a bystander is a notice nobody read",
+        fields=(Field("notice_id"), Field("note", required=False)),
+    ),
+
     "POST /notifications/addresses": Write(
         sql="""insert into cw.notification_address (person, channel, address, set_by)
        values (%(person)s, 'email', %(address)s, current_setting('cw.actor'))

@@ -50,8 +50,8 @@ function PipelineRail({ deal }) {
 const PANES = {
   // Requester
   'my-deals':  (me) => <MyDealsPane me={me} />,
-  'intake':    () => <NotBuiltYet what="The intake interview is not built." lands="a later package" />,
-  'negotiate': () => <NotBuiltYet what="The negotiate inbox is not built." lands="a later package" />,
+  'intake':    (me) => <IntakePane me={me} />,
+  'negotiate': (me) => <NegotiatePane me={me} />,
   'vendors':   () => <FrictionPane />,
   'my-record': (me) => <MyRecordPane me={me} />,
   // OB-11/OB-15: one pane, whoever holds the tab — the scoping is the
@@ -63,7 +63,11 @@ const PANES = {
   'review-desk':  (me) => <ReviewDeskPane me={me} />,
   'tickets':      (me) => <TicketsPane me={me} />,
   'approvals':    (me) => <OverridesPane me={me} />,
-  'negotiations': () => <NotBuiltYet what="Negotiation rounds are not built." lands="a later package" />,
+  // The Legal reviewer's and (by owner decision NI-1) the Legal admin's, from
+  // one pane. The scoping is the negotiation family's own read policies — both
+  // roles see every deal — so there is nothing here for a second copy to get
+  // subtly different.
+  'negotiations': (me) => <NegotiationsDeskPane me={me} />,
   'routing':      (me) => <RoutePane me={me} />,
   'holds':        (me) => <HoldsPane me={me} />,
 
@@ -89,7 +93,10 @@ const PANES = {
   // Administrator
   'people':   (me) => <PeopleAndAccessConsole me={me} />,
   'settings': (me) => <SettingsPane me={me} />,
-  'health':   () => <HealthPane />,
+  // Takes the identity now: the administrator's surfaces carry raise controls
+  // (NT-3) and the notices addressed to them, and both need to know who is
+  // looking. Affordances, not permissions — cw.notice_route refuses regardless.
+  'health':   (me) => <HealthPane me={me} />,
   'watchers': () => <WatchersPane />,
 };
 
@@ -110,10 +117,25 @@ function Workspace({ me, tab }) {
   }
   const pane = PANES[tab];
   if (!pane) return <NotBuiltYet what="This pane does not exist." />;
+
+  // ── Notices, wherever you are (NT-4) ────────────────────────────────────
+  // Rendered HERE, once, above whatever pane the role opened — rather than
+  // added to each pane, which is how five copies of one panel start disagreeing
+  // about what "open" means. It draws nothing at all when nothing is open, so
+  // a quiet system stays quiet, and it never draws a zero.
+  //
+  // The scoping is cw.notice's own read policy: a role nobody has raised
+  // anything to is answered an empty list rather than somebody else's business.
+  //
   // The identity is passed to panes that need to know WHO is looking — the
   // people console shows a countersign button only to a Legal admin, and no
   // revoke button against the viewer's own row. Those are affordances, not
   // permissions: the database refuses the acts regardless, and a pane that got
   // this wrong would offer a button that fails rather than leak anything.
-  return pane(me);
+  return (
+    <>
+      <NoticesWaiting me={me} />
+      {pane(me)}
+    </>
+  );
 }
