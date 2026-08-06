@@ -2826,7 +2826,10 @@ grant usage, select on sequence cw.notification_outbox_outbox_id_seq to cw_legal
     name: 'a notice can cite anything at all',
     find: `  if not cw.notice_subject_visible(new.subject_kind, new.subject_ref) then`,
     repl: `  if false then`,
-    expect: 'a probe nobody has ever failed to classify cannot be cited' },
+    // REPOINTED 2026-08-05 (0067). The suite's example subject was an intake
+    // question-set gap until the surface behind that subject kind was removed;
+    // it is a health tile now, and this row names the test that moved with it.
+    expect: 'a tile nobody has ever seen cannot be cited' },
 
   { suite: 'notices.test.mjs',
     name: 'anyone may notify anyone',

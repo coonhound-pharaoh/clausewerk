@@ -189,30 +189,13 @@ READS: dict[str, Read] = {
              "it; who may raise what is not a secret",
     ),
 
-    # ── Does the intake question set work? (IN-2, migration 0063) ───────────
-    # The administrator's surface, by owner decision NI-5 (2026-08-05) — Mike
-    # judged this an administrative question rather than a Legal one. Both
-    # views are cuts of the audit chain the role already reads in full, so no
-    # new fact is exposed by them; what is new is that somebody is counting.
-    "GET /intake/coverage": Read(
-        sql="""select probe, times_unmatched, first_unmatched, last_unmatched,
-                 people_affected
-          from cw.intake_question_coverage
-          order by times_unmatched desc, probe""",
-        rule="cw.intake_question_coverage grant (0063) — administrator and "
-             "auditor. The view is security invoker over cw.audit_event, so it "
-             "cannot show anybody rows their own chain policy would withhold",
-    ),
-
-    "GET /intake/coverage/summary": Read(
-        sql="""select classifications, answers, unmatched, risks_proposed,
-                 with_a_gap, unmatched_share, last_classified
-          from cw.intake_coverage_summary""",
-        rule="cw.intake_coverage_summary grant (0063) — one row always, and "
-             "unmatched_share is NULL rather than 0 when nothing has been "
-             "classified: 'no answers yet' and 'every answer classified' are "
-             "opposite facts",
-    ),
+    # DELIBERATELY ABSENT: GET /intake/coverage and its summary (0067). They
+    # counted intake questions whose answers matched no term list. Four of the
+    # six questions carry no term list to match, so they were counted as gaps
+    # they could never not be; and even for the two that do, silence means
+    # either "we missed something" or "there was nothing to find" and the
+    # figure cannot tell you which. Removed rather than narrowed — a weak
+    # number on a screen is worse than no number (Mike, 2026-08-05).
 
     "GET /watchers": Read(
         sql="""select watcher_id, category_key, person, added_by, added_at,
