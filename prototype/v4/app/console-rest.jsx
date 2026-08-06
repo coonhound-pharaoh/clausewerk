@@ -142,10 +142,15 @@ function SettingsPane({ me }) {
 }
 
 // ── System health ────────────────────────────────────────────────────────
-function HealthPane() {
+function HealthPane({ me }) {
   const tiles = usePane(() => API.health());
   const due   = usePane(() => API.retentionDue());
   const pipeline = usePane(() => API.redactionState());
+  // The permitted raiser → recipient pairs (0064). Read once here and handed
+  // to every raise control on this screen: what a role may raise is not a
+  // secret, and asking once is one request rather than one per row.
+  const routes = usePane(() => API.noticeRoutes());
+  const gaps  = usePane(() => API.notificationGap());
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(null);
   const [disposing, setDisposing] = useState(null); // { id, verb }
@@ -191,12 +196,51 @@ function HealthPane() {
               {t.detail && <div className="caption mt-0.5" style={{ lineHeight: 1.6 }}>{t.detail}</div>}
             </div>
             <div className="flex items-center gap-3 shrink-0">
+              {/* A FAILING OR NEVER-RUN CHECK IS RAISEABLE (NT-3). Watching a
+                  tile go red and having nothing to do about it is exactly the
+                  gap Mike named: the administrator observes, and until now
+                  could only mention it in a corridor. */}
+              {(t.state === 'fail' || t.state === 'never_ran') && (
+                <RaiseNotice
+                  me={me} routes={routes.rows}
+                  subject={{ kind: 'health_tile', ref: t.tile,
+                             about: `the ${t.tile} check` }} />
+              )}
               {chip(t.state)}
               <span className="waiting-age">{t.as_of ? since(t.as_of) : 'not yet'}</span>
             </div>
           </div>
         ))}
       </div>
+
+      {/* ── Who cannot be reached (OB-09's read, finally on a screen) ──────
+          Empty is good news ONLY IF SOMEBODY IS LOOKING — cw.notification_gap's
+          own words. This is somebody looking, and the act beside each row is
+          how the fact gets to the people waiting on that person. */}
+      {gaps.status === 'loaded' && gaps.rows.length > 0 && (
+        <div className="mt-6">
+          <PanelHead
+            title="Being waited on, and unreachable"
+            sub="Something is waiting on these people and no channel can deliver it. The address book is yours; who is waiting is not." />
+          {gaps.rows.map((g) => (
+            <div className="panel-2 p-3 mb-2 flex items-baseline justify-between"
+                 key={g.person} data-testid="unreachable-person">
+              <div>
+                <span className="font-mono text-[12.5px]">{g.person}</span>
+                <span className="ml-3 caption">{g.role}</span>
+              </div>
+              <RaiseNotice
+                me={me} routes={routes.rows}
+                subject={{ kind: 'notification_gap', ref: g.person,
+                           about: `${g.person} being unreachable` }} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* IN-2, owner decision NI-5: the intake question set, judged, in the
+          administrator's workspace rather than a Legal one. */}
+      <IntakeCoveragePane me={me} routes={routes.rows} />
 
       <div className="flex gap-2 mt-4">
         <button className="btn" disabled={busy === 'checkpoint'}

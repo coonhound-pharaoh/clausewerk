@@ -120,7 +120,7 @@ REQUEST_TIMEOUT_SECONDS = 30
 # spirit as reads.READS: one greppable line, so adding a second key is a visible
 # act rather than a condition buried in a handler. Anything else the browser
 # sends is dropped before App.handle is called.
-QUERY_KEYS = ("run", "agreement")
+QUERY_KEYS = ("run", "agreement", "negotiation", "round")
 MAX_QUERY_FIELDS = 20
 
 # Routes whose body is bytes rather than a JSON record. This decision must be

@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clausewerk V5 — design concept</title>
+
+<!-- COMPANION MOCKUP to UI-DESIGN-PROPOSAL-2026-08-04.md.
+     Every row, name, figure and sentence of contract text on this page is
+     INVENTED. This file is a picture of an interface, not a build of one, and
+     it is never served by the application. The served app loads no canned data
+     and that rule is untouched here. -->
+
+<!-- Typefaces come from the repository, not a font CDN — same rule as the app.
+     This file borrows the app's copies rather than keeping a second set. -->
+<link rel="stylesheet" href="../v4/app/fonts.css">
+
+<style>
+  /* ────────────────────────────────────────────────────────────────────────
+     ONE set of definitions, three settings. This file shows two of them:
+     the DESK (cooler paper — queues, forms, controls) and the SHEET (warmer,
+     brighter paper — anything that IS a document). Dark is the third and is
+     not drawn here.
+     ──────────────────────────────────────────────────────────────────────── */
+  :root {
+    /* desk */
+    --desk:      #E4DFD1;
+    --panel:     #F1EDE2;
+    --panel-2:   #E9E4D6;
+    --line:      #CFC7B3;
+    --line-2:    #B4A98F;
+    /* sheet */
+    --sheet:     #FCF8EC;
+    /* ink */
+    --ink:       #2A2117;
+    --mute:      #6B5C44;
+    --mute-2:    #96866A;
+    /* the four meanings — and there are only four */
+    --ok:        oklch(0.44 0.09 162);   /* effective */
+    --amber:     oklch(0.52 0.13 72);    /* pending / machine-authored */
+    --danger:    oklch(0.47 0.16 28);    /* ERROR. never merely "no" */
+    --neutral:   var(--mute-2);          /* never ran */
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background-color: var(--desk);
+    background-image:
+      radial-gradient(rgba(42,33,23,.030) 1px, transparent 1px),
+      radial-gradient(ellipse at 50% 0%, rgba(255,252,240,.55), transparent 68%);
+    background-size: 3px 3px, 100% 100%;
+    color: var(--ink);
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .mono { font-family: 'Courier Prime', 'Courier New', monospace; font-variant-numeric: tabular-nums; }
+  .display { font-family: 'Instrument Serif', Georgia, serif; letter-spacing: -.01em; line-height: 1.05; }
+  .mute { color: var(--mute); }
+  .mute-2 { color: var(--mute-2); }
+  .tabnum { font-variant-numeric: tabular-nums; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ── page furniture for the concept sheet itself ───────────────────────── */
+  .concept-head { padding: 64px 0 12px; }
+  .concept-head .display { font-size: 52px; }
+  .kicker {
+    font-family: 'Courier Prime', monospace; font-size: 10.5px;
+    letter-spacing: .18em; text-transform: uppercase; color: var(--mute-2);
+  }
+  .lede { font-size: 17px; color: var(--mute); max-width: 68ch; margin-top: 14px; }
+  .fig { margin-top: 52px; }
+  .fig > .fig-label {
+    display: flex; align-items: baseline; gap: 12px;
+    border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 18px;
+  }
+  .fig-label .n { font-family: 'Courier Prime', monospace; font-size: 11px; color: var(--mute-2); letter-spacing: .1em; }
+  .fig-label .t { font-family: 'Instrument Serif', Georgia, serif; font-size: 25px; }
+  .fig-label .d { font-size: 13px; color: var(--mute); font-style: italic; margin-left: auto; }
+  .note { font-size: 13px; color: var(--mute); margin-top: 12px; max-width: 76ch; }
+
+  /* ── application chrome ────────────────────────────────────────────────── */
+  .app {
+    border: 1px solid var(--line-2); border-radius: 3px; overflow: hidden;
+    background: var(--panel); box-shadow: 0 18px 44px -30px rgba(42,33,23,.55);
+  }
+  .masthead {
+    height: 54px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .monogram {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border: 1px solid var(--line-2);
+    font-family: 'Instrument Serif', Georgia, serif; font-size: 16px; letter-spacing: -.06em;
+  }
+  .wordmark { font-family: 'Instrument Serif', Georgia, serif; font-size: 22px; letter-spacing: -.02em; line-height: 1; }
+  .subword { font-family: 'Courier Prime', monospace; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--mute-2); }
+  .acting {
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 4px 10px; border: 1px solid var(--line-2); border-radius: 2px;
+  }
+  .acting .role {
+    font-family: 'Courier Prime', monospace; font-size: 9.5px;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--ok);
+  }
+  .body-split { display: grid; grid-template-columns: 218px 1fr; min-height: 520px; }
+
+  /* ── §3.4 the left rail, for the crowded workspaces ────────────────────── */
+  .rail { border-right: 1px solid var(--line); padding: 14px 0; background: var(--panel-2); }
+  .rail-group { font-family:'Courier Prime',monospace; font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color: var(--mute-2); padding: 14px 16px 6px; }
+  .rail-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 7px 16px; font-size: 14px; color: var(--mute); cursor: default; position: relative;
+  }
+  .rail-item:hover { background: rgba(42,33,23,.035); color: var(--ink); }
+  .rail-item.active { color: var(--ink); background: rgba(42,33,23,.055); }
+  .rail-item.active::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background: var(--ok); }
+  .rail-count { font-family:'Courier Prime',monospace; font-size:11px; color: var(--mute-2); font-variant-numeric: tabular-nums; }
+  .rail-item.active .rail-count { color: var(--ink); }
+
+  .pane { padding: 22px 26px; }
+  .pane-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .pane-title { font-family:'Instrument Serif',Georgia,serif; font-size: 28px; }
+  .pane-sub { font-style: italic; color: var(--mute); font-size: 14px; margin-top: 2px; }
+
+  /* ── the five states. five shapes. no sixth. ───────────────────────────── */
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px; border-radius: 2px; border: 1px solid var(--line-2);
+    font-family: 'Courier Prime', monospace; font-size: 10px;
+    letter-spacing: .09em; text-transform: uppercase; color: var(--mute);
+  }
+  .chip::before { content:''; width: 7px; height: 7px; flex: none; }
+  .chip-effective { color: var(--ok); border-color: color-mix(in oklch, var(--ok), transparent 55%); background: color-mix(in oklch, var(--ok), transparent 90%); }
+  .chip-effective::before { background: var(--ok); }
+  .chip-pending { color: var(--amber); border-color: color-mix(in oklch, var(--amber), transparent 50%); background: color-mix(in oklch, var(--amber), transparent 90%); }
+  .chip-pending::before { background: repeating-linear-gradient(45deg, var(--amber) 0 2px, transparent 2px 4px); }
+  .chip-refused { color: var(--danger); border-color: color-mix(in oklch, var(--danger), transparent 55%); background: color-mix(in oklch, var(--danger), transparent 92%); }
+  .chip-refused::before { background: var(--danger); border-radius: 50%; }
+  .chip-never { color: var(--mute-2); border-style: dashed; }
+  .chip-never::before { border: 1px dashed var(--mute-2); }
+  .chip-superseded { color: var(--mute-2); text-decoration: line-through; }
+  .chip-superseded::before { background: var(--mute-2); height: 1px; width: 9px; }
+
+  /* ── §3.5 the waiting list: age is warmth, never alarm ─────────────────── */
+  .waiting { border: 1px solid var(--line); border-radius: 3px; background: var(--panel); margin-top: 18px; }
+  .wrow {
+    display: grid; grid-template-columns: 1fr auto auto; gap: 18px; align-items: center;
+    padding: 11px 14px 11px 16px; border-bottom: 1px solid var(--line); position: relative;
+  }
+  .wrow:last-child { border-bottom: 0; }
+  .wrow::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background: var(--amber); }
+  .wrow.age-0::before { opacity: .10; }
+  .wrow.age-1::before { opacity: .28; }
+  .wrow.age-2::before { opacity: .55; }
+  .wrow.age-3::before { opacity: .95; }
+  .wrow:hover { background: rgba(42,33,23,.035); }
+  .wrow .what { font-size: 14.5px; }
+  .wrow .who { font-size: 12.5px; color: var(--mute); margin-top: 1px; }
+  .wage { font-family:'Courier Prime',monospace; font-size: 11.5px; color: var(--mute-2); font-variant-numeric: tabular-nums; }
+  .wrow.oldest .wage { color: var(--amber); }
+  .oldest-flag {
+    font-family:'Courier Prime',monospace; font-size: 9px; letter-spacing:.14em;
+    text-transform: uppercase; color: var(--amber);
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
+    border: 1px solid var(--line-2); border-radius: 2px; background: transparent;
+    font-family: 'Courier Prime', monospace; font-size: 12px; color: var(--ink); cursor: default;
+  }
+  .btn:hover { background: rgba(42,33,23,.05); }
+  .btn-primary { background: var(--ok); border-color: var(--ok); color: #F7F1E1; }
+
+  /* ── §3.2 THE ORIGIN GUTTER — the centrepiece ──────────────────────────── */
+  .sheet {
+    background: var(--sheet); border: 1px solid var(--line);
+    box-shadow: 0 1px 0 rgba(42,33,23,.16), 0 20px 46px -28px rgba(42,33,23,.42);
+    padding: 40px 46px 46px;
+  }
+  .sheet-head { border-bottom: 1px solid rgba(42,33,23,.14); padding-bottom: 16px; margin-bottom: 26px; }
+  .sheet-head .t { font-family:'Instrument Serif',Georgia,serif; font-size: 30px; }
+  .sheet-head .m { font-family:'Courier Prime',monospace; font-size: 11px; color: var(--mute); margin-top: 6px; letter-spacing:.04em; }
+
+  .clause { display: grid; grid-template-columns: 16px 42px 1fr; gap: 0 14px; margin-bottom: 22px; }
+  .gutter { width: 4px; margin-left: 6px; border-radius: 1px; }
+  /* approved library language */
+  .g-approved { background: var(--ok); }
+  /* approved, but a negotiated fallback rather than the preferred position */
+  .g-fallback { background: linear-gradient(var(--ok) 0 40%, var(--sheet) 40% 52%, var(--ok) 52% 100%); }
+  /* machine-PROPOSED, human-approved, then admitted to the library */
+  .g-aiapproved { background: repeating-linear-gradient(45deg, var(--ok) 0 3px, transparent 3px 6px); }
+  /* machine-AUTHORED and labelled — sourcing documents only, never a contract */
+  .g-aiauthored { background: repeating-linear-gradient(45deg, var(--amber) 0 3px, transparent 3px 6px); }
+
+  .cnum { font-family:'Courier Prime',monospace; font-size: 11.5px; color: var(--mute-2); padding-top: 4px; }
+  .ctext { max-width: 66ch; }
+  .ctext h4 {
+    margin: 0 0 5px; font-size: 13px; font-weight: 700; letter-spacing: .02em;
+    font-variant: all-small-caps; letter-spacing: .1em;
+  }
+  .ctext p { margin: 0; font-size: 15px; line-height: 1.62; }
+  .dt {
+    font-variant: all-small-caps; letter-spacing: .06em;
+    border-bottom: 1px dotted var(--mute-2); cursor: help;
+  }
+  .origin-note {
+    font-family:'Courier Prime',monospace; font-size: 10px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--mute-2); margin-top: 7px;
+  }
+  .origin-note.ai { color: var(--amber); }
+
+  .chain {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 3px; padding: 16px 18px;
+  }
+  .chain h5 { margin: 0 0 3px; font-family:'Instrument Serif',Georgia,serif; font-size: 19px; font-weight: 400; }
+  .chain .sub { font-size: 12.5px; color: var(--mute); font-style: italic; }
+  .chain-row { display: grid; grid-template-columns: 92px 1fr; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .chain-row .k { font-family:'Courier Prime',monospace; font-size: 10px; letter-spacing:.1em; text-transform: uppercase; color: var(--mute-2); padding-top: 2px; }
+
+  .quote-just {
+    position: relative; padding-left: 30px; font-style: italic; color: var(--mute); font-size: 13.5px; margin-top: 12px;
+  }
+  .quote-just::before {
+    content: '\201C'; position: absolute; left: 0; top: -10px;
+    font-family:'Instrument Serif',Georgia,serif; font-size: 46px; color: var(--ok); opacity: .55;
+  }
+
+  /* ── §3.7 the machine, labelled and unglamorous ────────────────────────── */
+  .disclosure {
+    border: 1px solid var(--line-2); border-left: 3px solid var(--amber);
+    background: color-mix(in oklch, var(--amber), transparent 94%);
+    padding: 11px 14px; font-size: 13px; color: var(--mute);
+  }
+  .disclosure b { color: var(--ink); font-weight: 600; }
+  .field { border: 1px solid var(--line-2); border-radius: 2px; padding: 9px 12px; background: var(--sheet); margin-top: 10px; }
+  .field .lab { font-family:'Courier Prime',monospace; font-size: 9.5px; letter-spacing:.13em; text-transform:uppercase; color: var(--mute-2); }
+  .field .val { font-size: 14.5px; margin-top: 3px; }
+  .field.proposed {
+    border-color: color-mix(in oklch, var(--amber), transparent 45%);
+    background:
+      repeating-linear-gradient(45deg, color-mix(in oklch, var(--amber), transparent 93%) 0 6px, transparent 6px 12px),
+      var(--sheet);
+  }
+  .field.confirmed { border-color: color-mix(in oklch, var(--ok), transparent 55%); }
+
+  /* ── the specimen sheets ───────────────────────────────────────────────── */
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  .swatch { border: 1px solid var(--line); border-radius: 2px; overflow: hidden; background: var(--panel); }
+  .swatch .chipbar { height: 58px; }
+  .swatch .meta { padding: 9px 11px; }
+  .swatch .nm { font-size: 13.5px; }
+  .swatch .hx { font-family:'Courier Prime',monospace; font-size: 10.5px; color: var(--mute-2); margin-top: 2px; }
+  .spec-row { display: grid; grid-template-columns: 150px 1fr; gap: 18px; padding: 14px 0; border-top: 1px solid var(--line); align-items: baseline; }
+  .spec-row .k { font-family:'Courier Prime',monospace; font-size: 10px; letter-spacing:.12em; text-transform:uppercase; color: var(--mute-2); }
+
+  .banner {
+    border: 1px dashed var(--line-2); border-radius: 3px; padding: 12px 16px;
+    font-size: 13px; color: var(--mute); background: rgba(42,33,23,.02); margin-top: 26px;
+  }
+  .banner b { color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <div class="concept-head">
+    <div class="kicker">Companion mockup · UI Design Proposal · 2026-08-04</div>
+    <div class="display" style="margin-top:14px;">Clausewerk&nbsp;V5</div>
+    <div class="lede">
+      One idea, drawn four ways: <em>the screen shows where every word came from.</em>
+      The palette, the type and the four settled colour rules are the ones the product
+      already has. What is new is the origin gutter, the left rail, the age-as-warmth
+      waiting list, and a status vocabulary with exactly five entries.
+    </div>
+    <div class="banner">
+      <b>Everything on this page is invented</b> — the names, the counts, the dates and the
+      contract sentences. It is a picture of an interface, not a build of one, and the
+      application itself still loads no example rows anywhere.
+    </div>
+  </div>
+
+  <!-- ══════════════════ FIGURE 1 — the desk ══════════════════════════ -->
+  <div class="fig">
+    <div class="fig-label">
+      <span class="n">FIG. 1</span>
+      <span class="t">The desk</span>
+      <span class="d">left rail · waiting list · age as warmth</span>
+    </div>
+
+    <div class="app">
+      <div class="masthead">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <div style="display:flex; align-items:center; gap:11px;">
+            <span class="monogram">CW</span>
+            <span>
+              <span class="wordmark">Clausewerk</span><br>
+              <span class="subword">The library</span>
+            </span>
+          </div>
+          <span style="width:1px; height:24px; background:var(--line-2);"></span>
+          <span class="mute" style="font-size:13.5px;">
+            The vault, the ladders and the rules — and everything a reviewer sees
+          </span>
+        </div>
+        <div style="display:flex; align-items:center; gap:11px;">
+          <span class="acting">
+            <span style="font-size:13px;">A. Okonjo</span>
+            <span class="role">legal admin</span>
+          </span>
+          <span class="btn">sign out</span>
+        </div>
+      </div>
+
+      <div class="body-split">
+        <div class="rail">
+          <div class="rail-group">Waiting on me</div>
+          <div class="rail-item active"><span>review desk</span><span class="rail-count">7</span></div>
+          <div class="rail-item"><span>routing</span><span class="rail-count">2</span></div>
+          <div class="rail-item"><span>obligations</span><span class="rail-count">1</span></div>
+          <div class="rail-group">The library</div>
+          <div class="rail-item"><span>the library</span><span class="rail-count">—</span></div>
+          <div class="rail-item"><span>ladders &amp; rules</span><span class="rail-count">—</span></div>
+          <div class="rail-item"><span>governance</span><span class="rail-count">3</span></div>
+          <div class="rail-item"><span>holds &amp; retention</span><span class="rail-count">4</span></div>
+          <div class="rail-item"><span>reporting</span><span class="rail-count">—</span></div>
+        </div>
+
+        <div class="pane">
+          <div class="pane-head">
+            <div>
+              <div class="pane-title">Review desk</div>
+              <div class="pane-sub">Everything waiting on Legal judgement, oldest first.</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <span class="btn">export</span>
+              <span class="btn btn-primary">open oldest</span>
+            </div>
+          </div>
+
+          <div class="waiting">
+            <div class="wrow age-3 oldest">
+              <div>
+                <div class="what">Override requested — Limitation of liability, uncapped indemnity</div>
+                <div class="who">Northwind Logistics · requested by R. Baptiste · 3 watchers told</div>
+              </div>
+              <div class="oldest-flag">oldest wait</div>
+              <div class="wage">9d 04h</div>
+            </div>
+            <div class="wrow age-2">
+              <div>
+                <div class="what">Concession approval — Payment terms, net 75</div>
+                <div class="who">Aurelia Systems · round 3 · one rung below preferred</div>
+              </div>
+              <div></div>
+              <div class="wage">4d 11h</div>
+            </div>
+            <div class="wrow age-2">
+              <div>
+                <div class="what">Clause candidate — Data processing, sub-processor notice</div>
+                <div class="who">drafted by model · awaiting a named approver</div>
+              </div>
+              <div><span class="chip chip-pending">pending</span></div>
+              <div class="wage">3d 22h</div>
+            </div>
+            <div class="wrow age-1">
+              <div>
+                <div class="what">Ticket — Governing law, requester asked for New York</div>
+                <div class="who">Kestrel Freight · expires in 6 days</div>
+              </div>
+              <div></div>
+              <div class="wage">1d 07h</div>
+            </div>
+            <div class="wrow age-0">
+              <div>
+                <div class="what">Routing question — Which reviewer owns export controls</div>
+                <div class="who">unassigned category</div>
+              </div>
+              <div><span class="chip chip-never">never ran</span></div>
+              <div class="wage">03h 12m</div>
+            </div>
+          </div>
+
+          <div class="note">
+            Age is a warmth along the left edge — barely there at a day, unmistakable at a week.
+            It never turns red and it never blinks. <b>Red is reserved for error, permanently.</b>
+            The oldest wait is also marked in words, because a sort order nobody can see reads as
+            a preference somebody is free to change.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ FIGURE 2 — the origin gutter ═════════════════ -->
+  <div class="fig">
+    <div class="fig-label">
+      <span class="n">FIG. 2</span>
+      <span class="t">The origin gutter</span>
+      <span class="d">a contract — where amber is structurally impossible</span>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 306px; gap: 26px; align-items:start;">
+      <div class="sheet">
+        <div class="sheet-head">
+          <div class="t">Master Services Agreement</div>
+          <div class="m">NORTHWIND LOGISTICS · AGR-2026-0184 · assembled 2026-08-03 · 41 clauses</div>
+        </div>
+
+        <div class="clause">
+          <div class="gutter g-approved"></div>
+          <div class="cnum">7.1</div>
+          <div class="ctext">
+            <h4>Limitation of liability</h4>
+            <p>Except in respect of the excluded matters, the total aggregate liability of either
+            party arising under or in connection with this <span class="dt">Agreement</span> shall
+            not exceed the <span class="dt">Charges</span> paid in the twelve months preceding the
+            first event giving rise to the claim.</p>
+            <div class="origin-note">Approved library language · CL-0119 v4</div>
+          </div>
+        </div>
+
+        <div class="clause">
+          <div class="gutter g-fallback"></div>
+          <div class="cnum">9.2</div>
+          <div class="ctext">
+            <h4>Payment terms</h4>
+            <p>The <span class="dt">Customer</span> shall pay each undisputed invoice within
+            seventy-five (75) days of receipt. Disputed sums shall be notified within ten
+            <span class="dt">Business Days</span> and the undisputed balance paid as though no
+            dispute had arisen.</p>
+            <div class="origin-note">Approved language · negotiated fallback, one rung below preferred</div>
+          </div>
+        </div>
+
+        <div class="clause">
+          <div class="gutter g-aiapproved"></div>
+          <div class="cnum">14.6</div>
+          <div class="ctext">
+            <h4>Sub-processor notice</h4>
+            <p>The <span class="dt">Supplier</span> shall give not less than thirty days' written
+            notice before appointing any new sub-processor, and shall not appoint one to whom the
+            <span class="dt">Customer</span> has reasonably objected within that period.</p>
+            <div class="origin-note">Drafted by model · approved by M. Halloran, 2026-06-11 · CL-0207 v1</div>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid rgba(42,33,23,.14); margin-top:30px; padding-top:14px;">
+          <span class="chip chip-effective">contract</span>
+          <span style="font-size:13px; color:var(--mute); margin-left:10px;">
+            Zero machine-authored characters. The amber mark cannot occur on this document class —
+            if it ever appears here, something is wrong, and that is the point of drawing it.
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <div class="chain">
+          <h5>Clause 14.6</h5>
+          <div class="sub">Where these words came from.</div>
+          <div class="chain-row"><span class="k">Clause</span><span class="mono">CL-0207 v1 — Sub-processor notice</span></div>
+          <div class="chain-row"><span class="k">Policy</span><span>Data protection standard §4.2 — sub-processor control</span></div>
+          <div class="chain-row"><span class="k">Origin</span><span>Model-drafted candidate, entered through the review queue</span></div>
+          <div class="chain-row"><span class="k">Approved</span><span>M. Halloran · legal reviewer · 2026-06-11</span></div>
+          <div class="chain-row"><span class="k">Chosen</span><span>Category <span class="mono">data_processing</span>, severity high</span></div>
+          <div class="quote-just">
+            The engagement moves personal data to a processor with its own supply chain, so notice
+            of any new sub-processor has to be a right and not a courtesy.
+          </div>
+        </div>
+
+        <div class="note">
+          The chain opens beside the text, not on top of it. The oversized quotation mark is the
+          existing idiom and it earns its place: it says <em>a person said this, in their own
+          words</em>.
+        </div>
+
+        <div class="chain" style="margin-top:22px;">
+          <h5 style="font-size:16px;">Reading the gutter</h5>
+          <div style="margin-top:12px; display:grid; gap:12px;">
+            <div style="display:flex; gap:12px; align-items:flex-start;">
+              <span class="gutter g-approved" style="height:34px; margin:2px 0 0 0;"></span>
+              <span style="font-size:13px;">Approved library language. A named lawyer approved this wording.</span>
+            </div>
+            <div style="display:flex; gap:12px; align-items:flex-start;">
+              <span class="gutter g-fallback" style="height:34px; margin:2px 0 0 0;"></span>
+              <span style="font-size:13px;">Approved, but a negotiated fallback rather than the preferred position.</span>
+            </div>
+            <div style="display:flex; gap:12px; align-items:flex-start;">
+              <span class="gutter g-aiapproved" style="height:34px; margin:2px 0 0 0;"></span>
+              <span style="font-size:13px;">Machine-proposed, then approved by a named human and admitted to the library.</span>
+            </div>
+            <div style="display:flex; gap:12px; align-items:flex-start;">
+              <span class="gutter g-aiauthored" style="height:34px; margin:2px 0 0 0;"></span>
+              <span style="font-size:13px;">Machine-authored and labelled. <b>Sourcing documents only.</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      The gutter lives on the screen and never in the exported file — provenance is not printed
+      on the contract, and that owner decision is untouched. Defined terms are set in small
+      capitals with a dotted rule; hovering one shows its definition without leaving the page.
+    </div>
+  </div>
+
+  <!-- ══════════════════ FIGURE 3 — the sourcing document ═════════════ -->
+  <div class="fig">
+    <div class="fig-label">
+      <span class="n">FIG. 3</span>
+      <span class="t">The same gutter, on an RFP</span>
+      <span class="d">where amber is allowed — and therefore has to be shown</span>
+    </div>
+
+    <div class="sheet" style="max-width:none;">
+      <div class="sheet-head">
+        <div class="t">Request for Proposal</div>
+        <div class="m">WAREHOUSE AUTOMATION · RFP-2026-0032 · 9 of 61 paragraphs machine-authored</div>
+      </div>
+
+      <div class="clause">
+        <div class="gutter g-approved"></div>
+        <div class="cnum">2.1</div>
+        <div class="ctext">
+          <h4>Submission and format</h4>
+          <p>Proposals shall be submitted through the portal by 17:00 on the closing date. Late
+          submissions will not be considered, and no submission may be amended after the closing
+          time without the written agreement of the buyer.</p>
+          <div class="origin-note">Approved section library · SEC-0044 v2</div>
+        </div>
+      </div>
+
+      <div class="clause">
+        <div class="gutter g-aiauthored"></div>
+        <div class="cnum">4.7</div>
+        <div class="ctext">
+          <h4>Supplier question — throughput under peak</h4>
+          <p>Describe how your system sustains stated throughput during a sustained four-hour
+          peak at 140% of nominal volume, including what degrades first and what the operator
+          sees when it does.</p>
+          <div class="origin-note ai">Machine-authored from the intake · labelled · reviewed by R. Baptiste</div>
+        </div>
+      </div>
+
+      <div class="clause">
+        <div class="gutter g-approved"></div>
+        <div class="cnum">6.0</div>
+        <div class="ctext">
+          <h4>Terms preview</h4>
+          <p>The draft clause set that will form the agreement accompanies this document at
+          Annex&nbsp;C. Suppliers are asked to state exceptions at bid, not at award.</p>
+          <div class="origin-note">Approved section library · SEC-0061 v1 · Annex C is contract paper</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid rgba(42,33,23,.14); margin-top:26px; padding-top:14px;">
+        <span class="chip chip-pending">sourcing document</span>
+        <span style="font-size:13px; color:var(--mute); margin-left:10px;">
+          Machine-authored passages are permitted here and every one of them carries its mark.
+          The count is kept in the record; the reader can see it without running a report.
+        </span>
+      </div>
+    </div>
+
+    <div class="note">
+      Two rules, one picture: <b>contracts contain zero machine-authored characters; sourcing
+      documents label every machine-authored passage.</b> The same gutter states both — which is
+      why it is worth building once and using everywhere.
+    </div>
+  </div>
+
+  <!-- ══════════════════ FIGURE 4 — intake ════════════════════════════ -->
+  <div class="fig">
+    <div class="fig-label">
+      <span class="n">FIG. 4</span>
+      <span class="t">Intake</span>
+      <span class="d">proposed is not recorded, and it looks it</span>
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <div class="disclosure">
+          <b>You are talking to a model.</b> It asks the questions and proposes how this
+          engagement should be classified. It writes no contract language, and nothing below is
+          recorded until you confirm it.
+        </div>
+
+        <div style="margin-top:20px;">
+          <div class="kicker">Proposed classification</div>
+
+          <div class="field proposed">
+            <div class="lab">Category · proposed</div>
+            <div class="val">Data processing — personal data of employees</div>
+          </div>
+          <div class="field proposed">
+            <div class="lab">Severity · proposed</div>
+            <div class="val">High</div>
+          </div>
+          <div class="field confirmed">
+            <div class="lab">Category · confirmed by you</div>
+            <div class="val">Limitation of liability — standard</div>
+          </div>
+
+          <div style="display:flex; gap:9px; margin-top:16px;">
+            <span class="btn">change</span>
+            <span class="btn btn-primary">confirm classification</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="chain">
+          <h5>Why proposals are hatched</h5>
+          <div class="sub">The same amber, the same hatch, everywhere in the product.</div>
+          <div style="font-size:13.5px; color:var(--mute); margin-top:14px; line-height:1.65;">
+            A field the model proposed uses the pending look — amber, hatched — and a field a
+            person confirmed uses the effective look. When you confirm, it stamps solid. That
+            single animation survives the cull because confirmation is the moment an opinion
+            becomes an act, and it should feel like one.
+          </div>
+          <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+            <span class="chip chip-pending">proposed</span>
+            <span class="chip chip-effective">confirmed</span>
+            <span class="chip chip-never">not asked</span>
+          </div>
+        </div>
+
+        <div class="note">
+          No sparkle, no gradient badge, no wand. In this product the model is a labelled
+          participant with a recorded name, exactly like the humans — and the disclosure sits in
+          the reading order rather than behind a tooltip.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ FIGURE 5 — the language ══════════════════════ -->
+  <div class="fig">
+    <div class="fig-label">
+      <span class="n">FIG. 5</span>
+      <span class="t">The language</span>
+      <span class="d">four meanings, five states, three faces</span>
+    </div>
+
+    <div class="grid-4">
+      <div class="swatch">
+        <div class="chipbar" style="background:var(--ok);"></div>
+        <div class="meta"><div class="nm">Effective</div><div class="hx">banker's-lamp green</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chipbar" style="background:var(--amber);"></div>
+        <div class="meta"><div class="nm">Pending · machine</div><div class="hx">burnished amber — never green</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chipbar" style="background:var(--danger);"></div>
+        <div class="meta"><div class="nm">Error</div><div class="hx">sealing-wax red — error only</div></div>
+      </div>
+      <div class="swatch">
+        <div class="chipbar" style="background:var(--panel-2); border-bottom:1px dashed var(--line-2);"></div>
+        <div class="meta"><div class="nm">Never ran</div><div class="hx">unfilled, dashed</div></div>
+      </div>
+    </div>
+
+    <div style="margin-top:26px; display:flex; gap:12px; flex-wrap:wrap;">
+      <span class="chip chip-effective">effective</span>
+      <span class="chip chip-pending">pending</span>
+      <span class="chip chip-refused">refused</span>
+      <span class="chip chip-never">never ran</span>
+      <span class="chip chip-superseded">superseded</span>
+    </div>
+    <div class="note">
+      Five states, five shapes. Every one carries a shape and a word as well as a colour, because
+      roughly one man in twelve cannot separate the amber from the green — and this product's
+      entire vocabulary is amber against green.
+    </div>
+
+    <div style="margin-top:34px;">
+      <div class="spec-row">
+        <span class="k">Display</span>
+        <span><span class="display" style="font-size:38px;">Instrument Serif</span>
+          <span class="mute" style="font-size:13px; margin-left:14px;">titles, empty states, the wordmark</span></span>
+      </div>
+      <div class="spec-row">
+        <span class="k">Running text</span>
+        <span><span style="font-size:20px;">Source Serif — the interface, and the contract</span>
+          <span class="mute" style="font-size:13px; margin-left:14px;">66-character measure on documents</span></span>
+      </div>
+      <div class="spec-row">
+        <span class="k">Data</span>
+        <span><span class="mono" style="font-size:16px;">Courier Prime · AGR-2026-0184 · 9d 04h · 41</span>
+          <span class="mute" style="font-size:13px; margin-left:14px;">identifiers, ages, counts, buttons — all figures align</span></span>
+      </div>
+      <div class="spec-row">
+        <span class="k">Defined terms</span>
+        <span><span class="dt">Business Days</span>
+          <span class="mute" style="font-size:13px; margin-left:14px;">small capitals, dotted rule, definition on hover</span></span>
+      </div>
+      <div class="spec-row">
+        <span class="k">Motion</span>
+        <span>Two animations exist: <b>the stamp</b> when something becomes recorded, and
+          <b>the strike</b> when something is superseded. Nothing else moves.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="banner" style="margin-top:56px;">
+    <b>Read with</b> <span class="mono">UI-DESIGN-PROPOSAL-2026-08-04.md</span> — the four
+    decisions this concept asks for are in its section 7.
+  </div>
+
+</div>
+</body>
+</html>

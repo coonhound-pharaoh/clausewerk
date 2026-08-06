@@ -77,7 +77,7 @@ const value = async (k) => (await one(
 // ── The four operational rows exist and say what they do ──────────────────
 console.log('\nfour operational settings, each with a default and a purpose');
 
-await test('exactly the nine named rows are operational, and no others', async () => {
+await test('exactly the eleven named rows are operational, and no others', async () => {
   // Five since 0042: D-3 settled the existing notification_digest row and
   // added the immediate list beside it — the fifth row arrived as a proposal
   // with an owner decision behind it, which is exactly what this pin is for.
@@ -85,10 +85,19 @@ await test('exactly the nine named rows are operational, and no others', async (
   // three friction-estimate assumptions, all engineering defaults, undecided —
   // each changes what a report says or when a person is nagged, never what
   // anyone may do.
+  //
+  // Eleven since 0066 (AI-3): the model budget — how many calls a day, and how
+  // much one call may cost. They arrived as a PROPOSAL THE OWNER ACCEPTED on
+  // 2026-08-04 (memory.md S225), which is precisely what this pin asks of a new
+  // row. Operational because changing them changes what the system spends and
+  // how often it asks a model, never what anybody is allowed to decide — and
+  // running out of budget does not block an intake, it falls back to the
+  // deterministic classifier and says so.
   const r = await rows(
     `select key from cw.governance_setting where kind='operational' order by key`);
   eq(r.map(x => x.key),
-    ['friction_hourly_rate_usd','friction_hours_per_escalation',
+    ['ai_calls_per_day','ai_tokens_per_call',
+     'friction_hourly_rate_usd','friction_hours_per_escalation',
      'friction_hours_per_round','notification_digest',
      'notification_immediate_list','override_review_window',
      'review_escalation_days','session_length','ticket_expiry'],

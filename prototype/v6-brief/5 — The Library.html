@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clausewerk V6 — The Library</title>
+<!-- A PICTURE OF AN INTERFACE, NOT A BUILD OF ONE. Never served by the app.
+     Every clause, name, date and figure is INVENTED. Typefaces: S226. -->
+<link rel="stylesheet" href="../v4/app/fonts.css">
+<link rel="stylesheet" href="v6.css">
+<style>
+  .ladder{background:var(--sheet);border:1px solid var(--rule-2)}
+  .rung{display:grid;grid-template-columns:15px 74px 1fr auto;gap:12px;align-items:start;
+    padding:11px 15px;border-bottom:1px solid var(--rule)}
+  .rung:last-child{border-bottom:0}
+  .rung .g{width:7px;align-self:stretch;min-height:22px;margin-top:2px}
+  .rung .lv{font-family:'Courier Prime',monospace;font-size:9.5px;letter-spacing:.11em;
+    text-transform:uppercase;color:var(--mute);padding-top:3px}
+  .rung .tx{font-size:13.5px;line-height:1.6}
+  .rung .tx i{display:block;color:var(--mute);font-size:12px;margin-top:2px;font-style:italic}
+  .rung.retreat{background:var(--sheet-2)}
+  .vers{display:flex;gap:0;margin-top:9px;border:1px solid var(--rule-2);background:var(--sheet)}
+  .v-item{flex:1;padding:10px 13px;border-right:1px solid var(--rule)}
+  .v-item:last-child{border-right:0}
+  .v-item .vn{font-family:'Courier Prime',monospace;font-size:11px;color:var(--mute)}
+  .v-item .b{font-size:12.5px;line-height:1.55;margin-top:4px;color:var(--ink-2)}
+  .v-item.now{background:var(--sheet-2)}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <nav class="rail">
+    <div class="mark" style="font-size:21px">Clausewerk</div>
+    <div class="desk-of">THE LIBRARY<br>s.steward · legal admin</div>
+    <div class="rl on"><span>the library</span><span class="n">412</span></div>
+    <div class="rl"><span>ladders &amp; rules</span><span class="n">38</span></div>
+    <div class="rl"><span>governance</span><span class="n">9</span></div>
+    <div class="rl"><span>holds &amp; retention</span><span class="n">1</span></div>
+    <div class="rl"><span>obligations</span><span class="n">24</span></div>
+    <div class="rl"><span>review desk</span><span class="n">6</span></div>
+    <div class="rl"><span>routing</span><span class="n zero">0</span></div>
+    <div class="rl"><span>reporting</span><span class="n zero">0</span></div>
+    <div class="railfoot">
+      Eight areas. A tab row this long stops being a row and becomes a queue nobody reads to the
+      end of — and it cannot show the counts, which are the reason to go anywhere.
+    </div>
+  </nav>
+
+  <main class="main">
+    <div class="mast">
+      <div><div class="t">The library</div></div>
+      <span class="who">s.steward · legal admin</span>
+    </div>
+    <p class="opens">The vault, the ladders and the rules — and everything a reviewer sees.</p>
+
+    <!-- ═══ A CLAUSE AND ITS VERSIONS ═══ -->
+    <h5 class="sec">CL-0119 · Limitation of liability</h5>
+    <div class="sub">A clause version cannot be edited once it exists. There is no save button on this screen — only a new version.</div>
+
+    <div class="sheet">
+      <div class="sheet-head">
+        <div>
+          <div class="t">Limitation of liability</div>
+          <div class="m">CL-0119 · VERSION 4 · STANDING SINCE 12 MAY 2026</div>
+        </div>
+        <span class="stamp s-ok">published</span>
+      </div>
+      <div class="grid">
+        <div class="lines">1<br>2<br>3<br>4<br>5</div>
+        <div class="body">
+          <div class="para">
+            <h4><span class="pn">v4</span>Approved wording</h4>
+            <p>Except in respect of the excluded matters, the total aggregate liability of either
+            party arising under or in connection with this <span class="dt">Agreement</span>
+            shall not exceed the <span class="dt">Charges</span> paid in the twelve months
+            preceding the first event giving rise to the claim.</p>
+          </div>
+        </div>
+        <div class="margin">
+          <div class="tag">margin — how this version came to exist</div>
+          <div style="height:10px"></div>
+          <div class="om">
+            <div class="glyph g-lib"></div>
+            <span class="w">Drafted by a person</span>
+            <div class="d">Written by m.counsel, published by s.steward on 12 May 2026. Both
+            names are on the act; neither can be one person twice.</div>
+            <a href="#">the publication act →</a>
+          </div>
+          <div class="om">
+            <div class="glyph g-fall"></div>
+            <span class="w">Learned from a concession</span>
+            <div class="d">v4 exists because the twelve-month cap was conceded three times in
+            one quarter. What we gave away taught the library.</div>
+            <a href="#">the three concessions →</a>
+          </div>
+          <div class="mfoot">
+            Origin is derived from where the text came from. Nobody picks it from a list — a
+            provenance you can choose is a provenance you can be wrong about.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="vers">
+      <div class="v-item"><div class="vn">v1 · 04 Jan 2026</div>
+        <div class="b">Unlimited for data breach. <span class="stamp s-gone">superseded</span></div></div>
+      <div class="v-item"><div class="vn">v2 · 19 Feb 2026</div>
+        <div class="b">Capped at 24 months. <span class="stamp s-gone">superseded</span></div></div>
+      <div class="v-item"><div class="vn">v3 · 30 Mar 2026</div>
+        <div class="b">Excluded matters named. <span class="stamp s-gone">superseded</span></div></div>
+      <div class="v-item now"><div class="vn">v4 · 12 May 2026</div>
+        <div class="b">Twelve months. <span class="stamp s-ok">standing</span></div></div>
+    </div>
+    <div class="sub" style="margin-top:7px">Superseded versions are struck through and kept, never
+    deleted. A library that forgets what it used to say cannot explain a contract signed last year.</div>
+
+    <!-- ═══ THE LADDER ═══ -->
+    <h5 class="sec">The ladder behind this clause</h5>
+    <div class="sub">What we stand for, and how far we will come down — written by lawyers, held as data, and read by the engine rather than remembered by a person.</div>
+    <div class="ladder">
+      <div class="rung">
+        <div class="g g-lib"></div>
+        <div class="lv">preferred</div>
+        <div class="tx">Twelve months' charges, excluded matters carved out
+          <i>Where every assembly starts.</i></div>
+        <span class="stamp s-ok">standing</span>
+      </div>
+      <div class="rung retreat">
+        <div class="g g-fall"></div>
+        <div class="lv">rung 1</div>
+        <div class="tx">Eighteen months' charges
+          <i>A reviewer may take this rung without asking anyone.</i></div>
+        <span class="stamp s-ok">available</span>
+      </div>
+      <div class="rung retreat">
+        <div class="g g-fall"></div>
+        <div class="lv">rung 2</div>
+        <div class="tx">Twenty-four months, data breach carved out
+          <i>Needs the attorney and every required approver on the deal.</i></div>
+        <span class="stamp s-wait">needs approval</span>
+      </div>
+      <div class="rung">
+        <div class="g" style="border:1.5px solid var(--err)"></div>
+        <div class="lv">floor</div>
+        <div class="tx">Unlimited liability
+          <i>Below the floor. The engine will not assemble it and no override reaches this far.</i></div>
+        <span class="stamp s-err">unusable</span>
+      </div>
+    </div>
+    <div class="sub" style="margin-top:7px">Red appears here once, on the only thing on this page
+    that is actually wrong to attempt. Everything above it is an ordinary choice with an ordinary
+    price.</div>
+
+    <div class="cols">
+      <div class="panel">
+        <h5>What this desk cannot do</h5>
+        <div class="note">It cannot <b>edit a published version</b>. There is no edit act in the
+        database, so there is no edit button here — the screen is not being polite, it is
+        mirroring what the connection can do.</div>
+        <div class="note">It cannot <b>unpublish</b>. A supersession is an append, and the old
+        version stays readable for as long as a contract quotes it.</div>
+        <div class="note">It cannot <b>publish alone</b>. Publication binds the approver to the
+        sitting, and the author and the approver cannot be the same name.</div>
+      </div>
+      <div class="panel">
+        <h5>Rules the lawyers wrote</h5>
+        <div class="sub" style="margin-bottom:8px">Contradiction rules are data, not code. Developers do not decide what conflicts.</div>
+        <div class="measure"><span class="l">Rules standing</span><span class="v">38</span>
+          <span class="stamp s-ok">active</span></div>
+        <div class="measure"><span class="l">Written since the last review</span><span class="v">4</span>
+          <span class="stamp s-wait">unreviewed</span></div>
+        <div class="measure"><span class="l">Last full rule review</span><span class="v">—</span>
+          <span class="stamp s-none">never ran</span></div>
+        <div class="note">A review that has never run is drawn as never run. Showing it as a pass
+        would be the worst lie a record can tell about itself.</div>
+      </div>
+    </div>
+
+    <div class="foot">
+      A picture of an interface, not a build of one — never served by the application. Every
+      clause, version, ladder rung, name, date and figure above is <b>invented</b>, and the
+      wording is placeholder. Typefaces are served from this repository.
+    </div>
+  </main>
+</div>
+</body>
+</html>

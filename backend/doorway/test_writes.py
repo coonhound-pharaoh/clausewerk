@@ -128,6 +128,14 @@ BODIES: dict[str, dict] = {
         "person": "leah@clausewerk", "address": "leah@example.com",
     },
     "POST /notifications/addresses/remove": {"person": "leah@clausewerk"},
+    # A complete notice, so the viewer sweep refuses it for WHO IS ASKING and
+    # not for a missing field. The viewer holds no grant on cw.notice at all,
+    # which is the refusal this body is here to reach.
+    "POST /notices": {
+        "to_role": "legal_admin", "subject_kind": "intake_probe",
+        "subject_ref": "need", "note": "this question classifies nothing",
+    },
+    "POST /notices/acknowledge": {"notice_id": 1, "note": "seen"},
     "POST /obligations/satisfy": {"obligation_id": 1, "note": "done; receipt"},
     "POST /obligations/ack": {"obligation_id": 1, "document_ref": 1},
     "POST /obligations/reassign": {

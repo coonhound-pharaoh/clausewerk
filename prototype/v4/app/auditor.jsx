@@ -175,6 +175,158 @@ function TheRecordPane() {
         The newest 500 acts. Whether the chain verifies is reported by the health
         check above, not decided by this screen.
       </p>
+
+      {/* NG-4, owner decision NI-2: the negotiation beside the rest of the
+          agreement's chain rather than behind a tab of its own. An auditor
+          reads an agreement, not a subsystem. */}
+      <NegotiationRecordForAudit />
+    </div>
+  );
+}
+
+// ── The negotiation record, read by the auditor (NG-4) ────────────────────
+// READ ONLY, AND STRUCTURALLY SO. There is no act on this surface and no
+// import of one: the auditor's grant is select-only across the negotiation
+// family, so an act offered here would be a button that refuses. What it shows
+// is the chain of one negotiation — what was exchanged, what was contested,
+// how each point moved, and what reopened.
+function NegotiationRecordForAudit() {
+  const negotiations = usePane(() => API.negotiations());
+  const rounds    = usePane(() => API.negotiationRounds());
+  const positions = usePane(() => API.positions());
+  const movements = usePane(() => API.positionMovements());
+  const revivals  = usePane(() => API.revivals());
+  const [open, setOpen] = useState('');
+
+  if (negotiations.status === 'loading') return null;
+  if (negotiations.status === 'failed') {
+    return (
+      <div className="mt-8">
+        <PanelHead title="Negotiations" />
+        <LoadFailed reason={negotiations.reason} />
+      </div>
+    );
+  }
+
+  const chosen = negotiations.rows.find((n) => String(n.negotiation_id) === open);
+  const mine = (rows, key = 'negotiation_id') => (rows ?? [])
+    .filter((r) => chosen && String(r[key]) === String(chosen.negotiation_id));
+
+  // A movement carries its negotiation on the row (the read joins the position
+  // to reach it), so the same filter works and nothing is matched by walking a
+  // second list in the browser.
+  const moved = mine(movements.rows);
+
+  return (
+    <div className="mt-8 pt-6 border-t hair" data-testid="audit-negotiations">
+      <PanelHead
+        title="Negotiations"
+        sub="What was exchanged and what was contested, for one agreement at a time. Nothing on this surface can be acted on." />
+
+      {negotiations.rows.length === 0
+        ? <div className="caption">No negotiation is on the record.</div>
+        : (
+          <>
+            <select className="font-mono" style={{ padding: '5px 9px', width: 320 }}
+                    data-testid="audit-negotiation"
+                    value={open} onChange={(e) => setOpen(e.target.value)}>
+              <option value="">choose a negotiation…</option>
+              {negotiations.rows.map((n) => (
+                <option key={n.negotiation_id} value={String(n.negotiation_id)}>
+                  {n.agreement_id} — {n.paper === 'ours' ? 'our paper' : 'their paper'}
+                  {n.renews_agreement_id ? ` (renews ${n.renews_agreement_id})` : ''}
+                </option>
+              ))}
+            </select>
+
+            {chosen && (
+              <div className="mt-4">
+                <div className="panel p-4">
+                  <div className="section-label">Opened</div>
+                  <div className="text-[12.5px] mt-1" style={{ color: 'var(--mute)' }}>
+                    {chosen.opened_on} by <span className="font-mono">{chosen.opened_by}</span>,
+                    from {chosen.baseline === 'executed_agreement'
+                      ? "last term's executed positions" : 'current library standard'}
+                    {chosen.baseline_chosen_by
+                      && <> · chosen by <span className="font-mono">{chosen.baseline_chosen_by}</span></>}
+                  </div>
+                  {chosen.baseline_note && (
+                    <div className="font-serif italic mt-2"
+                         style={{ fontSize: 14, color: 'var(--mute)' }}>
+                      {chosen.baseline_note}
+                    </div>
+                  )}
+                </div>
+
+                <div className="panel p-4 mt-4">
+                  <div className="section-label">Rounds</div>
+                  {mine(rounds.rows).length === 0
+                    ? <div className="caption mt-1">Nothing has been exchanged.</div>
+                    : mine(rounds.rows)
+                        .sort((a, b) => a.round_no - b.round_no)
+                        .map((r) => (
+                          <div className="py-2 border-b hair" key={r.round_no}>
+                            <span className="font-mono text-[12.5px]">round {r.round_no}</span>
+                            <span className="ml-3 caption">
+                              {r.direction} · {r.sent_on} · recorded by {r.actor}
+                            </span>
+                            <div className="caption font-mono mt-0.5">{r.document_sha256}</div>
+                          </div>
+                        ))}
+                </div>
+
+                <div className="panel p-4 mt-4">
+                  <div className="section-label">Positions, and how each moved</div>
+                  {mine(positions.rows).length === 0
+                    ? <div className="caption mt-1">No point was contested.</div>
+                    : mine(positions.rows).map((p) => (
+                        <div className="py-2 border-b hair" key={p.position_id}>
+                          <div>
+                            <span className="font-mono text-[12.5px]">{p.category_key}</span>
+                            <span className="ml-3 text-[12.5px]">{p.state}</span>
+                            {p.current_rung !== null && p.current_rung !== undefined
+                              && <span className="ml-2 caption">rung {p.current_rung}</span>}
+                            <span className="ml-2 caption">
+                              raised round {p.round_raised} from {p.opened_from.replace('_', ' ')}
+                            </span>
+                          </div>
+                          {moved.filter((m) => m.position_id === p.position_id)
+                                .sort((a, b) => a.movement_id - b.movement_id)
+                                .map((m) => (
+                            <div className="caption mt-1" key={m.movement_id}
+                                 style={{ paddingLeft: 16 }}>
+                              round {m.round_no} → {m.to_state}
+                              {m.current_rung !== null && m.current_rung !== undefined
+                                && ` (rung ${m.current_rung})`}
+                              {' '}· <span className="font-mono">{m.actor}</span>
+                              {m.note && ` · “${m.note}”`}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                </div>
+
+                <div className="panel p-4 mt-4">
+                  <div className="section-label">Reopened after settling</div>
+                  {/* Empty is good news and says so — a blank area here reads
+                      as a screen that failed to load. */}
+                  {mine(revivals.rows).length === 0
+                    ? <div className="caption mt-1">
+                        None. No settled point was argued again.
+                      </div>
+                    : mine(revivals.rows).map((r) => (
+                        <div className="py-2 border-b hair" key={r.position_id}>
+                          <span className="font-mono text-[12.5px]">{r.category_key}</span>
+                          <span className="ml-3 caption">
+                            held {r.times_held} times, rounds {r.first_held_round}–{r.last_round}
+                          </span>
+                        </div>
+                      ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
     </div>
   );
 }

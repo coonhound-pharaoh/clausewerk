@@ -201,6 +201,24 @@ const ADMIN_MAY_WRITE = {
   // the tick records deliveries and outcomes, and a delivery cannot be
   // un-sent. Carries references and outcomes, never contract content.
   'notification_outbox':  ['INSERT'],
+  // Raising what they observed, and acknowledging what was raised with them
+  // (0064, NT-1). INSERT only on both, append-only for every role: a notice
+  // cannot be un-raised and an acknowledgement cannot be withdrawn.
+  //
+  // THIS IS NOT A U5 BREACH, and the reason is worth stating rather than
+  // assumed. U5 says contract content is writable by the administrator
+  // nowhere. A notice carries a SUBJECT KIND, a REFERENCE, and the raiser's
+  // own sentence about process — an intake probe id, a person who cannot be
+  // reached, a health tile. It cannot carry clause text, because
+  // cw.notice_subject_visible() refuses any reference that does not resolve
+  // to one of four operational surfaces, and the administrator holds no read
+  // on contract content to cite in the first place.
+  //
+  // The grant is not the administrator's alone: every working role holds it,
+  // because the route table (cw.notice_route) is what decides who may raise
+  // what to whom, and a grant list here would be its second copy.
+  'notice':               ['INSERT'],
+  'notice_acknowledgement': ['INSERT'],
 };
 
 console.log('\ndecision U5: contract content is WRITABLE by the administrator NOWHERE');
@@ -237,9 +255,12 @@ await test('the administrator holds select on the content tables — the U5 gran
   // The counterpart sweep. Not every table needs to be readable, but the
   // content ones do, and a missing grant here is U5 quietly reverted.
   const missing = [];
+  // The four negotiation tables left this list on 2026-08-05 (migration 0065)
+  // for U13's reason, and the test below says so. Moved rather than loosened:
+  // a reader has to see the absence is a decision.
   for (const t of ['agreement','clause','clause_version','concession','run',
-                   'run_finding','review_ticket','negotiation',
-                   'negotiation_position','executed_agreement','sow_override']) {
+                   'run_finding','review_ticket',
+                   'executed_agreement','sow_override']) {
     const held = (await one(
       `select has_table_privilege('cw_administrator', $1, 'SELECT') as held`,
       [`cw.${t}`])).held;
@@ -259,6 +280,29 @@ await test('the administrator holds select on the content tables — the U5 gran
 // The sweep above and this test now disagree with each other by design, which
 // is why the two tables were moved rather than the assertion loosened: a
 // reader has to see that the absence is a decision and not an omission.
+
+await test('the administrator is refused the negotiation record — 2026-08-05', async () => {
+  // THE SAME SHAPE AS U13, SETTLED THE SAME WAY. 0013 granted the
+  // administrator select on the four negotiation tables and no policy ever
+  // admitted the role, so the database FILTERED instead of refusing: they were
+  // answered "no rounds" while a round was on record. NC-08 reported it and
+  // left it open; the negotiate screens (2026-08-05) widened the symptom from
+  // one read to three, and the owner settled it by revoking the inert grant.
+  //
+  // Asserted as an ABSENCE, deliberately: if a future migration re-grants
+  // these, the silent empty list comes back with it and this is what says so.
+  const wronglyHeld = [];
+  for (const t of ['negotiation', 'negotiation_round', 'negotiation_position',
+                   'position_movement']) {
+    const held = (await one(
+      `select has_table_privilege('cw_administrator', $1, 'SELECT') as held`,
+      [`cw.${t}`])).held;
+    if (held) wronglyHeld.push(`cw.${t}`);
+  }
+  eq(wronglyHeld, [], 'the administrator holds select on a negotiation table '
+    + 'again. No policy admits the role, so the grant produces a silent empty '
+    + 'list — the exact answer 0065 removed');
+});
 
 await test('the administrator is refused the hold matter and the retention dates — U13', async () => {
   const wrongly = [];

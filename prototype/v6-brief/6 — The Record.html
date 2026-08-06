@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clausewerk V6 — The Record</title>
+<!-- A PICTURE OF AN INTERFACE, NOT A BUILD OF ONE. Never served by the app.
+     Every figure, name, date and row is INVENTED. Typefaces: S226. -->
+<link rel="stylesheet" href="../v4/app/fonts.css">
+<link rel="stylesheet" href="v6.css">
+<style>
+  .mix{background:var(--sheet);border:1px solid var(--rule-2)}
+  .mrow{display:grid;grid-template-columns:15px 1fr 74px auto;gap:12px;align-items:center;
+    padding:11px 15px;border-bottom:1px solid var(--rule)}
+  .mrow:last-child{border-bottom:0}
+  .mrow .g{width:7px;align-self:stretch;min-height:22px}
+  .mrow .l{font-size:13.5px;line-height:1.5}
+  .mrow .l i{display:block;color:var(--mute);font-size:12px;margin-top:1px;font-style:italic}
+  .mrow .pc{font-family:'Courier Prime',monospace;font-size:15px;text-align:right;
+    font-variant-numeric:tabular-nums}
+  .bar{height:5px;background:var(--rule);margin-top:5px;position:relative;max-width:280px}
+  .bar span{position:absolute;left:0;top:0;bottom:0;background:var(--ok)}
+  .bar.w span{background:var(--wait)}
+  .twin{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:9px}
+  .claim{background:var(--sheet);border:1px solid var(--rule-2);border-top:3px solid var(--ok);
+    padding:15px 18px}
+  .claim.two{border-top-color:var(--wait)}
+  .claim .h{font-family:'Instrument Serif',Georgia,serif;font-size:19px}
+  .claim .p{font-size:13px;line-height:1.65;color:var(--ink-2);margin-top:6px}
+  .claim .n{font-family:'Courier Prime',monospace;font-size:26px;margin-top:9px;
+    font-variant-numeric:tabular-nums}
+  .chain{background:var(--sheet);border:1px solid var(--rule-2);padding:14px 17px}
+  .link{display:flex;gap:12px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--rule)}
+  .link:last-child{border-bottom:0}
+  .link .s{font-family:'Courier Prime',monospace;font-size:10px;color:var(--mute);width:74px;flex:none}
+  .link .t{flex:1;font-size:13px}
+  .link .t i{color:var(--mute);font-size:12px;font-style:italic}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mast">
+    <div><span class="mark">Clausewerk</span><span class="matter">&nbsp;— the record</span></div>
+    <span class="who">a.keeper · auditor</span>
+  </div>
+  <div class="tabs"><b>the record</b><span>quality</span><span>origin mix</span>
+    <span>access history</span><span>reporting</span></div>
+
+  <p class="opens">The full chain, verified status, and the history of who was granted what.</p>
+
+  <!-- ═══ THE TWO CLAIMS ═══ -->
+  <h5 class="sec">The two claims, as figures</h5>
+  <div class="sub">The product states two rules now, not one, and both are computed from the chain rather than asserted.</div>
+  <div class="twin">
+    <div class="claim">
+      <div class="h">Contracts carry no machine-written words</div>
+      <div class="p">Counted character by character on every build. The build fails if it is ever
+      non-zero — so this figure is zero by construction, not by promise.</div>
+      <div class="n">0 <span style="font-size:12px;color:var(--mute)">characters, across 214 executed</span></div>
+      <div style="margin-top:9px"><span class="stamp s-ok">holds</span></div>
+    </div>
+    <div class="claim two">
+      <div class="h">Sourcing documents label every machine-written passage</div>
+      <div class="p">Machine-authored spans are permitted here by design — supplier questions and
+      deliverable descriptions. Permitted is not the same as unrecorded.</div>
+      <div class="n">41 <span style="font-size:12px;color:var(--mute)">spans, every one labelled</span></div>
+      <div style="margin-top:9px"><span class="stamp s-ok">every span accounted</span></div>
+    </div>
+  </div>
+
+  <!-- ═══ ORIGIN MIX ═══ -->
+  <h5 class="sec">Whose words the executed book is made of</h5>
+  <div class="sub">Drawn from 214 acts. The chain is verified before the figure is drawn, and the pane refuses to render if it does not verify.</div>
+  <div class="mix">
+    <div class="mrow">
+      <div class="g g-lib"></div>
+      <div class="l">Library wording, unedited
+        <i>Selected by the engine from approved clauses.</i>
+        <div class="bar"><span style="width:71%"></span></div></div>
+      <div class="pc">71%</div><span class="stamp s-ok">library</span>
+    </div>
+    <div class="mrow">
+      <div class="g g-fall"></div>
+      <div class="l">Edited before approval
+        <i>A reviewer changed the proposal before it was minted.</i>
+        <div class="bar"><span style="width:22%"></span></div></div>
+      <div class="pc">22%</div><span class="stamp s-ok">edited</span>
+    </div>
+    <div class="mrow">
+      <div class="g g-model"></div>
+      <div class="l">Model drafted, then approved by a person
+        <i>Reached the contract through a ticket, as wording a named reviewer adjudicated.</i>
+        <div class="bar"><span style="width:7%"></span></div></div>
+      <div class="pc">7%</div><span class="stamp s-ok">adjudicated</span>
+    </div>
+    <div class="mrow">
+      <div class="g g-mach"></div>
+      <div class="l">Machine-authored, directly, on a contract
+        <i>No path exists for this to be anything but zero. It is not a target that was met.</i>
+        <div class="bar w"><span style="width:0%"></span></div></div>
+      <div class="pc">0%</div><span class="stamp s-ok">impossible</span>
+    </div>
+  </div>
+
+  <!-- ═══ THE CHAIN ═══ -->
+  <h5 class="sec">One contract, end to end</h5>
+  <div class="sub">AG-021 · Alpenglow Analytics · executed 12 May 2026. Every link is an act with a name and a minute on it.</div>
+  <div class="chain">
+    <div class="link"><span class="s">02 Apr</span>
+      <span class="t">Intake answered by d.buyer <i>— six questions, four fields confirmed, one corrected</i></span>
+      <span class="stamp s-ok">recorded</span></div>
+    <div class="link"><span class="s">02 Apr</span>
+      <span class="t">Manifest minted <i>— the model's proposals and the requester's corrections both kept</i></span>
+      <span class="stamp s-ok">recorded</span></div>
+    <div class="link"><span class="s">08 Apr</span>
+      <span class="t">Assembly run 4B77E2 <i>— 31 clauses selected from the library by the engine</i></span>
+      <span class="stamp s-ok">reproduces</span></div>
+    <div class="link"><span class="s">11 Apr</span>
+      <span class="t">Finding CW-LI-002 raised <i>— liability below the ladder floor</i></span>
+      <span class="stamp s-ok">decided</span></div>
+    <div class="link"><span class="s">14 Apr</span>
+      <span class="t">Override OR-88 asked, socialised, window observed <i>— decided per finding by m.counsel</i></span>
+      <span class="stamp s-ok">past the gate</span></div>
+    <div class="link"><span class="s">28 Apr</span>
+      <span class="t">Concession recorded <i>— rung 1 taken on this deal only; the library was told</i></span>
+      <span class="stamp s-ok">recorded</span></div>
+    <div class="link"><span class="s">12 May</span>
+      <span class="t">Executed <i>— fingerprint filed with both signers</i></span>
+      <span class="stamp s-ok">executed</span></div>
+    <div class="link"><span class="s">—</span>
+      <span class="t">Independent re-verification of this chain <i>— available to run at any time</i></span>
+      <span class="stamp s-none">never ran</span></div>
+  </div>
+  <div class="sub" style="margin-top:7px">Executed is drawn in the same green as every other
+  recorded fact. It is not red, however satisfying sealing wax would be — red is kept for the
+  day something is wrong.</div>
+
+  <div class="cols">
+    <div class="panel">
+      <h5>Reading is an act too</h5>
+      <div class="sub" style="margin-bottom:8px">Every sitting in the reading room is on this list.</div>
+      <div class="measure"><span class="l">v.reader ← shown AG-021 by l.reviewer</span>
+        <span class="v">yest.</span><span class="stamp s-ok">shown</span></div>
+      <div class="measure"><span class="l">m.counsel → legal reviewer</span>
+        <span class="v">2d</span><span class="stamp s-ok">effective</span></div>
+      <div class="measure"><span class="l">n.candidate → legal reviewer</span>
+        <span class="v">2d</span><span class="stamp s-wait">confers nothing yet</span></div>
+      <div class="measure"><span class="l">o.former — access revoked</span>
+        <span class="v">5d</span><span class="stamp s-gone">revoked</span></div>
+      <div class="note">A pending grant is amber and hatched, never green. A grant that looks
+      effective before it is countersigned is the control undone in pixels.</div>
+    </div>
+
+    <div class="panel">
+      <h5>What a report is, and is not</h5>
+      <div class="note">A report is <b>a view of the record, never a second record</b>. It is
+      regenerated from the chain every time it is asked for.</div>
+      <div class="note">If the chain does not verify, the report is <b>refused</b> rather than
+      drawn with a caveat. A figure nobody can stand behind is worse than no figure.</div>
+      <div class="note">Counts, ages and mixes are drawn as numbers and plain bars. There is no
+      donut chart of clause categories here, because it would tell an auditor nothing they could
+      act on.</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    A picture of an interface, not a build of one — never served by the application. Every
+    figure, name, date, reference and row above is <b>invented</b>. Typefaces are served from
+    this repository; opening this page contacts nobody.
+  </div>
+</div>
+</body>
+</html>

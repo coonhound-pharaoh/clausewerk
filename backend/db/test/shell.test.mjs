@@ -70,9 +70,13 @@ const SPEC = {
                    'vendors', 'my record'],
   legal_reviewer: ['review desk', 'tickets', 'routing', 'approvals',
                    'negotiations', 'holds'],
+  // Amended 2026-08-05: owner decision NI-1 gives the Legal admin a ninth
+  // area, `negotiations`, with the reviewer's desk behind it. It was put to
+  // Mike with a recommendation to leave it at eight; he asked for the desk.
+  // This line is the reason the change is visible rather than incidental.
   legal_admin:    ['the library', 'ladders & rules', 'governance',
                    'holds & retention', 'obligations', 'review desk',
-                   'routing', 'reporting'],
+                   'negotiations', 'routing', 'reporting'],
   auditor:        ['the record', 'quality', 'origin mix', 'access history',
                    'reporting'],
   viewer:         ['reading room'],
@@ -133,8 +137,12 @@ await test('no role can reach another role\'s tab', async () => {
   // scopes a requester to their deals and hands Legal admin the whole record,
   // so sharing the tab is the same surface answering differently, never a leak
   // (OB-11/OB-15, 2026-08-02).
+  // negotiations: one desk, two Legal roles, by owner decision NI-1
+  // (2026-08-05). Both roles' reads on the negotiation family are identical —
+  // Legal sees every deal — so this is one surface answering the same way
+  // twice, never a leak.
   const deliberatelyShared = new Set(['review-desk', 'routing', 'reporting',
-                                      'obligations']);
+                                      'obligations', 'negotiations']);
   const seen = new Map();
   for (const [role, ws] of Object.entries(WORKSPACES)) {
     for (const t of ws.tabs) {
@@ -787,8 +795,17 @@ await test('the nudge notifies and cannot destroy', async () => {
   // itself still cannot destroy, because it still only calls the nudge.
   const pane = /function HealthPane[\s\S]*?\n\}/.exec(src)[0];
   const calls = [...pane.matchAll(/API\.(\w+)/g)].map((m) => m[1]).sort();
-  const allowed = ['destroyRetention', 'health', 'nudgeRetention',
-                   'redactionState', 'retentionDue', 'runCheck', 'takeCheckpoint'];
+  // EXTENDED 2026-08-05 for NT-3. The administrator's screen gained two reads
+  // and no new act: `notificationGap` (who is being waited on and cannot be
+  // reached — OB-09's read, which had no screen until now) and `noticeRoutes`
+  // (which notices this role may raise, so the control is only offered where
+  // it would land). Raising a notice itself calls API.raiseNotice from
+  // notices.jsx, which is why it does not appear in this pane's calls — and
+  // that separation is worth keeping: this list stays an allow-list of what
+  // the HEALTH pane does, not of what the workspace can do.
+  const allowed = ['destroyRetention', 'health', 'noticeRoutes',
+                   'notificationGap', 'nudgeRetention', 'redactionState',
+                   'retentionDue', 'runCheck', 'takeCheckpoint'];
   eq([...new Set(calls)], allowed.filter((a) => calls.includes(a)),
     'the health pane calls something outside its allow-list');
   // The destroy is never one click: the record's own id must be typed.
@@ -1285,6 +1302,18 @@ await test('one screen downloads, and it is not the transport', async () => {
   assert(named.length === 1 && named[0] === 'requester.jsx',
     `API.contract() is called from ${named.join(', ') || 'nowhere'}; it belongs `
     + 'to the requester and to no other screen');
+
+  // THE SECOND DOWNLOAD, PINNED THE SAME WAY (owner decision NI-4,
+  // 2026-08-05). The counterparty's document may be read back by everyone who
+  // can read the deal — which is a WIDER audience than the contract download
+  // has, and precisely why it gets its own line here rather than relaxing the
+  // one above. One screen saves it; the transport still does not.
+  const paper = readdirSync(APPDIR)
+    .filter((f) => f.endsWith('.jsx') && f !== 'api.jsx')
+    .filter((f) => /API\.supplierPaper\(/.test(stripComments(read(f))));
+  assert(paper.length === 1 && paper[0] === 'negotiate.jsx',
+    `API.supplierPaper() is called from ${paper.join(', ') || 'nowhere'}; it `
+    + 'belongs to the negotiation screens and to no other');
 });
 
 await test('a refused download is a sentence and never a saved file', async () => {
@@ -1335,7 +1364,13 @@ await test('the auditor pane writes nothing through the API', async () => {
   // write affordance whatever the buttons looked like.
   const src = stripComments(audSrc());
   const calls = [...src.matchAll(/API\.([a-zA-Z]+)\(/g)].map((m) => m[1]);
-  const READS = ['record', 'quality', 'originMix', 'health'];
+  // Extended 2026-08-05 for NG-4 (owner decision NI-2): the negotiation record
+  // reads inside the record pane. Every one is a select the auditor already
+  // holds in full, and not one of them is an act — which is the property this
+  // list exists to keep true as the pane grows.
+  const READS = ['record', 'quality', 'originMix', 'health',
+                 'negotiations', 'negotiationRounds', 'positions',
+                 'positionMovements', 'revivals'];
   for (const c of calls) {
     assert(READS.includes(c), `the auditor pane calls API.${c}(), which is not a read`);
   }

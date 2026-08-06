@@ -16,9 +16,11 @@
      build tooling off the authenticated page; regenerate with:
      npx --yes tailwindcss@3.4.17 -i prototype/v4/app/tailwind.source.css -o prototype/v4/app/tailwind.css --content "prototype/v4/**/*.{html,jsx}" --minify -->
 <link rel="stylesheet" href="./app/tailwind.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<!-- The typefaces are served from this repository, not from a font CDN. A
+     contract system that fetches its type from a third party reports every page
+     view to that third party, and loses its typeset look entirely behind a
+     firewall that blocks the call. See app/fonts/README.md. -->
+<link rel="stylesheet" href="./app/fonts.css">
 
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
@@ -33,6 +35,11 @@
      repaints the tokens and typefaces the two files above define; remove this
      one line to return to dark mode. -->
 <link rel="stylesheet" href="./app/parchment.css">
+<!-- v6.css is the "Brief" direction applied to this app's own markup. It adds no
+     markup and changes no behaviour; it repaints and re-sets what the files
+     above define. Remove this one line for the parchment look, remove two for
+     dark mode — S95's reversibility is deliberately preserved. -->
+<link rel="stylesheet" href="./app/v6.css">
 </head>
 <body>
 <div id="root" style="height:100vh"></div>
@@ -47,10 +54,13 @@
 
 <script type="text/babel" src="./app/api.jsx"></script>
 <script type="text/babel" src="./app/common.jsx"></script>
+<script type="text/babel" src="./app/notices.jsx"></script>
 <script type="text/babel" src="./app/shell.jsx"></script>
 <script type="text/babel" src="./app/console-people.jsx"></script>
 <script type="text/babel" src="./app/console-rest.jsx"></script>
 <script type="text/babel" src="./app/requester.jsx"></script>
+<script type="text/babel" src="./app/intake.jsx"></script>
+<script type="text/babel" src="./app/negotiate.jsx"></script>
 <script type="text/babel" src="./app/reviewer.jsx"></script>
 <script type="text/babel" src="./app/auditor.jsx"></script>
 <script type="text/babel" src="./app/viewer.jsx"></script>

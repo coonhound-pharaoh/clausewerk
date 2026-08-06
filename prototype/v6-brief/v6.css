@@ -1,0 +1,228 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   CLAUSEWERK V6 — "THE BRIEF"
+   One set of definitions for every screen in this direction.
+
+   This file is the argument of §3.1 made real: the look is defined ONCE and
+   every screen consumes it, rather than being a layer painted over a layer.
+   If a rule below is wrong, it is wrong in one place.
+
+   THE RULES THIS FILE ENFORCES
+   1. Five inks, five meanings, no sixth.
+   2. Red means ERROR. Never "no", never "severe", never "executed".
+   3. Pending is amber and hatched, and never green.
+   4. A check that never ran looks like neither a pass nor a failure.
+   5. Nothing is signalled by colour alone — every state carries a shape and
+      a word, so the page survives with the colour removed.
+   6. Age is weight. Amber is a state, not a clock.
+   7. Two animations exist: the stamp and the strike. Nothing else moves.
+
+   These pages are PICTURES OF AN INTERFACE, not builds of one, and are never
+   served by the application. Typefaces come from this repository (S226).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root{
+  --desk:#ded4bb; --sheet:#faf6e9; --sheet-2:#f3edda; --rail:#e7ddc4;
+  --ink:#2c2318; --ink-2:#5a4c37; --mute:#8a7a5c; --faint:#b5a992;
+  --rule:#ddd6c0; --rule-2:#c9c0a4;
+
+  /* ── THE FIVE INKS ── */
+  --ok:oklch(0.42 0.09 165);    /* effective · recorded · executed        */
+  --wait:oklch(0.52 0.12 72);   /* pending — confers nothing yet          */
+  --err:oklch(0.47 0.16 28);    /* ERROR, and nothing else                */
+  --none:#9a8d70;               /* never ran                              */
+  --gone:#8d8069;               /* superseded                             */
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--desk);
+  background-image:radial-gradient(ellipse at 50% -20%,rgba(255,250,235,.5),transparent 60%),
+    radial-gradient(rgba(44,35,24,.035) 1px,transparent 1px);
+  background-size:100% 100%,3px 3px;
+  font-family:'Source Serif 4',Georgia,serif; color:var(--ink);
+}
+.mono{font-family:'Courier Prime','Courier New',monospace}
+.tag{font-family:'Courier Prime','Courier New',monospace;font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--mute)}
+a{color:var(--ok)}
+
+/* ── page frames ─────────────────────────────────────────────────────── */
+.wrap{max-width:1180px;margin:0 auto;padding:26px 22px 60px}
+.shell{display:grid;grid-template-columns:196px 1fr;min-height:100vh;max-width:1250px;margin:0 auto}
+.main{padding:24px 30px 60px;min-width:0}
+
+/* ── the rail (more than five areas) ─────────────────────────────────── */
+.rail{background:var(--rail);border-right:1px solid var(--rule-2);padding:22px 0 30px}
+.rail .mark{font-family:'Instrument Serif',Georgia,serif;font-size:21px;letter-spacing:.05em;
+  padding:0 18px 3px}
+.rail .desk-of{font-family:'Courier Prime',monospace;font-size:10px;color:var(--mute);
+  letter-spacing:.1em;padding:0 18px 16px;border-bottom:1px solid var(--rule-2);line-height:1.6}
+.rl{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:8px 18px;
+  font-size:13.5px;color:var(--ink-2);border-left:3px solid transparent}
+.rl.on{background:var(--sheet);color:var(--ink);border-left-color:var(--ink);font-weight:600}
+.rl .n{font-family:'Courier Prime',monospace;font-size:11px;color:var(--mute);
+  font-variant-numeric:tabular-nums}
+.rl.on .n{color:var(--ink)}
+/* Zero is shown, muted, never hidden — "nothing is waiting" is a real answer,
+   and it must not look like a count that failed to load. */
+.rl .n.zero{color:var(--faint)}
+.railfoot{margin:18px 18px 0;padding-top:12px;border-top:1px solid var(--rule-2);
+  font-size:11.5px;line-height:1.6;color:var(--mute);font-style:italic}
+
+/* ── masthead & tab row (five areas or fewer) ────────────────────────── */
+.mast{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:10px;
+  border-bottom:2px solid var(--ink)}
+.mast .t,.mark{font-family:'Instrument Serif',Georgia,serif;font-size:25px;letter-spacing:.04em}
+.matter{font-style:italic;color:var(--ink-2);font-size:14.5px}
+.who{font-family:'Courier Prime',monospace;font-size:11.5px;color:var(--ink-2);
+  border:1px solid var(--rule-2);padding:3px 9px}
+.tabs{display:flex;gap:20px;padding:9px 0 0;font-family:'Courier Prime',monospace;font-size:11px;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--mute);border-bottom:1px solid var(--rule-2)}
+.tabs b{color:var(--ink);border-bottom:2px solid var(--ink);padding-bottom:7px;font-weight:700}
+.opens{margin:9px 0 0;font-style:italic;color:var(--ink-2);font-size:14px}
+.lede{margin:20px 0 6px;font-size:15px;line-height:1.6;color:var(--ink-2);max-width:76ch}
+.lede b{color:var(--ink)}
+h5.sec{font-family:'Instrument Serif',Georgia,serif;font-size:19px;margin:26px 0 2px}
+.sub{font-size:12.5px;color:var(--mute);font-style:italic;margin-bottom:10px}
+
+/* ── the sheet: rules | text | margin ────────────────────────────────
+   ONE GRID at 26.4px. The rules, the numbers and every line share it, or the
+   page is not a brief — it is a picture of one. */
+.sheet{background:var(--sheet);border:1px solid var(--rule-2);
+  box-shadow:0 1px 0 rgba(44,35,24,.14),0 18px 40px -26px rgba(44,35,24,.45)}
+.sheet-head{display:flex;justify-content:space-between;align-items:baseline;
+  padding:15px 20px 11px;border-bottom:2px solid var(--ink)}
+.sheet-head .t{font-family:'Instrument Serif',Georgia,serif;font-size:21px}
+.sheet-head .m{font-family:'Courier Prime',monospace;font-size:10px;color:var(--mute);
+  letter-spacing:.1em;margin-top:2px}
+.grid{display:grid;grid-template-columns:42px 1fr 252px}
+.lines{border-right:1px solid var(--rule-2);padding:15px 8px 20px;text-align:right;
+  font-family:'Courier Prime',monospace;font-size:10px;color:var(--mute);line-height:26.4px}
+.body{padding:15px 24px 20px;
+  background:repeating-linear-gradient(var(--sheet) 0 25.4px,var(--rule) 25.4px 26.4px)}
+.margin{border-left:1px dashed var(--rule-2);background:var(--sheet-2);padding:15px 15px 20px}
+.para{margin:0 0 26.4px}
+.para h4{margin:0;font-size:12px;font-variant:all-small-caps;letter-spacing:.11em;font-weight:700;
+  line-height:26.4px}
+.para p{margin:0;font-size:14.5px;line-height:26.4px;max-width:62ch}
+.pn{font-family:'Courier Prime',monospace;font-size:11px;color:var(--mute);margin-right:5px}
+.dt{font-variant:all-small-caps;letter-spacing:.05em;border-bottom:1px dotted var(--mute);cursor:help}
+/* a block under judgement is marked as a whole, not by a colour alone */
+.pending-block{border-left:3px solid var(--wait);margin-left:-24px;padding-left:21px;
+  background:repeating-linear-gradient(45deg,rgba(44,35,24,.035) 0 5px,transparent 5px 10px)}
+
+/* ── THE ORIGIN MARGIN ───────────────────────────────────────────────
+   FIVE FILLS, never five hues. Solid · notched · diagonal · hollow · rungs.
+   Set the page in greyscale and each is still itself. */
+.om{margin:0 0 15px;padding-left:15px;position:relative;min-height:32px}
+.om .glyph{position:absolute;left:0;top:2px;width:7px;height:calc(100% - 4px);min-height:24px}
+.g-lib  {background:var(--ok)}
+.g-fall {background:linear-gradient(var(--ok) 0 34%,var(--sheet-2) 34% 48%,var(--ok) 48% 100%)}
+.g-model{background:repeating-linear-gradient(45deg,var(--ok) 0 2.5px,transparent 2.5px 6px);
+         border:1px solid var(--ok)}
+.g-mach {background:transparent;border:1.5px dotted var(--wait)}
+.g-prop {background:repeating-linear-gradient(to bottom,var(--wait) 0 2.5px,transparent 2.5px 7px);
+         border-left:1.5px solid var(--wait)}
+/* ── STATE FILLS ─────────────────────────────────────────────────────
+   The same shape language as the origin marks above, used where the thing
+   being marked is a STATE rather than an origin — a grant, chiefly. Shapes
+   are shared deliberately: solid always means in force, rungs always mean
+   still climbing, hatch always means struck, dashes always mean it never
+   happened. Only the ink and the word beside them change. */
+.sg-eff  {background:var(--ok)}
+.sg-pend {background:repeating-linear-gradient(to bottom,var(--wait) 0 2.5px,transparent 2.5px 7px);
+          border-left:1.5px solid var(--wait)}
+.sg-gone {background:repeating-linear-gradient(45deg,var(--gone) 0 2px,transparent 2px 5px)}
+.sg-never{background:transparent;border:1.5px dashed var(--none)}
+
+.om .w{font-family:'Courier Prime',monospace;font-size:9.5px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--ink-2);display:block;line-height:1.5}
+.om .d{font-size:12px;color:var(--mute);line-height:1.5;margin-top:2px;font-style:italic}
+.om a{color:var(--ok);text-decoration:none;border-bottom:1px solid rgba(0,0,0,.16);font-size:11px;
+  font-family:'Courier Prime',monospace}
+.mfoot{margin-top:18px;padding-top:10px;border-top:1px solid var(--rule-2);font-size:11.5px;
+  color:var(--mute);line-height:1.55;font-style:italic}
+
+/* ── stamps: an ink, a shape, and always a word ──────────────────────── */
+.stamp{display:inline-block;font-family:'Courier Prime',monospace;font-size:9.5px;
+  letter-spacing:.11em;text-transform:uppercase;padding:2px 7px;border:1.5px solid}
+.s-ok{color:var(--ok);border-color:var(--ok)}
+.s-wait{color:var(--wait);border-color:var(--wait);
+  background:repeating-linear-gradient(45deg,rgba(0,0,0,.045) 0 3px,transparent 3px 6px)}
+.s-err{color:var(--err);border-color:var(--err)}
+.s-none{color:var(--none);border:1.5px dashed var(--none)}
+.s-gone{color:var(--gone);border-color:var(--gone);text-decoration:line-through}
+
+/* ── the waiting list — age as weight ────────────────────────────────── */
+.wl{background:var(--sheet);border:1px solid var(--rule-2)}
+.wrow{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--rule);
+  position:relative}
+.wrow:last-child{border-bottom:0}
+.wrow::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ink)}
+.w1::before{opacity:.10}.w2::before{opacity:.26}.w3::before{opacity:.48}
+.w4::before{opacity:.68}.w5::before{opacity:.88}
+.wrow .id{font-family:'Courier Prime',monospace;font-size:10.5px;color:var(--mute);width:58px;flex:none}
+.wrow .nm{flex:1;font-size:13.5px}
+.wrow .nm i{color:var(--mute);font-size:12.5px}
+.wrow .age{font-family:'Courier Prime',monospace;font-size:10.5px;color:var(--mute);
+  font-variant-numeric:tabular-nums;width:36px;text-align:right;flex:none}
+.oldest{font-family:'Courier Prime',monospace;font-size:8.5px;letter-spacing:.1em;
+  text-transform:uppercase;border:1px solid var(--ink);padding:1px 5px;flex:none}
+.wrow.open{background:var(--sheet-2)}
+
+/* ── acts: every one that needs a reason gets a field for it ─────────── */
+.acts{background:var(--sheet);border:1px solid var(--rule-2);border-top:0;padding:16px 20px 18px}
+.act{display:flex;gap:13px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--rule)}
+.act:last-of-type{border-bottom:0}
+.btn{font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  padding:6px 12px;border:1.5px solid var(--ink);background:transparent;color:var(--ink);
+  white-space:nowrap;flex:none;min-width:150px;text-align:center}
+.btn.primary{background:var(--ok);border-color:var(--ok);color:#f6f1e2}
+.btn.off{border-color:var(--none);color:var(--none);border-style:dashed}
+.reason{flex:1}
+.reason .lab{font-family:'Courier Prime',monospace;font-size:9.5px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--mute)}
+.field{margin-top:4px;border:1px solid var(--rule-2);background:#fdfaf0;padding:7px 9px;
+  font-size:12.5px;color:var(--mute);font-style:italic;min-height:32px}
+.act .why{font-size:12px;color:var(--mute);line-height:1.55;margin-top:5px;font-style:italic}
+
+/* ── panels, legends, measures ───────────────────────────────────────── */
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:22px}
+.cols-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:22px}
+.panel{background:var(--sheet);border:1px solid var(--rule-2);padding:15px 18px 17px}
+.panel h5{margin:0 0 3px;font-family:'Instrument Serif',Georgia,serif;font-size:18px}
+.panel .note{font-size:12.5px;color:var(--ink-2);line-height:1.65;margin-top:9px}
+.panel .note b{color:var(--ink)}
+.legend{display:flex;flex-direction:column;gap:10px}
+.lrow{display:flex;gap:11px;align-items:flex-start}
+.lrow .lg{width:7px;flex:none;align-self:stretch;min-height:30px}
+.lrow .tx{font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.lrow .tx b{font-family:'Courier Prime',monospace;font-size:9.5px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--ink);display:block}
+.measure{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0;
+  border-bottom:1px solid var(--rule)}
+.measure:last-of-type{border-bottom:0}
+.measure .v{font-family:'Courier Prime',monospace;font-size:15px;font-variant-numeric:tabular-nums}
+.measure .l{font-size:12.5px;color:var(--ink-2);flex:1}
+
+/* ── rows of records ─────────────────────────────────────────────────── */
+.rows{background:var(--sheet);border:1px solid var(--rule-2)}
+.row{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--rule)}
+.row:last-child{border-bottom:0}
+.row .id{font-family:'Courier Prime',monospace;font-size:10.5px;color:var(--mute);width:96px;flex:none}
+.row .nm{flex:1;font-size:13.5px}
+.row .nm i{color:var(--mute);font-size:12.5px;display:block;margin-top:1px}
+
+/* ── an honest empty state ───────────────────────────────────────────── */
+.empty{background:var(--sheet);border:1px dashed var(--rule-2);padding:26px 22px;text-align:center}
+.empty .k{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--mute)}
+.empty .l{font-family:'Instrument Serif',Georgia,serif;font-size:20px;margin-top:6px}
+.empty .s{font-size:12.5px;color:var(--mute);font-style:italic;margin-top:5px;line-height:1.6}
+
+.rule-note{margin-top:24px;border-top:2px solid var(--ink);padding-top:13px;font-size:13.5px;
+  line-height:1.7;color:var(--ink-2);max-width:88ch}
+.rule-note b{color:var(--ink)}
+.foot{margin-top:24px;border:1px dashed var(--rule-2);padding:11px 14px;font-size:11.5px;
+  color:var(--mute);line-height:1.6;font-style:italic}
+.foot b{color:var(--ink-2)}

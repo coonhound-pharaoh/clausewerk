@@ -1,0 +1,211 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   V6 — "THE BRIEF", wired into the running application.
+
+   WHAT THIS IS. The design direction from prototype/v6-brief, applied to the
+   real app's own markup instead of to mockup markup. It is the LAST stylesheet
+   loaded, after parchment.css, and it repaints and re-sets what those files
+   already define. It adds no markup and changes no behaviour.
+
+   WHY IT IS ONE FILE. S95 (2026-07-28) made the parchment look one removable
+   line, so dark mode was always one deletion away. That property is kept
+   exactly: remove this line and you are back at parchment; remove both and you
+   are back at dark. A design you cannot reverse is a decision nobody can undo.
+
+   WHAT IT DOES NOT DO YET. The rail, the single status component and the origin
+   margin all need markup or data the app does not yet expose. They are staged
+   in the handoff, not smuggled in here.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* THE FIVE INKS, restated so every screen draws from one place. */
+  --ok:      oklch(0.42 0.09 165);   /* effective · recorded · executed */
+  --pending: oklch(0.52 0.12 72);    /* waiting — confers nothing yet   */
+  --danger:  oklch(0.47 0.16 28);    /* ERROR, and nothing else          */
+  --never:   #9a8d70;                /* never ran                        */
+  --gone:    #8d8069;                /* superseded                       */
+
+  --sheet:   #faf6e9;
+  --sheet-2: #f3edda;
+  --ink:     #2c2318;
+  --mute:    #8a7a5c;
+}
+
+/* ── Typeset: the brief register ─────────────────────────────────────── */
+h1,h2,h3,.pane-title,.section-title{
+  font-family:'Instrument Serif',Georgia,serif; letter-spacing:.03em;
+}
+.caption{ font-style:italic; color:var(--mute); }
+.section-label{
+  font-family:'Courier Prime','Courier New',monospace;
+  letter-spacing:.14em; text-transform:uppercase; font-weight:400;
+}
+/* Every figure that might be compared to another aligns. Money and counts in
+   ragged proportional numerals is the oldest unforced error in this category. */
+.font-mono,.tile-n,.waiting-age,.chip,.tag,.btn,
+input,textarea,select,table,td,th{ font-variant-numeric:tabular-nums; }
+
+/* ── Panels read as paper, not as chrome ─────────────────────────────── */
+.panel{
+  background:var(--sheet);
+  box-shadow:0 1px 0 rgba(44,35,24,.10),0 14px 30px -24px rgba(44,35,24,.40);
+}
+.panel-2{ background:var(--sheet-2); }
+
+/* ── THE FIVE INKS, as the app's own chips ───────────────────────────
+   Each keeps its word — the markup already writes one — and each gains a
+   shape, so none of them is carried by colour alone. */
+.chip{ letter-spacing:.09em; }
+
+.chip-ok{
+  color:var(--ok);
+  border-color:color-mix(in oklch,var(--ok),transparent 55%);
+  background:color-mix(in oklch,var(--ok),transparent 90%);
+}
+/* Pending is amber AND hatched. A grant that looks effective before somebody
+   countersigns it is the control undone in pixels. */
+.chip-pending{
+  color:var(--pending);
+  border-color:color-mix(in oklch,var(--pending),transparent 50%);
+  background:
+    repeating-linear-gradient(45deg,rgba(44,35,24,.05) 0 3px,transparent 3px 6px),
+    color-mix(in oklch,var(--pending),transparent 92%);
+}
+/* Red is error. It is stated, never shouted — no weight, no alarm. */
+.chip-err{
+  color:var(--danger); font-weight:400;
+  border-color:color-mix(in oklch,var(--danger),transparent 55%);
+  background:color-mix(in oklch,var(--danger),transparent 92%);
+}
+/* A check that never ran is neither a pass nor a failure, and must look like
+   neither. Dashed and unfilled: visibly absent. */
+.chip-unknown{
+  color:var(--never); border-style:dashed;
+  border-color:var(--never); background:transparent;
+}
+/* "High" is a severity, not an error. It must not wear the error ink — that is
+   the single most common way red stops meaning anything. */
+.chip-high{
+  color:var(--ink); font-weight:600;
+  border-color:var(--ink); background:transparent;
+}
+.chip-std{ color:var(--mute); border-color:color-mix(in oklch,var(--ink),transparent 72%); }
+/* Superseded is struck through and KEPT. A library that deletes what it used to
+   say cannot explain a contract signed last year. */
+.chip-gone{
+  color:var(--gone); border-color:color-mix(in oklch,var(--gone),transparent 45%);
+  background:transparent; text-decoration:line-through;
+}
+
+/* ── Age is weight, never the status palette ─────────────────────────
+   Amber means "waiting on somebody" everywhere else in this product, so it
+   cannot also mean "this has been here a while". Depth of ink carries age. */
+.waiting-row{ position:relative; }
+.waiting-row::before{
+  content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:var(--ink); opacity:.10;
+}
+.waiting-row.oldest::before{ opacity:.85; }
+.waiting-row.oldest .waiting-age{ color:var(--ink); font-weight:600; }
+
+/* ── THE RAIL ────────────────────────────────────────────────────────
+   Six areas or more. The markup for this lives in shell.jsx; the rule about
+   when it appears lives there too, counted from the role's own areas. */
+.rail{
+  width:196px; flex:none; overflow-y:auto;
+  background:var(--sheet-2);
+  border-right:1px solid color-mix(in oklch,var(--ink),transparent 78%);
+  padding:14px 0 20px;
+}
+.rail-btn{
+  display:flex; align-items:baseline; justify-content:space-between; gap:8px;
+  width:100%; text-align:left; cursor:pointer;
+  padding:8px 16px; border:0; background:transparent;
+  border-left:3px solid transparent;
+  font-family:'Source Serif 4',Georgia,serif; font-size:13.5px;
+  color:color-mix(in oklch,var(--ink),transparent 25%);
+}
+.rail-btn:hover{ background:color-mix(in oklch,var(--sheet),transparent 25%); }
+.rail-btn.active{
+  background:var(--sheet); color:var(--ink); font-weight:600;
+  border-left-color:var(--ink);
+}
+.rail-n{
+  font-family:'Courier Prime','Courier New',monospace; font-size:11px;
+  font-variant-numeric:tabular-nums; color:var(--mute);
+}
+/* Zero is shown, muted, never hidden — "nothing is waiting" is a real answer
+   and must not look like a count that failed to load. */
+.rail-n.zero{ color:color-mix(in oklch,var(--mute),transparent 40%); }
+
+/* ── THE READING SURFACE AND ITS ORIGIN MARGIN ───────────────────────
+   A contract is read, not scanned, so it is set like a document: a fixed
+   measure, the clause number out of the text flow, and the origin of every
+   paragraph stated in the margin — in words, with room to say them.
+
+   The margin is on the SCREEN and never in the exported file. Provenance
+   figures do not print on paper the counterparty signs (owner, 2026-07-25). */
+.sheet{
+  background:var(--sheet); border:1px solid color-mix(in oklch,var(--ink),transparent 78%);
+  box-shadow:0 1px 0 rgba(44,35,24,.10),0 16px 34px -26px rgba(44,35,24,.42);
+}
+.clause{
+  display:grid; grid-template-columns:38px 1fr 240px; gap:0 16px;
+  padding:15px 20px; border-bottom:1px solid color-mix(in oklch,var(--ink),transparent 88%);
+}
+.clause:last-child{ border-bottom:0; }
+.clause-n{
+  font-family:'Courier Prime','Courier New',monospace; font-size:10.5px;
+  color:var(--mute); text-align:right; padding-top:4px; font-variant-numeric:tabular-nums;
+}
+.clause-text h4{
+  margin:0 0 3px; font-size:12px; font-weight:700;
+  font-variant:all-small-caps; letter-spacing:.1em; color:var(--ink);
+}
+.clause-text p{ margin:0; font-size:14.5px; line-height:1.75; max-width:64ch; color:var(--ink); }
+.clause-margin{
+  border-left:1px dashed color-mix(in oklch,var(--ink),transparent 80%);
+  padding-left:14px; position:relative;
+}
+/* FIVE FILLS, not five hues: solid · diagonal · notched · hollow · dashed.
+   Take the colour away and each is still itself. */
+.og{ position:absolute; left:0; top:2px; width:7px; height:calc(100% - 6px); min-height:24px; }
+.og-legal{ background:var(--ok); }
+.og-model{
+  background:repeating-linear-gradient(45deg,var(--ok) 0 2.5px,transparent 2.5px 6px);
+  border:1px solid var(--ok);
+}
+.og-vendor{
+  background:linear-gradient(var(--ink) 0 34%,var(--sheet) 34% 48%,var(--ink) 48% 100%);
+}
+.og-external{ background:transparent; border:1.5px dotted var(--pending); }
+/* No origin on the record: drawn as absent, never as anything reassuring. */
+.og-none{ background:transparent; border:1.5px dashed var(--never); }
+
+.og-word{
+  display:block; font-family:'Courier Prime','Courier New',monospace;
+  font-size:9.5px; letter-spacing:.1em; text-transform:uppercase;
+  color:color-mix(in oklch,var(--ink),transparent 20%); line-height:1.5;
+}
+.og-detail{ font-size:12px; font-style:italic; color:var(--mute); line-height:1.5; margin-top:3px; }
+.og-ref{
+  font-family:'Courier Prime','Courier New',monospace; font-size:10.5px;
+  color:var(--mute); margin-top:3px;
+}
+
+/* ── Acts ────────────────────────────────────────────────────────────── */
+.btn{ letter-spacing:.08em; }
+.btn-primary{ background:var(--ok); border-color:var(--ok); color:#f6f1e2; }
+
+/* ── Almost no motion ────────────────────────────────────────────────
+   Two animations exist in this product: the stamp, when something becomes
+   recorded, and the strike, when something is superseded. Motion suggests a
+   system busy DOING things, and this one's promises are mostly about what it
+   refuses to do. A still interface is the truthful one here.
+
+   Transitions go; ANIMATIONS DO NOT, because the stamp and the strike are
+   animations and killing every one of them would take the two that are meant
+   to survive. A blanket rule here would contradict the paragraph above it. */
+*,*::before,*::after{ transition-duration:0s !important; }
+
+/* ── Reading ─────────────────────────────────────────────────────────── */
+p,.prose{ max-width:66ch; }

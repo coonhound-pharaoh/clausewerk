@@ -135,6 +135,43 @@ function Refused({ what, role, reason }) {
   );
 }
 
+// ── The one status mark ───────────────────────────────────────────────────
+// FIVE STATES, FIVE INKS, AND NO SIXTH. Four near-duplicate stat tiles once
+// drifted apart in this product and WP-U07 consolidated them; status marks were
+// heading the same way — every pane deciding its own chip class from its own
+// ternary. This is the single component they should all go through.
+//
+// Every mark carries a WORD as well as an ink and a shape. Roughly one man in
+// twelve cannot separate the amber from the green, and this product's entire
+// vocabulary is amber against green, so colour may reinforce a state and may
+// never be the thing that carries it.
+//
+//   effective   something is in force and confers what it says
+//   pending     asked for, not yet granted — CONFERS NOTHING YET, never green
+//   refused     the database said no. an ERROR, not an ordinary "no"
+//   never       the check has not run. neither a pass nor a failure
+//   superseded  replaced, and kept rather than deleted
+//
+// A state outside these five is a design decision somebody has to make on
+// purpose, not a class somebody types in a hurry.
+const STATE_INK = {
+  effective:  'chip-ok',
+  pending:    'chip-pending',
+  refused:    'chip-err',
+  never:      'chip-unknown',
+  superseded: 'chip-gone',
+  neutral:    'chip-std',
+};
+
+function Status({ state, children, title }) {
+  const ink = STATE_INK[state] || STATE_INK.neutral;
+  return (
+    <span className={`chip ${ink}`} data-state={state || 'neutral'} title={title}>
+      {children}
+    </span>
+  );
+}
+
 // ── Loading, and failing to load ──────────────────────────────────────────
 // A pane that cannot load says so. It never renders as empty: "nothing is
 // waiting on you" and "we could not ask" are different facts, and showing the
@@ -166,16 +203,25 @@ function LoadFailed({ reason }) {
 // ── The hook every pane uses ──────────────────────────────────────────────
 // Fetch once, hold three states — loading, failed, loaded — and never collapse
 // the first two into an empty list.
+//
+// `body` is the whole reply, for the few endpoints that answer a RECORD rather
+// than a list of rows — GET /intake/probes is the first, and it answers a walk
+// version and a set of probes. Kept on this hook rather than given a second
+// one: the generation guard below (S214) is the part that is easy to get
+// wrong, and a parallel hook is how a screen ends up with the version of it
+// that was written before the bug was found.
 function usePane(fetcher, deps = []) {
-  const [state, setState] = useState({ status: 'loading', rows: [], reason: null });
+  const [state, setState] = useState({
+    status: 'loading', rows: [], body: null, reason: null });
   const generation = useRef(0);
   const reload = useCallback(async () => {
     const request = ++generation.current;
     setState((s) => ({ ...s, status: 'loading' }));
     const r = await fetcher();
     if (request !== generation.current) return;
-    if (r.ok) setState({ status: 'loaded', rows: r.rows, reason: null });
-    else setState({ status: 'failed', rows: [], reason: r.reason, http: r.status });
+    if (r.ok) setState({ status: 'loaded', rows: r.rows, body: r.body, reason: null });
+    else setState({ status: 'failed', rows: [], body: null,
+                    reason: r.reason, http: r.status });
   }, deps);
   useEffect(() => {
     reload();

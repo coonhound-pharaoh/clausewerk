@@ -208,6 +208,42 @@ await test('both U15 rows are on the record, decided by the owner', async () => 
   assert(s.every(r => r.decided_by === 'owner'), 'both are the owner’s decision');
 });
 
+console.log('\nreading one back out is itself recorded (0065, NI-4)');
+
+await test('a recorded read names the role that made it', async () => {
+  // THE AUDITOR'S NARROW DOOR. Handing a document out is appended to the chain
+  // before the bytes leave, and the chain's general append policy names the
+  // requester and the two Legal roles — not the auditor, who verifies the
+  // record and does not write to it. That rule was refusing them a DOCUMENT,
+  // so 0065 opened one function that writes this event and nothing else.
+  //
+  // INSIDE A SECURITY DEFINER, cw.app_role() answers null — current_user has
+  // become the owner. So the role must come from the connection's own SET
+  // ROLE, which is unforgeable, and this asserts it arrives. Recording every
+  // download as roleless would make the ledger useless in the exact case it
+  // was built for.
+  await queryAs('auditor', `select cw.record_document_read(
+    1, 1, 1, repeat('a', 64), 4200, 'received')`, [], 'ava@cw');
+
+  const [entry] = await rows(
+    `select actor, actor_role, event_type, payload from cw.audit_event
+      where event_type = 'received_document_read'`);
+  assert(entry, 'the read was not recorded at all');
+  eq(entry.actor, 'ava@cw');
+  eq(entry.actor_role, 'auditor',
+     'the chain recorded the read without the role that made it');
+  eq(entry.payload.byte_size, 4200);
+});
+
+await test('the door writes that one event and nothing else', async () => {
+  // The half that matters. If the auditor ever holds a general append, the
+  // record they exist to verify has become a record they can write.
+  await throws(() => queryAs('auditor',
+    `select cw.audit('invented_by_the_auditor','x','{}'::jsonb)`, [], 'ava@cw'),
+    'permission denied',
+    'the auditor can append an arbitrary event to the chain');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) {
   for (const [n, m] of failures) console.log(`  FAIL ${n}: ${m}`);

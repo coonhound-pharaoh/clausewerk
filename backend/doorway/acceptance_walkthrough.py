@@ -201,7 +201,210 @@ def main() -> int:
               f"approved by {row.get('reviewer') or row.get('approver')} — "
               f"origin {row.get('origin')}")
     print("\nthe reading room's per-clause render is real, behind a real run.")
+
+    walk_the_intake(buyer)
+    walk_the_negotiation(buyer, reviewer)
     return 0
+
+
+# ── The intake walk, end to end (AI-2) ──────────────────────────────────────
+
+
+def walk_the_intake(buyer: str) -> None:
+    """The requester's second entrance to the same recorded act.
+
+    The point of running it here rather than unit-testing the classifier: the
+    screen's four steps are four separate calls, and the ONE that has bitten
+    before is the last. POST /intake/classify answers `source: "intake"` and
+    cw.run.manifest_source accepts llm, fallback or manual (0005) — so a screen
+    forwarding the classifier's own label is refused at the final act, after
+    the person has answered every question. This walks the whole path so that
+    refusal cannot hide behind a green unit test again.
+    """
+    print("\nthe intake walk")
+
+    probes = act(BUYER, "reads the checklist", "GET", "/intake/probes", buyer)
+    asked = probes.get("probes", [])
+    print(f"           {len(asked)} probe(s), walk version {probes.get('version')}")
+    if not asked:
+        print("           no probes came back; the library defines no category "
+              "the walk can reach")
+        return
+
+    # Placeholder answers (content is placeholder — CLAUDE.md 2026-07-27). One
+    # deliberately matches no term list at all, because `unmatched` coming back
+    # populated is the thing the screen exists to show.
+    answers = [
+        {"probe": "need", "text": "A quarterly delivery of widgets for the "
+                                  "operations team."},
+        {"probe": "data", "text": "The supplier will process customer data on "
+                                  "our behalf."},
+    ]
+    proposed = act(BUYER, "answers, and the system reads them", "POST",
+                   "/intake/classify", buyer,
+                   {"vendor": "Northwind", "answers": answers})
+
+    # WHICH PATH RAN, printed rather than assumed. Without a model key this is
+    # the deterministic classifier, and the run says so — which is the whole
+    # point: a fallback that looks identical to the real thing is the
+    # degradation ADR-0005 exists to make visible.
+    path = proposed.get("source")
+    print(f"           proposed by: {path}")
+    if path == "fallback":
+        print(f"           the model did not answer: {proposed.get('model_absence')}")
+    if path not in ("llm", "fallback"):
+        print("           THE SOURCE IS NOT ONE THE RUN STORE ACCEPTS — "
+              "POST /runs will refuse this manifest at the last step")
+        sys.exit(1)
+    if proposed.get("not_in_library"):
+        print("           the model named categories this library does not "
+              f"define: {proposed['not_in_library']}")
+    print(f"           proposed {len(proposed.get('risks', []))} risk(s); "
+          f"unmatched: {proposed.get('unmatched')}")
+    if not proposed.get("unmatched"):
+        print("           NOTE: nothing was unmatched, so the screen's gap "
+              "panel is untested by this run")
+
+    if not proposed.get("risks"):
+        print("           the classifier proposed nothing; the rest of the "
+              "walk needs at least one risk")
+        return
+
+    # THE SOURCE COMES FROM THE ENDPOINT — 'llm' or 'fallback' — and is what
+    # the run keeps permanently. It used to be neither: the endpoint answered
+    # 'intake', its own name for the classification event, and POST /runs would
+    # have refused that after the requester had answered every question.
+    confirmed = {
+        "agreement_id": "AG-WALK-1",
+        "vendor": "Northwind",
+        "source": path,
+        "risks": [{"category": r["category"], "severity": r["severity"],
+                   "justification": r["justification"]}
+                  for r in proposed["risks"]],
+    }
+    act(BUYER, "pre-flights the confirmed manifest", "POST", "/manifests/check",
+        buyer, confirmed)
+    intake_run = act(BUYER, "assembles from the walk's manifest", "POST",
+                     "/runs", buyer, confirmed)
+    print(f"           run {intake_run.get('run_id')} recorded from source "
+          f"'{path}' — which is what an auditor reads in a year")
+
+
+# ── The negotiation, end to end (NG-0 … NG-4) ───────────────────────────────
+
+
+def upload(who: str, description: str, path: str, token: str, body: bytes,
+           filename: str):
+    """A POST whose body is a document rather than a record — the one shape
+    `call` above cannot make, because the transport decides "this is a
+    document" from the content type not being JSON."""
+    request = urllib.request.Request(
+        BASE + "/api" + path, method="POST", data=body,
+        headers={"Content-Type": "application/octet-stream",
+                 "Content-Disposition": f'attachment; filename="{filename}"',
+                 "Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(request) as answer:
+            print(f"  ok       {who:24} {description}")
+            return json.loads(answer.read() or b"{}")
+    except urllib.error.HTTPError as refused:
+        said = json.loads(refused.read() or b"{}")
+        print(f"  refused  {who:24} {description}")
+        print(f"           the doorway said: {said.get('reason', said)}")
+        sys.exit(1)
+
+
+def fetch_bytes(who: str, description: str, path: str, token: str):
+    request = urllib.request.Request(
+        BASE + "/api" + path, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(request) as answer:
+            data = answer.read()
+            print(f"  ok       {who:24} {description} — {len(data)} bytes")
+            return data
+    except urllib.error.HTTPError as refused:
+        said = refused.read()
+        print(f"  refused  {who:24} {description}")
+        print(f"           {said[:200]!r}")
+        return None
+
+
+def walk_the_negotiation(buyer: str, reviewer: str) -> None:
+    """Open it, take their paper, contest a point, hand it to Legal — and
+    prove the reviewer's desk sees the escalation.
+
+    What this catches that a unit test does not: the round the upload appends
+    is the round the download resolves through, and the requester's escalation
+    is the reviewer's queue. Both are two endpoints agreeing about one fact,
+    which is exactly the class of thing that passes in isolation.
+    """
+    print("\nthe negotiation")
+
+    act(BUYER, "opens a second deal to negotiate", "POST", "/deals", buyer,
+        {"agreement_id": "AG-WALK-2", "counterparty": "Contoso"},
+        tolerate="duplicate key")
+
+    opened = act(BUYER, "opens the negotiation on our paper", "POST",
+                 "/negotiations", buyer,
+                 {"agreement_id": "AG-WALK-2", "paper": "ours",
+                  "baseline": "library_standard",
+                  "baseline_note": "Placeholder: fresh paper, library standard."},
+                 tolerate="duplicate key")
+    negotiations = act(BUYER, "lists their negotiations", "GET", "/negotiations",
+                       buyer)
+    mine = [n for n in negotiations["rows"] if n["agreement_id"] == "AG-WALK-2"]
+    if not mine:
+        print("           the negotiation just opened is not in the list")
+        sys.exit(1)
+    negotiation_id = mine[0]["negotiation_id"]
+    print(f"           negotiation {negotiation_id}")
+
+    markup = b"PK\x03\x04 placeholder counterparty markup for AG-WALK-2"
+    recorded = upload(BUYER, "records the paper they sent back",
+                      "/negotiations/redline?agreement=AG-WALK-2", buyer,
+                      markup, "contoso-markup.docx")
+    print(f"           round {recorded['round_no']}, "
+          f"sha256 {recorded['document_sha256'][:16]}…")
+
+    # NI-4: back out again, through the round, under the caller's own rules.
+    got = fetch_bytes(BUYER, "reads their document back out",
+                      f"/negotiations/paper?negotiation={negotiation_id}"
+                      f"&round={recorded['round_no']}", buyer)
+    if got != markup:
+        print("           THE BYTES CAME BACK DIFFERENT — the round and the "
+              "store disagree about what was exchanged")
+        sys.exit(1)
+
+    position = act(BUYER, "contests a point", "POST", "/negotiations/positions",
+                   buyer,
+                   {"negotiation_id": negotiation_id, "category_key": "data",
+                    "round_raised": recorded["round_no"],
+                    "opened_from": "library_standard"},
+                   tolerate="duplicate key")
+    position_id = position["rows"][0]["position_id"]
+
+    act(BUYER, "hands it to Legal", "POST",
+        "/negotiations/positions/escalate", buyer,
+        {"position_id": position_id, "round_no": recorded["round_no"],
+         "note": "Placeholder: their wording moves the risk onto us."})
+
+    # THE TWO-ENDPOINT AGREEMENT. The requester escalated; the reviewer's desk
+    # is a different read, run as a different person.
+    desk = act(REVIEWER, "opens the desk", "GET", "/negotiations/positions",
+               reviewer)
+    escalated = [p for p in desk["rows"] if p["state"] == "escalated"]
+    print(f"           {len(escalated)} point(s) waiting on Legal")
+    if not any(p["position_id"] == position_id for p in escalated):
+        print("           THE ESCALATION DID NOT REACH THE DESK")
+        sys.exit(1)
+
+    moves = act(REVIEWER, "reads how it got there", "GET",
+                "/negotiations/movements", reviewer)
+    trail = [m for m in moves["rows"] if m["position_id"] == position_id]
+    for m in trail:
+        print(f"           round {m['round_no']} → {m['to_state']} by {m['actor']}")
+
+    print("\nintake and negotiation are real, end to end, through the doorway.")
 
 
 if __name__ == "__main__":

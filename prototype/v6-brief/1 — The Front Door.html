@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clausewerk V6 — The Front Door</title>
+<!-- A PICTURE OF AN INTERFACE, NOT A BUILD OF ONE. Never served by the app.
+     Every name and row is INVENTED. Typefaces are this repository's (S226). -->
+<link rel="stylesheet" href="../v4/app/fonts.css">
+<link rel="stylesheet" href="v6.css">
+<style>
+  .door{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+  .card{width:430px;background:var(--sheet);border:1px solid var(--rule-2);padding:32px 34px 26px;
+    box-shadow:0 1px 0 rgba(44,35,24,.16),0 24px 50px -26px rgba(44,35,24,.55)}
+  .card .crest{text-align:center;border-bottom:3px double var(--ink);padding-bottom:14px}
+  .card .crest .w{font-family:'Instrument Serif',Georgia,serif;font-size:31px;letter-spacing:.05em}
+  .card .crest .s{font-family:'Courier Prime',monospace;font-size:9.5px;letter-spacing:.26em;
+    color:var(--mute);margin-top:5px}
+  .card .say{font-style:italic;font-size:14.5px;color:var(--ink-2);line-height:1.6;margin-top:16px}
+  .lab{font-family:'Courier Prime',monospace;font-size:9.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--mute);margin-top:18px}
+  .inp{margin-top:5px;border:1.5px solid var(--rule-2);background:#fdfaf0;padding:9px 11px;
+    font-family:'Courier Prime',monospace;font-size:13.5px;color:var(--faint)}
+  .go{margin-top:12px;width:100%;padding:10px;background:var(--ok);color:#f6f1e2;border:none;
+    font-family:'Courier Prime',monospace;font-size:12px;font-weight:700;letter-spacing:.14em;
+    text-transform:uppercase}
+  .desks{margin-top:20px;border-top:1px solid var(--rule-2);padding-top:13px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .chip{font-family:'Courier Prime',monospace;font-size:10.5px;padding:3px 8px;
+    border:1px solid var(--rule-2);color:var(--ink-2)}
+  .admit{margin-top:16px;border-top:1px solid var(--rule-2);padding-top:12px;font-size:12px;
+    color:var(--mute);line-height:1.6;font-style:italic}
+  .aside{max-width:430px;margin:0 auto;padding:0 0 50px}
+</style>
+</head>
+<body>
+<div class="door">
+ <div>
+  <div class="card">
+    <div class="crest">
+      <div class="w">Clausewerk</div>
+      <div class="s">PROCUREMENT · CONTRACT · RECORD</div>
+    </div>
+
+    <p class="say">Present yourself. Clausewerk looks up the grant you hold — nobody chooses a
+    role here, and no screen offers one you were not given.</p>
+
+    <div class="lab">Who are you</div>
+    <div class="inp">name@clausewerk</div>
+    <button class="go">Present yourself</button>
+
+    <div class="desks">
+      <div class="tag">The six desks of this record</div>
+      <div class="chips">
+        <span class="chip">d.buyer · requester</span>
+        <span class="chip">l.reviewer · legal reviewer</span>
+        <span class="chip">s.steward · legal admin</span>
+        <span class="chip">a.keeper · auditor</span>
+        <span class="chip">v.reader · viewer</span>
+        <span class="chip">n.admin · administrator</span>
+      </div>
+    </div>
+
+    <div class="admit">
+      There is no password yet. This is a development doorway, and it is labelled as one rather
+      than dressed up as a lock that would open for anybody.
+    </div>
+  </div>
+
+  <div class="aside">
+    <div class="foot">
+      <b>Why this screen has nothing else on it.</b> No feature list, no illustration, no
+      tagline. A system of record should open like a ledger, not like a landing page — and the
+      one sentence worth printing here is the admission that the lock is not built yet. That
+      sentence is kept word for word from the running app; only its setting changed.
+      <br><br>
+      A picture of an interface, not a build of one. Every name above is <b>invented</b>.
+    </div>
+  </div>
+ </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>V6 contact sheet — all eight at once</title>
+<!-- A REVIEW TOOL, not a screen. It exists so the whole set can be looked at
+     together, which is the only way to judge whether it is coherent.
+     Serve it: preview_start {name:"prototypes"} → /v6-brief/_contact-sheet.html -->
+<link rel="stylesheet" href="../v4/app/fonts.css">
+<link rel="stylesheet" href="v6.css">
+<style>
+  body{padding:16px}
+  h1{font-family:'Instrument Serif',Georgia,serif;font-size:22px;margin:0 0 3px}
+  .say{font-size:12.5px;color:var(--mute);font-style:italic;margin:0 0 14px}
+  .sheetgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .cell{background:var(--sheet);border:1px solid var(--rule-2);overflow:hidden}
+  .cap{display:flex;justify-content:space-between;align-items:baseline;gap:6px;
+    padding:5px 8px;border-bottom:1px solid var(--rule-2);background:var(--sheet-2)}
+  .cap .t{font-family:'Courier Prime',monospace;font-size:9.5px;letter-spacing:.08em;
+    text-transform:uppercase}
+  .cap .r{font-family:'Courier Prime',monospace;font-size:8.5px;color:var(--mute)}
+  .port{width:100%;height:300px;overflow:hidden;position:relative;background:var(--desk)}
+  .port iframe{position:absolute;top:0;left:0;width:1240px;height:1200px;border:0;
+    transform:scale(.26);transform-origin:0 0}
+  .grey .port iframe{filter:grayscale(1)}
+  .bar{display:flex;gap:14px;align-items:center;margin:0 0 12px;font-size:12.5px}
+  .bar b{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--mute)}
+</style>
+</head>
+<body>
+  <h1>V6 — all eight screens at once</h1>
+  <p class="say">A review tool, not a screen. Add <code>?grey</code> to the address to drain the
+  colour from every panel at once and check that the set still reads.</p>
+
+  <div class="sheetgrid" id="g"></div>
+
+<script>
+const S=[
+ ["1 — The Front Door.html","One","everybody"],
+ ["2 — Intake.html","Two","requester + model"],
+ ["3 — My Deals and the Document.html","Three","requester"],
+ ["4 — The Review Desk.html","Four","legal reviewer"],
+ ["5 — The Library.html","Five","legal admin"],
+ ["6 — The Record.html","Six","auditor"],
+ ["7 — The Reading Room.html","Seven","viewer"],
+ ["8 — People and Access.html","Eight","administrator"],
+];
+const grey = location.search.includes('grey');
+if (grey) document.body.classList.add('grey');
+document.getElementById('g').innerHTML = S.map(([f,n,r])=>`
+  <div class="cell">
+    <div class="cap"><span class="t">${n} · ${f.split('—')[1].trim().replace('.html','')}</span>
+      <span class="r">${r}</span></div>
+    <div class="port"><iframe src="${encodeURI(f)}" loading="eager" scrolling="no"></iframe></div>
+  </div>`).join('');
+</script>
+</body>
+</html>

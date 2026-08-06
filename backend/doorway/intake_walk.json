@@ -1,0 +1,22 @@
+{
+  "comment": "PLACEHOLDER CONTENT (CLAUDE.md 2026-07-27). Every question and every term below is synthetic, pending Legal review. Structure is what the system relies on; wording is not. No test pins any string in this file.",
+  "version": 1,
+  "probes": [
+    { "id": "need",      "category": null,   "asks": "Describe what you are buying and why the business needs it." },
+    { "id": "vendor",    "category": null,   "asks": "Which supplier is this for, and have we worked with them before?" },
+    { "id": "value",     "category": null,   "asks": "What is the expected total value of this engagement?" },
+    { "id": "data",      "category": "data", "asks": "Will the supplier receive, store, or process any personal data — customer, employee, or otherwise?" },
+    { "id": "liability", "category": "liab", "asks": "What could go wrong in this engagement, and what would it cost the business if it did?" },
+    { "id": "term",      "category": null,   "asks": "How long should this arrangement run, and how would we exit it?" }
+  ],
+  "terms": {
+    "data": {
+      "match": ["personal data", "customer data", "employee data", "pii", "gdpr", "privacy", "data processing", "personal information"],
+      "high":  ["health", "medical", "special category", "children", "biometric", "financial records"]
+    },
+    "liab": {
+      "match": ["liability", "damages", "outage", "downtime", "safety", "injury", "recall", "breach of contract"],
+      "high":  ["death", "regulated", "critical infrastructure", "single point of failure"]
+    }
+  }
+}

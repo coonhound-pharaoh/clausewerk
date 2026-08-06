@@ -98,7 +98,7 @@ def test_the_read_count_moves_only_on_purpose():
     Asserted so the number moves deliberately. An endpoint appearing without
     anybody noticing is how a surface grows past what was reviewed.
     """
-    assert len(READS) == 63, (
+    assert len(READS) == 69, (
         f"{len(READS)} reads are registered; 25 ported, 4 added for the reading "
         "room and the library boards, 3 for assembly runs, 1 for the metrics "
         "board that shows the measurement beside the AI estimate (NC-25), "
@@ -112,11 +112,18 @@ def test_the_read_count_moves_only_on_purpose():
         "(OB-07): the book, the coverage gaps, the unowned-defect surface, "
         "and close eligibility, 2 for the portfolio's certain half "
         "(NC-16): positions and unresolved, 2 for round analysis and "
-        "risk estimates (NC-17/NC-26), and 3 for the governed Legal-admin "
+        "risk estimates (NC-17/NC-26), 2 more for the negotiate screens "
+        "(2026-08-05): the negotiation header list, without which a screen "
+        "could show what was happening inside a negotiation it could not "
+        "list, and the position movements behind each current rung, and 3 "
+        "for the governed Legal-admin "
         "acts (D-5, NC-21/22/23): the rule catalogue, the records "
         "delegations, and the disposal review queue, and 1 for the envelope "
-        "strip (OB-15). If that changed deliberately, move this number "
-        "with it."
+        "strip (OB-15), 2 for the intake question set's coverage (IN-2, "
+        "0063) — the per-question gaps and the one-line summary — and 2 for "
+        "the notice record (NT-2, 0064): what was raised, and the route "
+        "table that says who may raise what to whom. If that changed "
+        "deliberately, move this number with it."
     )
 
 
@@ -443,32 +450,43 @@ def test_an_unknown_read_is_not_reported_as_a_refusal(people, db: Database):
 # own WHERE clause (0027) and the tables' read policies (0011), proved against
 # real rows in db/test/negotiation.test.mjs — not rebuilt here.
 
-NEGOTIATION_READS = ("GET /negotiations/rounds", "GET /negotiations/positions",
+NEGOTIATION_READS = ("GET /negotiations", "GET /negotiations/rounds",
+                     "GET /negotiations/positions", "GET /negotiations/movements",
                      "GET /negotiations/revivals", "GET /negotiations/drift")
 
 NEGOTIATION_READ_OUTCOMES = {
     # A viewer holds no negotiation grant of any kind — 0011 records the
     # absence as deliberate, matching cw.concession. Refused, with words.
+    ("viewer", "GET /negotiations"): "refused",
     ("viewer", "GET /negotiations/rounds"): "refused",
     ("viewer", "GET /negotiations/positions"): "refused",
+    ("viewer", "GET /negotiations/movements"): "refused",
     ("viewer", "GET /negotiations/revivals"): "refused",
     ("viewer", "GET /negotiations/drift"): "refused",
 
+    ("requester", "GET /negotiations"): "rows",
+    ("requester", "GET /negotiations/movements"): "rows",
     ("requester", "GET /negotiations/rounds"): "rows",
     ("requester", "GET /negotiations/positions"): "rows",
     ("requester", "GET /negotiations/revivals"): "rows",
     ("requester", "GET /negotiations/drift"): "rows",
 
+    ("legal_reviewer", "GET /negotiations"): "rows",
+    ("legal_reviewer", "GET /negotiations/movements"): "rows",
     ("legal_reviewer", "GET /negotiations/rounds"): "rows",
     ("legal_reviewer", "GET /negotiations/positions"): "rows",
     ("legal_reviewer", "GET /negotiations/revivals"): "rows",
     ("legal_reviewer", "GET /negotiations/drift"): "rows",
 
+    ("legal_admin", "GET /negotiations"): "rows",
+    ("legal_admin", "GET /negotiations/movements"): "rows",
     ("legal_admin", "GET /negotiations/rounds"): "rows",
     ("legal_admin", "GET /negotiations/positions"): "rows",
     ("legal_admin", "GET /negotiations/revivals"): "rows",
     ("legal_admin", "GET /negotiations/drift"): "rows",
 
+    ("auditor", "GET /negotiations"): "rows",
+    ("auditor", "GET /negotiations/movements"): "rows",
     ("auditor", "GET /negotiations/rounds"): "rows",
     ("auditor", "GET /negotiations/positions"): "rows",
     ("auditor", "GET /negotiations/revivals"): "rows",
@@ -483,11 +501,20 @@ NEGOTIATION_READ_OUTCOMES = {
     ("administrator", "GET /negotiations/revivals"): "refused",
     ("administrator", "GET /negotiations/drift"): "refused",
 
-    # "rows" HERE MEANS ZERO ROWS, ALWAYS, AND THAT IS A REPORTED GAP, not an
-    # endorsement. 0013:324 grants the table; no policy admits the role; the
-    # database filters instead of refusing — docs/open-questions.md §9's exact
-    # shape. The test below pins the fact so it can only move deliberately.
-    ("administrator", "GET /negotiations/rounds"): "rows",
+    # The two reads added for the negotiate screens (2026-08-05) sat on TABLES
+    # rather than on the three views, so they inherited the silent-zero shape
+    # rather than the views' honest refusal. Asserting "refused" here failed
+    # for half a day — the grant was real — and 0065 then removed it. Both
+    # answers were right in turn, which is why this is a table and not a guess.
+    ("administrator", "GET /negotiations"): "refused",
+    ("administrator", "GET /negotiations/movements"): "refused",
+
+    # SETTLED 2026-08-05 (migration 0065). This said "rows" — meaning ZERO
+    # rows, always — because 0013:324 granted the table, no policy admitted the
+    # role, and the database filtered instead of refusing. The owner settled it
+    # the way U13 settled the identical shape on legal holds: revoke the inert
+    # grant, so the answer is at least honest.
+    ("administrator", "GET /negotiations/rounds"): "refused",
 }
 
 
@@ -535,20 +562,22 @@ def test_a_viewer_is_refused_the_negotiation_reads_and_never_an_empty_list(
         assert shaped.body.get("reason", "").strip()
 
 
-def test_the_administrator_is_answered_no_rounds_while_a_round_exists(six, db: Database):
-    """THE REPORTED GAP, PINNED — NOT FIXED. cw_administrator holds 0013's
-    grant on cw.negotiation_round and no policy admits the role, so row-level
-    security FILTERS instead of refusing: the one person who runs the machine
-    is told the negotiation has no rounds while a round is on record. That is
-    docs/open-questions.md §9's shape — on legal holds it shipped, and the
-    owner's answer there (U13) was to revoke the inert grant rather than widen
-    the policy.
+def test_the_administrator_is_refused_the_negotiation_record(six, db: Database):
+    """SETTLED 2026-08-05 — this test used to assert the opposite.
 
-    NC-08's brief says this gap stays open and is REPORTED, never closed by a
-    read package — widening a role's read is an owner decision. So this test
-    pins today's behaviour: if it ever fails, either the owner settled the
-    boundary (move this test with the migration that did it) or the answer
-    drifted silently (which this test exists to catch).
+    cw_administrator held 0013's grant on the negotiation tables and no policy
+    admitted the role, so row-level security FILTERED instead of refusing: the
+    one person who runs the machine was told a negotiation had no rounds while
+    a round was on record. NC-08 reported that gap and left it open, correctly
+    — widening a role's read is an owner decision, never a read package's.
+
+    The owner settled it on 2026-08-05, the same way U13 settled the identical
+    shape on legal holds (0024): revoke the inert grant rather than widen the
+    policy, so the answer is at least honest. Migration 0065.
+
+    The fixture below still creates a real negotiation with a real round, and
+    that is the point — the refusal has to be a refusal WHILE THERE IS
+    SOMETHING TO SEE, or it proves nothing.
     """
     legal = six["legal_admin"]
     with db.as_person(legal.person, legal.role) as request:
@@ -567,21 +596,27 @@ def test_the_administrator_is_answered_no_rounds_while_a_round_exists(six, db: D
                from cw.negotiation where agreement_id = 'AG-NEG-ADMIN'""",
             ("e" * 64, legal.person))
 
-    # Non-vacuity: the round is genuinely visible to a role the policy admits.
+    # Non-vacuity: it is genuinely visible to a role the policy admits.
     seen_by_legal = run(db, legal, "GET /negotiations/rounds")
     assert any(r["storage_uri"] == "memory://r1" for r in seen_by_legal), (
-        "the fixture round never landed; the assertion below would pass "
+        "the fixture round never landed; the assertions below would pass "
         "vacuously")
+    assert any(n["agreement_id"] == "AG-NEG-ADMIN"
+               for n in run(db, legal, "GET /negotiations")), (
+        "the fixture negotiation never landed")
 
-    shaped = answer(db, six["administrator"], "GET /negotiations/rounds")
-    assert not shaped.refused, (
-        "the administrator was REFUSED the rounds read. The inert grant of "
-        "0013:324 has been revoked or a policy now admits the role — either "
-        "way an owner decision landed, and this test moves with it.")
-    assert shaped.body["rows"] == [], (
-        "the administrator was answered rows from cw.negotiation_round. A "
-        "policy now admits the role — an owner decision landed, and this "
-        "test moves with the migration that made it.")
+    # And the administrator is told so, in words, on all three.
+    for key in ("GET /negotiations", "GET /negotiations/rounds",
+                "GET /negotiations/movements"):
+        shaped = answer(db, six["administrator"], key)
+        assert shaped.refused, (
+            f"{key} answered an administrator {shaped.body!r} instead of "
+            "refusing. Either 0065's revoke was undone or a policy now admits "
+            "the role — either way an owner decision landed, and this test "
+            "moves with the migration that made it.")
+        assert shaped.body.get("reason", "").strip(), (
+            f"{key} refused an administrator with no words, which is the one "
+            "thing worse than the empty list this replaced")
 
 
 # ── 5. A view does not inherit the rules underneath it ──────────────────────

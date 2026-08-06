@@ -1,0 +1,196 @@
+// A grant with no policy behind it is a silent lie. Swept, schema-wide.
+//
+// THE BUG THIS EXISTS TO CATCH, which has now shipped twice.
+//
+// PostgreSQL does not refuse a role that holds SELECT on a table but is
+// admitted by none of its row-level policies. It SUCCEEDS, and returns nothing.
+// So the screen says "no holds are open" while a hold is open, or "this
+// negotiation has no rounds" while a round is on record — and an empty list is
+// a worse answer than a refusal, because a refusal sends somebody to ask.
+//
+//   · 2026-07-27, cw.legal_hold and cw.agreement_retention. The Administrator
+//     — the person who destroys records on schedule — was told nothing stood
+//     in their way. Owner decision U13, migration 0024: revoke the inert grant.
+//   · 2026-08-05, the four negotiation tables. Reported on one of them by
+//     NC-08 and left open; the negotiate screens widened the symptom to three
+//     reads before the owner settled it the same way. Migration 0065.
+//
+// Both times it was found by a person noticing. This is the sweep that was
+// missing, and it would have caught both.
+//
+// WHAT THIS CHECK IS, STATED HONESTLY: A LINT, NOT A PROOF.
+//
+// The sound test is "put a row in the table and see whether the role gets it or
+// is refused", and it is not achievable here — every table would need a fixture
+// satisfying its foreign keys, and the sweep would rot the first time a
+// migration added one. So this reads the POLICY EXPRESSIONS as text and asks
+// whether any of them could admit the role.
+//
+// Its limits, so nobody mistakes it for more than it is:
+//   · A policy admitting a role through a helper function this file does not
+//     know about reads as a suspect. That is a FALSE ALARM, and the answer is
+//     to add it to KNOWN_ADMITTING below with a reason, never to loosen the
+//     check.
+//   · A policy that mentions a role only to exclude it would read as admitting.
+//     No such policy exists today; if one is written, this sweep stops covering
+//     that table and the comment on it should say so.
+//
+// A lint that catches the shape twice is worth more than a proof nobody writes.
+//
+//   node db/test/grants-and-policies.test.mjs
+
+import { PGlite } from '@electric-sql/pglite';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const MIGRATIONS = process.env.CW_MIGRATIONS || join(HERE, '..', 'migrations');
+
+let pass = 0, fail = 0;
+const failures = [];
+async function test(name, fn) {
+  try { await fn(); pass++; console.log(`  ok   ${name}`); }
+  catch (e) { fail++; failures.push([name, e.message]); console.log(`  FAIL ${name}\n       ${e.message}`); }
+}
+function assert(c, m) { if (!c) throw new Error(m || 'assertion failed'); }
+function eq(a, b, m) {
+  if (JSON.stringify(a) !== JSON.stringify(b))
+    throw new Error(`${m || 'not equal'}: got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`);
+}
+
+const db = await PGlite.create();
+for (const f of readdirSync(MIGRATIONS).filter(f => f.endsWith('.sql')).sort())
+  await db.exec(readFileSync(join(MIGRATIONS, f), 'utf8'));
+
+const rows = async (s, p) => (await db.query(s, p)).rows;
+
+// The six application roles and the database role each one connects as.
+const ROLES = {
+  viewer:         'cw_viewer',
+  requester:      'cw_requester',
+  legal_reviewer: 'cw_legal_reviewer',
+  legal_admin:    'cw_legal_admin',
+  auditor:        'cw_auditor',
+  administrator:  'cw_administrator',
+};
+
+// Expressions that admit EVERY signed-in role. A policy carrying one of these
+// admits whoever holds the grant, so the pair is fine whatever role it is.
+const ADMITS_EVERYONE = [
+  'app_role() IS NOT NULL',
+  'current_setting(',   // e.g. scoping to the caller's own name
+];
+
+// Helper functions that scope a row to the caller rather than to a role. A
+// policy built on one of these admits the role and filters the rows, which is
+// the intended shape and not the bug — the caller sees THEIR rows, and a
+// refusal was never the right answer.
+const KNOWN_ADMITTING = [
+  'owns_agreement(',
+  'app_actor()',
+  'shared_with',
+];
+
+// DELEGATION: "visible exactly when its parent row is visible".
+//
+//   using (exists (select 1 from cw.review_ticket t where t.ticket_id = ...))
+//
+// Row-level security applies to that inner select too, so the child row is
+// admitted for precisely the callers the PARENT's policy admits. It names no
+// role because it does not need to — which is why the first run of this sweep
+// reported twenty-nine of them as suspects.
+//
+// THEY WERE FALSE ALARMS, AND THE FIX IS TO TEACH THE LINT THE SHAPE rather
+// than to relax it. The check keeps all its teeth on the shape that actually
+// bit: a policy that enumerates roles and omits one that holds the grant. Both
+// historical instances are of that kind, and both are still caught — verified
+// by the named test at the bottom of this file, which does not consult this
+// list at all.
+const DELEGATES_TO_ANOTHER_TABLE = /EXISTS \(\s*SELECT 1\s*FROM cw\./i;
+
+console.log('\nevery SELECT grant has a policy that could admit its role');
+
+const tables = await rows(`
+  select c.relname as name, c.relrowsecurity as rls
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'cw' and c.relkind = 'r'
+   order by c.relname`);
+
+await test('the sweep found the schema (guards a vacuous pass)', async () => {
+  assert(tables.length >= 40,
+    `only ${tables.length} tables found in schema cw; a sweep over an empty ` +
+    'list passes while proving nothing');
+  assert(tables.some(t => t.rls),
+    'no table has row-level security enabled, which cannot be true');
+});
+
+const policies = await rows(`
+  select c.relname as table_name, p.polname as name, p.polpermissive as permissive,
+         p.polcmd as cmd, pg_get_expr(p.polqual, p.polrelid) as qual
+    from pg_policy p
+    join pg_class c on c.oid = p.polrelid
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'cw'`);
+
+function couldAdmit(table, role) {
+  // PERMISSIVE policies grant; restrictive ones only ever subtract, so a
+  // restrictive policy can never be the thing that admits a role.
+  const forSelect = policies.filter(p =>
+    p.table_name === table && p.permissive &&
+    (p.cmd === 'r' || p.cmd === '*') && p.qual);
+  return forSelect.some(p => {
+    const text = p.qual;
+    if (ADMITS_EVERYONE.some(marker => text.includes(marker))) return true;
+    if (KNOWN_ADMITTING.some(marker => text.includes(marker))) return true;
+    if (DELEGATES_TO_ANOTHER_TABLE.test(text)) return true;
+    return text.includes(`'${role}'`);
+  });
+}
+
+await test('no role holds a read it can never use', async () => {
+  const silent = [];
+  for (const table of tables) {
+    if (!table.rls) continue;   // no RLS: the grant is the whole answer
+    for (const [role, dbRole] of Object.entries(ROLES)) {
+      const [{ held }] = await rows(
+        `select has_table_privilege($1, $2, 'SELECT') as held`,
+        [dbRole, `cw.${table.name}`]);
+      if (!held) continue;
+      if (!couldAdmit(table.name, role)) silent.push(`cw.${table.name} → ${role}`);
+    }
+  }
+
+  eq(silent, [],
+    'these roles hold SELECT on a table whose policies never admit them. '
+    + 'PostgreSQL will not refuse them — it will answer ZERO ROWS, and a '
+    + 'screen will report "there are none" where the truthful answer is "not '
+    + 'yours to see". Either revoke the grant (the U13 answer, migrations 0024 '
+    + 'and 0065) or admit the role in a policy. If the policy admits it through '
+    + 'a helper this sweep does not know, add the helper to KNOWN_ADMITTING '
+    + 'with a reason — never loosen the check');
+});
+
+await test('the two historical instances stay fixed', async () => {
+  // Named rather than left to the sweep, because these two are the reason it
+  // exists and a regression on either should say so in those words.
+  const regressed = [];
+  for (const table of ['legal_hold', 'agreement_retention',
+                       'negotiation', 'negotiation_round',
+                       'negotiation_position', 'position_movement']) {
+    const [{ held }] = await rows(
+      `select has_table_privilege('cw_administrator', $1, 'SELECT') as held`,
+      [`cw.${table}`]);
+    if (held) regressed.push(`cw.${table}`);
+  }
+  eq(regressed, [],
+    'the administrator holds a read that no policy admits, on a table where '
+    + 'this exact bug has already shipped once');
+});
+
+console.log(`\n${pass} passed, ${fail} failed`);
+if (fail) {
+  console.log('\nfailures:');
+  for (const [n, m] of failures) console.log(`  · ${n}\n    ${m}`);
+  process.exit(1);
+}

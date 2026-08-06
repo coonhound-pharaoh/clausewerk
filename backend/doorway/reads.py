@@ -163,6 +163,57 @@ READS: dict[str, Read] = {
         rule="granted to administrator and auditor only",
     ),
 
+    # ── Notices raised, and whether anybody answered (NT-2, over 0064) ──────
+    # No parameter, as everywhere: the scoping is "yours, or addressed to you
+    # or your role, plus Legal and the auditor in full", and it comes from the
+    # connection through cw.notice's own read policy.
+    "GET /notices": Read(
+        sql="""select notice_id, raised_by, raised_at, to_role, to_person,
+                 subject_kind, subject_ref, note, state, acknowledged_by,
+                 acknowledged_at, acknowledgement_note
+          from cw.notice_state order by notice_id desc""",
+        rule="cw.notice read_scoped policy (0064) reached through "
+             "cw.notice_state — your own raised notices, the ones addressed to "
+             "you or your role, and Legal and the Auditor in full. No viewer "
+             "grant of any kind",
+    ),
+
+    # The permitted raiser → recipient pairs, so a screen can offer only the
+    # notices that would land. THE SCREEN DOES NOT DECIDE ANYTHING WITH THIS —
+    # the database refuses an unrouted notice either way; this is so the person
+    # is not offered a button that will fail.
+    "GET /notice-routes": Read(
+        sql="""select raiser_role, to_role, subject_kind, why
+          from cw.notice_route order by raiser_role, subject_kind, to_role""",
+        rule="cw.notice_route read_all policy (0064) — every signed role reads "
+             "it; who may raise what is not a secret",
+    ),
+
+    # ── Does the intake question set work? (IN-2, migration 0063) ───────────
+    # The administrator's surface, by owner decision NI-5 (2026-08-05) — Mike
+    # judged this an administrative question rather than a Legal one. Both
+    # views are cuts of the audit chain the role already reads in full, so no
+    # new fact is exposed by them; what is new is that somebody is counting.
+    "GET /intake/coverage": Read(
+        sql="""select probe, times_unmatched, first_unmatched, last_unmatched,
+                 people_affected
+          from cw.intake_question_coverage
+          order by times_unmatched desc, probe""",
+        rule="cw.intake_question_coverage grant (0063) — administrator and "
+             "auditor. The view is security invoker over cw.audit_event, so it "
+             "cannot show anybody rows their own chain policy would withhold",
+    ),
+
+    "GET /intake/coverage/summary": Read(
+        sql="""select classifications, answers, unmatched, risks_proposed,
+                 with_a_gap, unmatched_share, last_classified
+          from cw.intake_coverage_summary""",
+        rule="cw.intake_coverage_summary grant (0063) — one row always, and "
+             "unmatched_share is NULL rather than 0 when nothing has been "
+             "classified: 'no answers yet' and 'every answer classified' are "
+             "opposite facts",
+    ),
+
     "GET /watchers": Read(
         sql="""select watcher_id, category_key, person, added_by, added_at,
                  removed_by, removed_at
@@ -725,6 +776,49 @@ READS: dict[str, Read] = {
     # docs/open-questions.md §9 wrote up on legal holds, where it shipped.
     # Reported by a named test in test_reads.py; not closed here, because
     # widening a role's read is an owner decision and never a read package's.
+    # THE HEADER ROW, and the reason it arrives late: the four reads below have
+    # existed since NC-08 and every one of them describes something INSIDE a
+    # negotiation — its rounds, its positions, its revivals, its drift. Nothing
+    # named the negotiations themselves, so a screen could show what was
+    # happening in a negotiation it could not list. Found while building the
+    # negotiate screens, which is where it became impossible to ignore.
+    #
+    # `renews_agreement_id` is here because a renewal and a fresh negotiation
+    # are different commercial acts (0011's own words) and the difference must
+    # reach the screen: the drift report is a control that belongs in front of
+    # whoever opened a renewal, and this column is how a screen knows to show it.
+    "GET /negotiations": Read(
+        sql="""select negotiation_id, agreement_id, paper, baseline, state,
+                 opened_on, opened_by, renews_agreement_id, baseline_note,
+                 baseline_chosen_by
+          from cw.negotiation order by negotiation_id""",
+        rule="cw.negotiation read_scoped policy (0011) — Legal and the Auditor "
+             "in full, a requester the negotiations on deals they own, no "
+             "viewer grant. The same sentence cw.position_current copies into "
+             "its own WHERE clause (0027). The administrator holds 0013's "
+             "table grant and no policy admits the role, so this answers them "
+             "zero rows rather than refusing — the reported gap on "
+             "cw.negotiation_round, on two more tables; test_reads.py pins it",
+    ),
+
+    # How a position got where it is, rather than only where it is.
+    # cw.position_current answers the second question and deliberately not the
+    # first: it is the LATEST movement per position. A screen showing a rung
+    # without the retreat that reached it shows a number nobody can account for.
+    "GET /negotiations/movements": Read(
+        sql="""select m.movement_id, m.position_id, p.negotiation_id,
+                 p.category_key, m.round_no, m.to_state, m.current_rung,
+                 m.actor, m.note, m.moved_at
+          from cw.position_movement m
+          join cw.negotiation_position p using (position_id)
+          order by m.position_id, m.movement_id""",
+        rule="cw.position_movement read_scoped policy (0011), which walks to "
+             "cw.negotiation for a requester exactly as the join here does — a "
+             "movement is visible precisely when the position it moved is. The "
+             "administrator's zero-row answer is the same reported gap as "
+             "GET /negotiations above",
+    ),
+
     "GET /negotiations/rounds": Read(
         sql="""select negotiation_id, round_no, direction, document_sha256,
                  storage_uri, sent_on, actor, run_id, recorded_at

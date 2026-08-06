@@ -54,6 +54,13 @@ const WORKSPACES = {
       { key: 'retention',   label: 'holds & retention' },
       { key: 'obligations', label: 'obligations' },
       { key: 'review-desk', label: 'review desk' },
+      // THE NINTH AREA, added 2026-08-05 by owner decision NI-1. It was put to
+      // Mike with a recommendation to leave the Legal admin at eight and give
+      // them the numbers through reporting; he asked for the desk itself. The
+      // rail is now nine deep, which is past what a rail reads well at — a
+      // layout question for when sourcing and obligations grow this workspace
+      // further, and deliberately not a reason to withhold a decided screen.
+      { key: 'negotiations', label: 'negotiations' },
       { key: 'routing',     label: 'routing' },
       { key: 'reporting',   label: 'reporting' },
     ],
@@ -222,6 +229,117 @@ function Tabs({ role, active, onSelect }) {
       ))}
     </div>
   );
+}
+
+// ── The rail ──────────────────────────────────────────────────────────────
+// Six areas or more gets a rail instead of a row, and the threshold has no
+// exemptions: the requester holds six, so the requester gets one too. A row of
+// eight stops being scannable and becomes a list nobody reads to the end of.
+//
+// Counts appear ONLY where the app actually knows one. A rail showing "0" for
+// an area it has not measured would be stating a fact it does not hold, which
+// is the one thing this product may never do — so an unmeasured area shows
+// nothing at all, and the difference is visible.
+const RAIL_AT = 6;
+
+// Which endpoint stands behind each area's number. An area is listed here ONLY
+// where a read already exists whose row count is the honest answer to "how many
+// are waiting on me here". Everything else is deliberately absent and shows no
+// number at all — a rail that printed 0 for an area it never asked about would
+// be stating a fact it does not hold.
+//
+// An entry is either the read itself, or `{ read, only }` where `only` narrows
+// what the read already returned to the rows the AREA is about. The narrowing
+// form arrived with the negotiations rail (2026-08-05): the positions read
+// answers every contested point, and the number beside "negotiations" claims
+// something narrower — what is waiting on Legal. Two facts, one read, and the
+// pane narrows it identically, so the number and the queue behind it cannot
+// disagree. NOTE WHAT THIS IS NOT: it is not fetching broadly and filtering for
+// permission. What the read returned is already only what the caller may see.
+const COUNT_SOURCE = {
+  'my-deals':    (A) => A.deals(),
+  'obligations': (A) => A.obligationsBook(),
+  'review-desk': (A) => A.waitingTickets(),
+  'tickets':     (A) => A.tickets(),
+  'approvals':   (A) => A.countersignQueue(),
+  'holds':       (A) => A.holds(),
+  // Repointed 2026-08-05. It was the whole concession list, which counts
+  // something real but not the thing the rail claims.
+  'negotiations':{ read: (A) => A.positions(),
+                   only: (p) => p.state === 'escalated' },
+  'library':     (A) => A.clauses(),
+  'ladders':     (A) => A.ladders(),
+  'retention':   (A) => A.retentionDue(),
+  'people':      (A) => A.people(),
+  'watchers':    (A) => A.watchers(),
+};
+
+// Counts are read once per workspace, through the same role-scoped endpoints
+// the panes use. A read that refuses or fails leaves its area WITHOUT a number
+// rather than with a zero — the difference between "none are waiting" and "we
+// could not ask" is exactly the difference this product exists to keep.
+function useRailCounts(role) {
+  const [counts, setCounts] = useState({});
+  useEffect(() => {
+    let live = true;
+    const keys = WORKSPACES[role].tabs
+      .map((t) => t.key)
+      .filter((k) => COUNT_SOURCE[k]);
+    if (!keys.length) { setCounts({}); return; }
+    Promise.all(keys.map(async (k) => {
+      try {
+        const source = COUNT_SOURCE[k];
+        const read = typeof source === 'function' ? source : source.read;
+        const only = typeof source === 'function' ? null : source.only;
+        const r = await read(API);
+        if (r && r.ok && Array.isArray(r.rows)) {
+          return [k, only ? r.rows.filter(only).length : r.rows.length];
+        }
+      } catch (_) { /* falls through to no number */ }
+      return null;
+    })).then((pairs) => {
+      if (!live) return;
+      setCounts(Object.fromEntries(pairs.filter(Boolean)));
+    });
+    return () => { live = false; };
+  }, [role]);
+  return counts;
+}
+
+function Rail({ role, active, onSelect }) {
+  const counts = useRailCounts(role);
+  const tabs = WORKSPACES[role].tabs;
+  return (
+    <nav className="rail" data-testid="rail">
+      {tabs.map((t) => {
+        const n = counts ? counts[t.key] : undefined;
+        return (
+          <button
+            key={t.key}
+            data-testid={`tab-${t.key}`}
+            className={`rail-btn${active === t.key ? ' active' : ''}`}
+            onClick={() => onSelect(t.key)}
+          >
+            <span className="rail-label">{t.label}</span>
+            {n === undefined
+              ? null
+              : <span className={`rail-n${n === 0 ? ' zero' : ''}`}>{n}</span>}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+// Row or rail, decided by how many areas the role actually holds — never by
+// taste, and never per-screen. The layout asks the same question, because a
+// row stacks above the workspace and a rail stands beside it.
+function usesRail(role) {
+  return WORKSPACES[role].tabs.length >= RAIL_AT;
+}
+
+function Nav(props) {
+  return usesRail(props.role) ? <Rail {...props} /> : <Tabs {...props} />;
 }
 
 function Footer({ identity, note }) {

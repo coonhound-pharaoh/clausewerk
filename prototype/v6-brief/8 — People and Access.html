@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clausewerk V6 — People and Access</title>
+<!-- A PICTURE OF AN INTERFACE, NOT A BUILD OF ONE. Never served by the app.
+     Every name, date and figure is INVENTED. Typefaces: S226. -->
+<link rel="stylesheet" href="../v4/app/fonts.css">
+<link rel="stylesheet" href="v6.css">
+<style>
+  .grant{display:grid;grid-template-columns:15px 1fr 210px auto;gap:13px;align-items:center;
+    padding:11px 15px;border-bottom:1px solid var(--rule)}
+  .grant:last-child{border-bottom:0}
+  .grant .g{width:7px;align-self:stretch;min-height:24px}
+  .grant .who2{font-size:13.5px;line-height:1.5}
+  .grant .who2 i{display:block;color:var(--mute);font-size:12px;margin-top:1px;font-style:italic}
+  .names{font-family:'Courier Prime',monospace;font-size:10.5px;color:var(--ink-2);line-height:1.7}
+  .names span{color:var(--mute)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mast">
+    <div><span class="mark">Clausewerk</span><span class="matter">&nbsp;— administration</span></div>
+    <span class="who">n.admin · administrator</span>
+  </div>
+  <div class="tabs"><b>people &amp; access</b><span>settings</span><span>system health</span>
+    <span>watchers &amp; notices</span></div>
+
+  <p class="opens">People and access, and the health of the record.</p>
+
+  <p class="lede">This is the screen where <b>pending must never look effective</b>. Everywhere
+  else that rule is good hygiene; here it is the control itself. A grant drawn as live before it
+  is countersigned would hand someone a role nobody agreed to give them.</p>
+
+  <h5 class="sec">Grants</h5>
+  <div class="sub">Every grant carries two names — the one who proposed it and the one who countersigned. They are never the same person, and the database is what refuses, not this screen.</div>
+  <div class="rows">
+    <div class="grant">
+      <div class="g sg-eff"></div>
+      <div class="who2">m.counsel → legal reviewer
+        <i>Effective since yesterday. Reads the review desk and decides findings.</i></div>
+      <div class="names">proposed s.steward<br><span>countersigned a.keeper</span></div>
+      <span class="stamp s-ok">effective</span>
+    </div>
+    <div class="grant">
+      <div class="g sg-pend"></div>
+      <div class="who2">n.candidate → legal reviewer
+        <i>Proposed two days ago. <b>Confers nothing while it waits</b> — n.candidate signs in today as a viewer and sees a viewer's room.</i></div>
+      <div class="names">proposed s.steward<br><span>awaiting a countersigner</span></div>
+      <span class="stamp s-wait">pending</span>
+    </div>
+    <div class="grant">
+      <div class="g sg-gone"></div>
+      <div class="who2">o.former — access revoked
+        <i>Honoured at their next request rather than mid-sitting; a session already open is not torn in half.</i></div>
+      <div class="names">revoked s.steward<br><span>reason recorded</span></div>
+      <span class="stamp s-gone">revoked</span>
+    </div>
+    <div class="grant">
+      <div class="g sg-never"></div>
+      <div class="who2">p.contractor → auditor
+        <i>Proposed and then withdrawn before anyone countersigned it. It never took effect.</i></div>
+      <div class="names">proposed n.admin<br><span>withdrawn same day</span></div>
+      <span class="stamp s-none">never effective</span>
+    </div>
+  </div>
+
+  <div class="sub" style="margin-top:8px">Four states, four fills, four words — solid, rungs,
+  hatch, dashed. Remove the colour and the pending grant is still visibly not the effective one,
+  which is the only property on this page that really matters.</div>
+
+  <div class="acts" style="border:1px solid var(--rule-2)">
+    <div class="act">
+      <button class="btn primary">✓ Countersign n.candidate</button>
+      <div class="reason">
+        <div class="lab">Why this person should hold this role</div>
+        <div class="field">Recorded against your name and the minute. The grant becomes effective at your signature, not before.</div>
+      </div>
+    </div>
+    <div class="act">
+      <button class="btn off">Countersign your own proposal</button>
+      <div class="reason">
+        <div class="lab">Not available at this desk</div>
+        <div class="why">You proposed p.contractor's grant. One person cannot be both names on
+        an access decision, so the act is not drawn — two roles holding one duty means nobody
+        owns it.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="panel">
+      <h5>The health of the record</h5>
+      <div class="sub" style="margin-bottom:8px">Facts about the system, not opinions about it.</div>
+      <div class="measure"><span class="l">Chain verification, last run</span>
+        <span class="v">04:12</span><span class="stamp s-ok">verified</span></div>
+      <div class="measure"><span class="l">Received documents held</span>
+        <span class="v">1,884</span><span class="stamp s-ok">stored</span></div>
+      <div class="measure"><span class="l">Backup restore, last rehearsed</span>
+        <span class="v">—</span><span class="stamp s-none">never ran</span></div>
+      <div class="measure"><span class="l">Grants effective without a countersigner</span>
+        <span class="v">0</span><span class="stamp s-ok">as designed</span></div>
+      <div class="note">A restore that has never been rehearsed is drawn as never rehearsed.
+      The temptation to show it green because nothing has gone wrong is exactly the lie this
+      product exists to refuse.</div>
+    </div>
+
+    <div class="panel">
+      <h5>What an administrator cannot do</h5>
+      <div class="note">Cannot <b>read a contract</b>. This desk grants access to the record; it
+      does not hold access to the deals. The screens for them are not drawn here because the
+      connection could not fetch them.</div>
+      <div class="note">Cannot <b>grant themselves a role</b>, and cannot countersign their own
+      proposal.</div>
+      <div class="note">Cannot <b>delete a person</b>. An account that acted has a history, and
+      a history with the actor removed is not a record — it is an anecdote.</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    A picture of an interface, not a build of one — never served by the application. Every name,
+    grant, figure and date above is <b>invented</b>. Typefaces are served from this repository;
+    opening this page contacts nobody.
+  </div>
+</div>
+</body>
+</html>

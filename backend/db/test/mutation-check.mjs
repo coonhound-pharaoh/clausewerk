@@ -1347,11 +1347,15 @@ function RunResultRetired({ run, decisions, findings, onError }) {`,
   // — the harness catching its own rot rather than quietly proving nothing.
   { target: 'shell', suite: 'shell.test.mjs',
     name: 'the countersign queue is shown only in the admin console',
+    // REPOINTED 2026-08-05: the reviewer's rendering gained a `routes` prop
+    // when the raise control landed on the shared queue component (NT-3), so
+    // the old four-line `find` stopped matching. Anchored on the opening tag
+    // and the two props that were always there — a shorter pattern rots less
+    // often, and this row has now been repointed twice for the same reason.
     find: `          <CountersignQueue
-            me={me} rows={queue.rows}
-            onDone={() => queue.reload()} onError={setError}
-          />`,
-    repl: `          <div />`,
+            me={me} rows={queue.rows}`,
+    repl: `          <ItsOwnLocalQueue
+            me={me} rows={queue.rows}`,
     expect: 'the countersign queue is one component, used in both places' },
 
   { target: 'shell', suite: 'shell.test.mjs',
@@ -2114,10 +2118,15 @@ grant select on cw.review_quality to cw_viewer;`,
   // if you cannot see whose language it is.
   { target: 'shell', suite: 'shell.test.mjs',
     name: 'the viewer is shown the wording but not who approved it',
-    find: `                        {c.reviewer
-                          ? \`approved by \${c.reviewer}\${c.approved_on ? \` on \${c.approved_on}\` : ''}\`
-                          : 'no approver recorded'}`,
-    repl: `                        {''}`,
+    // REPOINTED 2026-08-05. The line was re-indented when the per-clause render
+    // moved inside the origin-gutter markup, so the pattern stopped matching
+    // and reported STALE — the harness catching its own rot, which is what the
+    // preflight is for. Anchored on the conditional alone now, without the
+    // leading whitespace that indentation keeps changing.
+    find: `{c.reviewer
+                            ? \`approved by \${c.reviewer}\${c.approved_on ? \` on \${c.approved_on}\` : ''}\`
+                            : 'no approver recorded'}`,
+    repl: `{''}`,
     expect: 'the viewer is shown who approved each clause' },
 
   // ════════════════════════════════════════════════════════════════════════
@@ -2756,11 +2765,92 @@ grant usage, select on sequence cw.notification_outbox_outbox_id_seq to cw_legal
   // REPOINTED 2026-08-02: 0059 merged the from and where onto one line when it
   // re-created cw.waiting_for, stranding this row on the 0044 text — the same
   // trap 5.4a as the renewal-window row above, found in the same sweep.
+  // REPOINTED AGAIN 2026-08-05, and by the trap's own instructions above. 0064
+  // adds the notice branch to cw.waiting_for, so this arm is no longer the last
+  // line of the function and lost its trailing semicolon. The `find` below drops
+  // the semicolon, which makes it a substring of BOTH the 0059 line (which still
+  // ends in one) and the 0064 line (which ends in `union all`) — so every copy
+  // is sabotaged, which is what keeps this row honest.
   { suite: 'routing.test.mjs',
     name: 'the escalation never reaches the named owner',
-    find: `  from cw.ticket_route r where r.escalated and r.category_owner = p_person;`,
-    repl: `  from cw.ticket_route r where false;`,
+    find: `  from cw.ticket_route r where r.escalated and r.category_owner = p_person`,
+    repl: `  from cw.ticket_route r where false`,
     expect: 'the named owner is told about work nobody took — review_escalation reaches cw.waiting_for' },
+
+  // ── The notice record (0064, NT-1) ────────────────────────────────────────
+  // Four rows, one per rule in the migration's header. Each mutation is the
+  // shape the rule exists to prevent, not a paraphrase of the rule.
+  // ── The grant-without-policy sweep (2026-08-05) ──────────────────────────
+  // The sweep is a LINT, so it needs proving it still bites. Putting back the
+  // grant migration 0065 removed must make it fail — if it does not, the sweep
+  // has become a green light nobody is behind.
+  { suite: 'grants-and-policies.test.mjs',
+    name: 'the inert negotiation grant comes back',
+    find: `revoke select on cw.negotiation, cw.negotiation_round,
+                cw.negotiation_position, cw.position_movement
+  from cw_administrator;`,
+    repl: `select 1;`,
+    expect: 'the two historical instances stay fixed' },
+
+  // ── The model intake's budget and ledger (0066, AI-3) ────────────────────
+  { suite: 'model-intake.test.mjs',
+    name: 'the ledger can be rewritten after the fact',
+    find: `create trigger model_call_no_edit before update or delete on cw.model_call
+  for each row execute function cw.model_call_append_only();`,
+    repl: `select 1;`,
+    expect: 'the model-call ledger is append-only' },
+
+  { suite: 'model-intake.test.mjs',
+    name: 'the daily count is scoped to the caller and undercounts',
+    find: `    (select count(*) from cw.model_call
+      where called_at >= date_trunc('day', now())),`,
+    repl: `    (select count(*) from cw.model_call
+      where called_at >= date_trunc('day', now())
+        and actor = cw.app_actor()),`,
+    expect: "the budget counts every call, not only the caller's own" },
+
+  { suite: 'model-intake.test.mjs',
+    name: "a requester reads everybody's model calls",
+    find: `  or (cw.app_role() = 'requester' and model_call.actor = cw.app_actor()));`,
+    repl: `  or cw.app_role() = 'requester');`,
+    expect: 'a requester sees the calls their own work caused and no others' },
+
+  // ── The auditor's narrow door onto the chain (0065) ──────────────────────
+  { suite: 'received-documents.test.mjs',
+    name: 'the download door records whatever role it is told',
+    find: `    cw.app_actor(), caller_role, 'human', 'received_document_read',`,
+    repl: `    cw.app_actor(), null, 'human', 'received_document_read',`,
+    expect: 'a recorded read names the role that made it' },
+
+  { suite: 'notices.test.mjs',
+    name: 'a notice can cite anything at all',
+    find: `  if not cw.notice_subject_visible(new.subject_kind, new.subject_ref) then`,
+    repl: `  if false then`,
+    expect: 'a probe nobody has ever failed to classify cannot be cited' },
+
+  { suite: 'notices.test.mjs',
+    name: 'anyone may notify anyone',
+    find: `    if not cw.notice_is_routed(raiser_role, new.to_role, new.subject_kind) then`,
+    repl: `    if false then`,
+    expect: 'a pair absent from cw.notice_route is refused' },
+
+  { suite: 'notices.test.mjs',
+    name: 'naming a person walks around the route table',
+    find: `         and cw.notice_is_routed(raiser_role, e.role, new.subject_kind)`,
+    repl: `         and true`,
+    expect: 'naming an individual is not a way around the route table' },
+
+  { suite: 'notices.test.mjs',
+    name: 'a raised notice never reaches the waiting list',
+    find: `    and (n.to_person = p_person or n.to_role = p_role);`,
+    repl: `    and false;`,
+    expect: "an open notice is on the recipient role's waiting list" },
+
+  { suite: 'notices.test.mjs',
+    name: 'a bystander clears somebody else\'s notice',
+    find: `       and (n.to_person = cw.app_actor() or n.to_role = cw.app_role())));`,
+    repl: `       and true));`,
+    expect: "a bystander cannot acknowledge somebody else's notice" },
 
   // ── The received-document store (0047, NC-07, U15) ────────────────────────
   { suite: 'received-documents.test.mjs',

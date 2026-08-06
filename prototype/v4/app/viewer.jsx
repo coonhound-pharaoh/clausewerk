@@ -36,6 +36,38 @@
 
 const { useState } = React;
 
+// ── The origin vocabulary ─────────────────────────────────────────────────
+// Keyed to the four values cw.clause_version.origin actually permits. A value
+// outside them, or a clause with no origin recorded, falls to _unrecorded and
+// is drawn as ABSENT rather than as anything reassuring — an unrecorded origin
+// shown as "approved" would be the worst lie this surface could tell.
+//
+// Each entry carries a SHAPE and a WORD. The colour only reinforces them, so
+// the margin still reads for someone who cannot separate the greens from the
+// ambers — which is most of the point of drawing it this way.
+const ORIGIN = {
+  legal_authored: {
+    glyph: 'og-legal',
+    word: 'Legal wording',
+  },
+  ai_drafted: {
+    glyph: 'og-model',
+    word: 'Model drafted · approved by a person',
+  },
+  vendor_derived: {
+    glyph: 'og-vendor',
+    word: "From the counterparty's paper",
+  },
+  external: {
+    glyph: 'og-external',
+    word: 'External source',
+  },
+  _unrecorded: {
+    glyph: 'og-none',
+    word: 'Origin unrecorded',
+  },
+};
+
 function ReadingRoomPane({ me }) {
   const shares = usePane(() => API.readingRoom());
   const clauses = usePane(() => API.readingRoomClauses());
@@ -118,36 +150,36 @@ function ReadingRoomPane({ me }) {
                      something missing." />;
             }
             return (
-              <div className="panel">
-                {body.map((c) => (
-                  <div className="waiting-row" key={`${c.clause_id}@${c.version}`}
-                       style={{ alignItems: 'flex-start' }}>
-                    <div className="min-w-0">
-                      <div className="text-[13px]" style={{ color: 'var(--ink)' }}>
-                        {c.title}
-                        <span className="caption"> · {c.clause_id}@v{c.version}</span>
+              <div className="sheet">
+                {body.map((c, i) => {
+                  const o = ORIGIN[c.origin] || ORIGIN._unrecorded;
+                  return (
+                    <div className="clause" key={`${c.clause_id}@${c.version}`}>
+                      <div className="clause-n">{i + 1}</div>
+                      <div className="clause-text">
+                        <h4>{c.title}</h4>
+                        <p style={{ whiteSpace: 'pre-wrap' }}>{c.body}</p>
                       </div>
-                      <div className="caption mt-1" style={{ whiteSpace: 'pre-wrap' }}>
-                        {c.body}
-                      </div>
-                      {/* THE ONE PLACE A VIEWER SEES AN APPROVAL. Being shown a
-                          contract is useless if you cannot see whose language it
-                          is — this is WP-U14's SOW-departure visibility rule and
-                          the socialisation audience's whole reason for being. */}
-                      <div className="caption mt-1.5">
-                        {c.reviewer
-                          ? `approved by ${c.reviewer}${c.approved_on ? ` on ${c.approved_on}` : ''}`
-                          : 'no approver recorded'}
+                      {/* THE ORIGIN MARGIN. Being shown a contract is useless if
+                          you cannot see whose language it is. The origin is read
+                          from cw.reading_room_clause — the mark is the recorded
+                          fact drawn, never a claim this screen makes. The shape
+                          carries the meaning and the word states it, so the
+                          margin still reads with the colour taken away. */}
+                      <div className="clause-margin">
+                        <div className={`og ${o.glyph}`} />
+                        <span className="og-word">{o.word}</span>
+                        <div className="og-detail">
+                          {c.reviewer
+                            ? `approved by ${c.reviewer}${c.approved_on ? ` on ${c.approved_on}` : ''}`
+                            : 'no approver recorded'}
+                        </div>
+                        <div className="og-ref">{c.clause_id}@v{c.version}</div>
+                        {c.provenance ? <div className="og-detail">{c.provenance}</div> : null}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className={`chip ${c.origin === 'legal_authored' ? 'chip-ok'
-                        : c.origin === 'external' ? 'chip-pending' : 'chip-std'}`}>
-                        {c.origin ?? 'origin unrecorded'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             );
           })()}

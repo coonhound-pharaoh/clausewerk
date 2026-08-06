@@ -295,6 +295,36 @@ MUTATIONS = [
         "test_redlines.py::"
         "test_a_recorded_redline_is_a_received_round_pointing_at_the_stored_bytes",
     ),
+
+    # ── And reading one back out (NI-4, 2026-08-05) ────────────────────────
+    (
+        # A DOCUMENT LEAVING THE SYSTEM IS AN ACT. The chain entry goes in
+        # before the bytes do — documents.py's order — so a download nobody can
+        # see afterwards is impossible. Delete the entry and the endpoint still
+        # works perfectly; that is exactly why it needs a guard.
+        "the supplier's document leaves without the chain recording it",
+        "doorway/redlines.py",
+        '                "select cw.audit(%(event)s, %(subject)s, %(payload)s::jsonb)",',
+        '                "select 1 where %(event)s is null and %(subject)s is null'
+        ' and %(payload)s is null",',
+        "test_redlines.py::test_the_fetch_is_on_the_chain_before_the_bytes_leave",
+    ),
+    (
+        # THE FENCE. The document id comes off the ROUND row, read under the
+        # caller's own rules — not from cw.received_document, whose read policy
+        # is `app_role() is not null` (0047) and would hand one requester
+        # another requester's supplier paper. Mutating the refusal into a
+        # fall-through is the shape that bug would take.
+        "a round that is not yours stops being a refusal",
+        "doorway/redlines.py",
+        '            if not rounds:\n'
+        '                return Response(403, {\n'
+        '                    "error": "refused", "kind": "not_permitted",',
+        '            if False:\n'
+        '                return Response(403, {\n'
+        '                    "error": "refused", "kind": "not_permitted",',
+        "test_redlines.py::test_another_requester_gets_a_sentence_and_no_bytes",
+    ),
     (
         # NC-17's load-bearing rule: where nothing clears the bar the system
         # ESCALATES (ADR-0005) — it never quietly drops the paragraph. With
@@ -517,6 +547,20 @@ MUTATIONS = [
         "            stored = request.rows(",
         '            stored = {"document_id": 0} or request.rows(',
         "test_paper.py::test_the_ingested_document_is_stored",
+    ),
+
+    # ── The intake can never invent a category (AI-1) ────────────────────────
+    # Remove the vocabulary check and a term list for a category nobody created
+    # starts proposing risks. The proposal would then be refused downstream by
+    # /manifests/check wearing the words "the model invented a category" — on a
+    # path with no model in it, which is exactly the confusion of faults the
+    # whole boundary exists to keep apart.
+    (
+        "the classifier proposes categories the caller's library does not define",
+        "doorway/intake.py",
+        "            if key not in known:",
+        "            if False:",
+        "test_intake.py::test_a_term_list_for_an_undefined_category_proposes_nothing",
     ),
 ]
 
