@@ -174,6 +174,176 @@ def test_an_answer_no_term_matched_is_returned_by_name():
     assert unmatched == ["quiet"]
 
 
+# ── A denial is not a mention (2026-08-05) ──────────────────────────────────
+#
+# WHAT IS BEING PROVED, and what deliberately is not.
+#
+# The classifier used to read "no confidential records are involved" as a
+# mention of confidential records, because the phrase is in the sentence. It
+# now reads the few words before a term and ignores the term when they deny it.
+#
+# THE TESTS BELOW ARE ASYMMETRIC ON PURPOSE. One proves a plain denial is
+# dropped. Three prove that everything short of a plain denial is STILL
+# PROPOSED — a denial too far away, a denial in a different sentence, a denial
+# that a genuine mention sits beside. That asymmetry is the design: a proposal
+# a requester removes costs seconds, a risk nobody proposed costs a missing
+# clause in a signed contract. If a future change makes this cleverer and one
+# of the "propose anyway" tests goes red, the change is wrong even if it looks
+# smarter.
+#
+# Every word below is the fixture's own synthetic term list. Nothing here pins
+# a shipped question, term or category name.
+
+
+def test_a_plain_assertion_is_still_a_match():
+    from doorway.intake import classify_answers
+
+    risks, unmatched = classify_answers(
+        [{"probe": "p", "text": "the supplier will hold confidential records"}],
+        WALK["terms"], {"data": "Data Privacy"})
+
+    assert [risk["category"] for risk in risks] == ["Data Privacy"]
+    assert unmatched == []
+
+
+def test_a_denied_mention_proposes_nothing():
+    """The defect, in the requester's own words: saying a thing is NOT there
+    used to propose it, because the phrase was in the sentence."""
+    from doorway.intake import classify_answers
+
+    for denial in ("No confidential records are involved in this purchase.",
+                   "we will not hold confidential records",
+                   "this does not involve confidential records",
+                   "the supplier never sees confidential records",
+                   "we don't process confidential records",
+                   "the work is done without confidential records"):
+        risks, unmatched = classify_answers(
+            [{"probe": "p", "text": denial}],
+            WALK["terms"], {"data": "Data Privacy"})
+
+        assert risks == [], f"a denial proposed a risk: {denial!r}"
+        assert unmatched == ["p"], (
+            "a denied answer must still come back as unmatched, not vanish")
+
+
+def test_a_denial_beside_a_genuine_mention_still_proposes_the_genuine_one():
+    """The case that decides whether this is safe. One denied mention must not
+    take a real one down with it."""
+    from doorway.intake import classify_answers
+
+    risks, unmatched = classify_answers(
+        [{"probe": "p",
+          "text": "No confidential records are involved in the pilot. "
+                  "The support desk does hold confidential records."}],
+        WALK["terms"], {"data": "Data Privacy"})
+
+    assert [risk["category"] for risk in risks] == ["Data Privacy"]
+    assert unmatched == []
+
+
+def test_a_denied_high_term_does_not_raise_the_severity():
+    """Severity had the same fault as the match: the high-term list is read
+    the same way, so a denied high term leaves Standard standing."""
+    from doorway.intake import classify_answers
+
+    risks, _ = classify_answers(
+        [{"probe": "p", "text": "we hold confidential records, and no very "
+                                "sensitive ones"}],
+        WALK["terms"], {"data": "Data Privacy"})
+
+    assert len(risks) == 1
+    assert risks[0]["severity"] == "Standard"
+
+    raised, _ = classify_answers(
+        [{"probe": "p", "text": "we hold confidential records, very sensitive "
+                                "ones"}],
+        WALK["terms"], {"data": "Data Privacy"})
+    assert raised[0]["severity"] == "High", (
+        "a real high term stopped raising severity")
+
+
+def test_an_unclear_denial_proposes_the_risk_anyway_by_design():
+    """THE INTENDED CONSERVATIVE BEHAVIOUR, not a shortcoming.
+
+    None of these three sentences denies the term itself — the denial is about
+    something else, or too far away, or in another sentence. A cleverer reading
+    might drop them. This one proposes, because a risk proposed and removed
+    costs a requester seconds and a risk never proposed costs a clause.
+    """
+    from doorway.intake import classify_answers
+
+    for unclear in (
+        # The denial is about certainty, not about the records.
+        "we are not certain what the supplier does with confidential records",
+        # The denial belongs to the sentence before it.
+        "this purchase does not involve payroll. "
+        "The vendor stores confidential records.",
+        # The denial is turned around before the term is reached.
+        "we hold no confidential records in Europe, "
+        "but the US team does hold confidential records",
+    ):
+        risks, _ = classify_answers(
+            [{"probe": "p", "text": unclear}],
+            WALK["terms"], {"data": "Data Privacy"})
+
+        assert [risk["category"] for risk in risks] == ["Data Privacy"], (
+            f"a doubtful case was dropped instead of proposed: {unclear!r}")
+
+
+def test_not_knowing_is_not_a_denial_so_the_risk_is_proposed():
+    """"I DON'T KNOW" MUST REACH A PERSON, and this test exists because the
+    first version of the denial reading silenced it.
+
+    Every sentence below carries a denial word, and not one of them denies
+    anything: the requester is telling us they do not know yet. That is the
+    strongest reason there is to put the risk on the screen — a question nobody
+    has answered is exactly what a human is for. Reading "not sure" as "no"
+    turns an open question into silence, which is the failure that costs a
+    clause in a signed contract.
+    """
+    from doorway.intake import classify_answers
+
+    for doubt in ("It is not clear whether confidential records are involved.",
+                  "We are not sure if confidential records are involved.",
+                  "We have not confirmed whether confidential records are held.",
+                  "It is not yet known whether confidential records are in scope.",
+                  "We do not know if confidential records are involved.",
+                  "we cannot say whether confidential records are held"):
+        risks, unmatched = classify_answers(
+            [{"probe": "p", "text": doubt}],
+            WALK["terms"], {"data": "Data Privacy"})
+
+        assert [risk["category"] for risk in risks] == ["Data Privacy"], (
+            f"an answer saying nobody knows was silenced: {doubt!r}")
+        assert unmatched == []
+
+
+def test_a_plain_denial_is_still_a_denial_beside_all_that_doubt():
+    """The other half of the pair above, so widening the doubt reading cannot
+    quietly widen its way through a plain "no"."""
+    from doorway.intake import classify_answers
+
+    for denial in ("No confidential records are involved.",
+                   "We will not process any confidential records.",
+                   "We don't hold confidential records."):
+        risks, _ = classify_answers(
+            [{"probe": "p", "text": denial}],
+            WALK["terms"], {"data": "Data Privacy"})
+
+        assert risks == [], f"a plain denial proposed a risk: {denial!r}"
+
+
+def test_the_classifier_never_raises_whatever_the_answer_says():
+    """ADR-0005's fallback runs when the model cannot. If it throws, the
+    requester's work stops — so nothing about an answer's shape may break it."""
+    from doorway.intake import classify_answers
+
+    for odd in ("", "   ", ".;:!?", "no", "not not not confidential records",
+                "confidential records" * 200, "\n\n\r\t", "don't", "ÜBER — no"):
+        classify_answers([{"probe": "p", "text": odd}],
+                         WALK["terms"], {"data": "Data Privacy"})
+
+
 # ── The shipped walk file: shape only, never words ──────────────────────────
 
 
