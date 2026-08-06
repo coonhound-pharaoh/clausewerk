@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 import psycopg
@@ -163,22 +164,177 @@ def probes(db: Database, caller: Caller, walk_path=None) -> Answer:
     return Answer(200, {"version": walk.get("version"), "probes": shown})
 
 
+# ── Reading a denial (2026-08-05) ───────────────────────────────────────────
+#
+# THE DEFECT THIS ANSWERS. Matching used to be case-blind substring over the
+# WHOLE answer, so a requester writing "No personal data is involved in this
+# purchase" contained the phrase "personal data" and had Data Privacy proposed
+# at them — the opposite of what they had just said. Severity had the same
+# fault: "no health data" contained "health" and read as High.
+#
+# WHAT IT DOES NOW, IN THE ONE SENTENCE A REQUESTER GETS: a term still counts
+# wherever it appears, EXCEPT where the few words immediately before it, in the
+# same sentence, deny it.
+#
+# WHY IT LEANS TOWARDS PROPOSING, AND WHY THAT MUST NOT BE "IMPROVED" AWAY.
+# Two mistakes are possible here and they are nowhere near equally bad.
+# Proposing a risk that is not there costs the requester a few seconds and one
+# removal on a screen they have to read anyway. MISSING a risk that is there
+# means a contract gets assembled without a clause it needed, and nobody finds
+# out at the time. So every doubtful case resolves the same way — PROPOSE:
+#
+#   · a denial further back than NEGATION_WINDOW words does not count
+#   · a denial in another sentence does not count
+#   · a denial before "but", "however", "except" … does not carry past it
+#   · two denials in the window cancel ("not without personal data")
+#   · A DENIAL THAT IS REALLY AN EXPRESSION OF DOUBT does not count at all —
+#     "it is not clear whether personal data is involved" says nobody knows,
+#     which is the single strongest reason to put the risk on the screen and
+#     let a person decide. Not knowing is not the same as saying no.
+#   · anything at all that goes wrong falls back to plain substring matching
+#
+# The next person here will be tempted to make this cleverer. The property
+# worth keeping is not cleverness: it is that the errors stay on the side that
+# a person can see and undo. This is ADR-0005's fallback, not the product — the
+# model reads these answers when it can — so buying a little accuracy with a
+# silent drop would be a bad trade even if the cleverness worked.
+
+# How far back a denial reaches, in words. Small on purpose: "we are not sure —
+# we process personal data" must still propose.
+NEGATION_WINDOW = 3
+
+# Ordinary denials. Contractions ("don't", "won't", "isn't") are caught by the
+# n't ending rather than listed, so the list stays short enough to read.
+NEGATION_CUES = frozenset({
+    "no", "not", "never", "none", "nothing", "neither", "nor", "without",
+    "cannot", "exclude", "excludes", "excluded", "excluding",
+})
+
+# WORDS THAT TURN A DENIAL INTO A SHRUG. "We are not SURE if personal data is
+# involved" wears the same "not" as "we will not process personal data" and
+# means the opposite thing: the first says nobody knows yet, and nobody knowing
+# is the strongest possible reason to show the risk to a person. When one of
+# these sits between the denial and the term, the denial is set aside and the
+# risk is proposed.
+#
+# THE KNOWN COST OF THIS LIST, ACCEPTED ON REVIEW 2026-08-05 — READ THIS BEFORE
+# "FIXING" IT. A genuine denial that happens to contain one of these words is
+# now proposed as well: "no clear personal-data requirement exists" raises Data
+# Privacy even though it is a no. That looks like an obvious bug and it is a
+# deliberate trade. The alternative — tightening the list so that sentence goes
+# quiet — brings back the case this list exists for, where a requester says
+# "we are not sure if personal data is involved" and the screen answers with
+# silence. An unnecessary proposal is removed with one click by somebody who is
+# reading the screen anyway. An unanswered question that nobody was shown ends
+# up in a signed contract. Do not trade the second away to remove the first.
+UNCERTAINTY_MARKERS = frozenset({
+    "clear", "sure", "certain", "known", "know", "knows", "whether", "if",
+    "yet", "confirmed", "confirm", "determined", "decided", "established",
+    "aware", "verified", "checked", "say",
+})
+
+# Where a denial stops carrying: the end of a sentence, or a word that turns
+# the sentence around. "We hold no personal data but we do process payroll
+# records" denies the first and not the second.
+_SCOPE_BREAK = re.compile(
+    r"[.!?;:\n\r]+"
+    r"|\bbut\b|\bhowever\b|\balthough\b|\bthough\b|\bwhereas\b"
+    r"|\bexcept\b|\bunless\b|\baside from\b|\bapart from\b|\bother than\b")
+_WORD = re.compile(r"[a-z0-9']+")
+
+
+def _is_denial(word: str) -> bool:
+    return word in NEGATION_CUES or word.endswith("n't")
+
+
+def _scopes(lowered: str) -> list[tuple[str, list[tuple[int, int, str]]]]:
+    """The answer cut into stretches a denial can reach across, each with its
+    words and where they sit."""
+    scopes = []
+    for piece in _SCOPE_BREAK.split(lowered):
+        if piece:
+            scopes.append((piece, [(m.start(), m.end(), m.group())
+                                   for m in _WORD.finditer(piece)]))
+    return scopes
+
+
+def _denied(words: list[tuple[int, int, str]], at: int) -> bool:
+    """Do the words just before position `at` deny what follows?
+
+    Only words BEFORE the term are read, deliberately. Reading the whole
+    stretch would let "we process personal data, and there is no health data"
+    deny its own first half — a silent drop, the failure that costs most.
+
+    A denial followed by a word of doubt is not counted at all — see
+    UNCERTAINTY_MARKERS. "Not clear whether", "not sure if", "have not
+    confirmed", "do not know if" are people telling us they do not know, and
+    the answer to not knowing is to show the risk, never to hide it.
+    """
+    before = [word for _, end, word in words if end <= at]
+    window = before[-NEGATION_WINDOW:]
+
+    denials = 0
+    for position, word in enumerate(window):
+        if not _is_denial(word):
+            continue
+        if any(later in UNCERTAINTY_MARKERS for later in window[position + 1:]):
+            continue                       # doubt, not denial — propose.
+        denials += 1
+    # Odd, not "any": a second denial turns it back round again.
+    return denials % 2 == 1
+
+
+def _reader(text: str):
+    """Give back a function answering: does this term appear somewhere the
+    surrounding words do not deny?
+
+    NEVER RAISES. If the sentence cannot be read for any reason at all, the
+    answer falls back to the old plain substring test — which over-proposes,
+    which is the safe direction. This classifier is what runs when the model
+    cannot, and a requester's work must not stop because of it.
+    """
+    lowered = text.lower()
+    try:
+        scopes = _scopes(lowered)
+    except Exception:                                    # pragma: no cover
+        return lambda term: term in lowered
+
+    def appears(term: str) -> bool:
+        term = str(term).lower().strip()
+        if not term:
+            return False
+        try:
+            for piece, words in scopes:
+                at = piece.find(term)
+                while at != -1:
+                    if not _denied(words, at):
+                        return True
+                    at = piece.find(term, at + 1)
+            return False
+        except Exception:                                # pragma: no cover
+            return term in lowered
+
+    return appears
+
+
 def classify_answers(answers: list[dict], terms: dict,
                      known: dict[str, str]) -> tuple[list[dict], list[str]]:
     """The keyword classifier, pure: answers + term lists + the caller's
     category vocabulary in, proposed risks and unmatched probe ids out.
 
-    Matching is case-blind substring — deliberately the simplest thing that
-    can be explained in one sentence to the person whose answer it classified.
-    Severity is High when any high-term appears, Standard otherwise; two
-    answers hitting one category merge, High winning, first quote kept.
+    Matching is case-blind substring, minus denials — still the simplest thing
+    that can be explained in one sentence to the person whose answer it
+    classified: a term counts wherever it appears, except where the few words
+    just before it, in the same sentence, say it is not there.
+    Severity is High when any high-term appears undenied, Standard otherwise;
+    two answers hitting one category merge, High winning, first quote kept.
     """
     proposed: dict[str, dict] = {}
     unmatched: list[str] = []
 
     for answer in answers:
         text = answer["text"]
-        lowered = text.lower()
+        appears = _reader(text)
         hit = False
         for key, lists in terms.items():
             if key not in known:
@@ -186,11 +342,12 @@ def classify_answers(answers: list[dict], terms: dict,
                 # the rule in the header. The gap belongs to whoever curates
                 # the walk file, and /intake/probes already withholds the probe.
                 continue
-            if not any(str(term).lower() in lowered for term in lists["match"]):
+            if not any(appears(term) for term in lists["match"]):
                 continue
             hit = True
-            high = any(str(term).lower() in lowered
-                       for term in lists.get("high", []))
+            # Severity reads denials too. "No health data is involved" must not
+            # arrive as High — it was the same one-word fault as the match.
+            high = any(appears(term) for term in lists.get("high", []))
             already = proposed.get(key)
             if already is None:
                 proposed[key] = {

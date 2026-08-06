@@ -581,6 +581,19 @@ MUTATIONS = [
         "            if False:",
         "test_intake.py::test_a_term_list_for_an_undefined_category_proposes_nothing",
     ),
+    # ── And it does not read a denial as a mention (2026-08-05) ──────────────
+    # Stop reading the words before a term and "no personal data is involved"
+    # proposes Data Privacy again — at the person who just said the opposite.
+    # Nothing downstream refuses it: it is a perfectly valid proposal for a
+    # category the library defines, so the only thing that can catch this is
+    # the test that names it.
+    (
+        "a denied mention is read as a mention again",
+        "doorway/intake.py",
+        "    return denials % 2 == 1",
+        "    return False",
+        "test_intake.py::test_a_denied_mention_proposes_nothing",
+    ),
 ]
 
 
