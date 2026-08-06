@@ -5031,3 +5031,83 @@ one that holds the grant.
 
 **A mutation row puts back 0065's revoke and requires the sweep to fail** — a lint
 nobody has seen fail is a green light with nothing behind it.
+
+## S239 — The fallback classifier read a denial as a mention — 2026-08-05
+
+`intake.classify_answers` matched term lists as case-blind substrings over the whole
+answer, so "No personal data is involved in this purchase" contained the phrase
+"personal data" and proposed Data Privacy at the person who had just said the
+opposite. Severity had the same fault ("no health data" read as High). Since AI-3
+this is the FALLBACK path ([[S236]]) — it runs when there is no key, no network or
+the day's budget is spent — but a fallback that argues with the requester costs
+confidence in the whole screen.
+
+**The rule now, in the sentence a requester gets:** a term counts wherever it
+appears, except where the few words just before it, in the same sentence, deny it.
+
+**The trade-off was decided in one direction and written into the code.** A risk
+proposed that is not there costs seconds and one removal on a screen the requester
+must read anyway; a risk NOT proposed costs a clause missing from a signed contract
+that nobody notices at the time. So everything short of a plain denial still
+proposes: a denial more than three words back, a denial in another sentence, a
+denial before "but"/"except", two denials that cancel — and any internal failure at
+all falls back to plain substring matching and never raises, because ADR-0005's
+fallback must not stop a requester's work.
+
+**Three tests exist purely to keep the errors on the harmless side** — they assert
+that doubtful cases are STILL proposed, so a future "smarter" reading that starts
+dropping them goes red. A mutation row (`a denied mention is read as a mention
+again`) proves the denial reading is guarded; nothing downstream could catch it,
+because a denied mention produces a perfectly valid proposal for a real category.
+
+**NOT KNOWING IS NOT SAYING NO, and the first version got that wrong.** "It is not
+clear whether personal data is involved" was read as a denial and silenced — the
+exact case where a person most needs to see the risk, because the requester has just
+said nobody knows. Corrected the same day on review: a denial followed by a word of
+doubt ("clear", "sure", "certain", "known", "know", "whether", "if", "yet",
+"confirmed", "say" …) is set aside and the risk is proposed. Two tests hold the pair
+— one that doubt proposes, one that a plain "no" still does not.
+
+**Known residual, stated rather than papered over:** a denial that FOLLOWS its term
+("personal data is not involved") is not read at all, so it over-proposes; and a
+genuine denial with a doubt word between it and the term — "no clear personal-data
+requirement exists" — now proposes too. Both are the harmless direction. The costly
+direction is a real denial landing within three words of a term while meaning
+something else, which is why the window is deliberately short.
+
+## S240 — A number that cannot fail is not a measure: the intake coverage screen came out — 2026-08-05
+
+Built in the morning (0063), removed the same day (0067). It counted intake
+questions whose plain-word answers matched none of Legal's term lists and showed
+the result to the administrator as gaps in those lists.
+
+**Two defects, and the second one could not be fixed.** Four of the six intake
+questions carry no category at all — what are you buying, from whom, for how much,
+for how long — so they have no term list to match and were reported as gaps they
+could never *not* be. The single "gap" the demo produced was the question asking a
+requester to describe their purchase: a false alarm, and the only reading anybody
+ever got. Narrowed to the two questions that do carry a category, the figure still
+cannot tell "our word lists missed something" from "there was nothing to find" —
+the requester who correctly says there is no personal data looks identical to the
+one describing a serious exposure in words we do not recognise.
+
+**Mike's decision: remove rather than narrow — a weak number on a screen is worse
+than no number.** An administrator who reads a figure they cannot act on learns to
+skip that panel, and the panels beside it must not be skipped.
+
+**The notice record survived intact; only the `intake_probe` subject kind went.**
+It was one of four kinds and the only one whose sole surface was the removed screen.
+The other three — `notification_gap`, `health_tile`, `account` — all still have live
+screens, so the kind was removed rather than repointed: a kind kept alive against a
+future surface is a kind whose visibility rule nobody re-reads. The check constraint
+was re-added NOT VALID, because `cw.notice` is append-only and a validated one would
+have demanded the migration rewrite notices already raised.
+
+**How to apply:** before building a counting surface, ask what its silence means.
+If "zero" and "we are blind" produce the same number, there is nothing to build.
+
+*Both records above were written S239 by two agents working in parallel and
+blind to each other; the second was renumbered on integration. Worth knowing
+the next time work is split this way — a sequential id is a shared resource,
+and nothing stopped them both taking it.*
+

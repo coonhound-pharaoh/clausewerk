@@ -238,9 +238,12 @@ function HealthPane({ me }) {
         </div>
       )}
 
-      {/* IN-2, owner decision NI-5: the intake question set, judged, in the
-          administrator's workspace rather than a Legal one. */}
-      <IntakeCoveragePane me={me} routes={routes.rows} />
+      {/* REMOVED 2026-08-05 (0067): the intake question-set coverage panel.
+          It counted questions whose answers matched no term list — but four of
+          the six questions have no term list to match, so they were reported as
+          gaps they could never not be, and for the rest the number could not
+          tell "we missed something" from "there was nothing to find". Removed
+          rather than narrowed: a weak number on a screen is worse than none. */}
 
       <div className="flex gap-2 mt-4">
         <button className="btn" disabled={busy === 'checkpoint'}

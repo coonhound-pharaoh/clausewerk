@@ -64,10 +64,17 @@ const BUYER = 'buyer@clausewerk';
 const REVIEWER = 'reviewer@clausewerk';
 
 // ── The smallest world in which any of this means anything ─────────────────
-// Two people with effective roles, and ONE REAL GAP for a notice to cite. The
-// gap is manufactured the way the system makes them: an intake classification
-// is appended to the chain with an unmatched probe on it, which is exactly
-// what cw.intake_question_coverage reads.
+// Four people with effective roles, and ONE REAL SUBJECT for a notice to cite.
+//
+// THE SUBJECT IS A HEALTH TILE, and it used to be an intake question-set gap.
+// 0067 removed that surface and the `intake_probe` subject kind with it, so
+// every fixture below moved to a health tile — the same shape of subject (a
+// row on a surface the administrator reads) attached to a kind that still has
+// a live screen behind it. cw.health_summary names its tiles as constants, so
+// the tile below exists on an empty system, which is what makes it a fixture
+// rather than a thing that has to be manufactured first.
+const TILE = 'audit chain';
+
 await db.exec(`
   select set_config('cw.actor', 'owner@clausewerk', false);
   insert into cw.account (person, display_name, unit, role, created_by) values
@@ -82,38 +89,25 @@ await db.exec(`
     ('granted', '${REVIEWER}', 'legal_reviewer', 'owner@clausewerk', 'fixture');
 `);
 
-// One classification with one unmatched probe, written the way intake.py
-// writes it. Owner-run, because the point of the fixture is the GAP existing,
-// not who created it.
-await db.exec(`
-  select cw.audit('intake_classified', 'Northwind', jsonb_build_object(
-    'source', 'intake', 'answers', 2,
-    'risks_proposed', jsonb_build_array('Data Privacy'),
-    'unmatched', jsonb_build_array('need'),
-    'classified_by', 'doorway.intake.classify_answers'));
-`);
+console.log('\nthe subject a notice can be raised about is real');
 
-console.log('\nthe gap a notice can be raised about is real');
-
-await test('the coverage view sees the unmatched probe (guards a vacuous pass)', async () => {
+await test('the health surface sees the tile (guards a vacuous pass)', async () => {
   const seen = await queryAs('administrator',
-    'select probe, times_unmatched from cw.intake_question_coverage', [], ADMIN);
-  eq(seen.map(r => r.probe), ['need'],
-    'the fixture classification never reached the coverage view; every test '
-    + 'below would then be asserting about an empty world');
+    'select tile from cw.health_summary where tile = $1', [TILE], ADMIN);
+  assert(seen.length === 1,
+    'the fixture tile is not on the administrator\'s health surface; every '
+    + 'test below would then be asserting about an empty world');
 });
 
-await test('nothing classified yet is NOT rendered as nothing unmatched', async () => {
-  // The summary's null share. Asserted on the shape rather than the number:
-  // with one classification and no answers-without-a-match the share is a
-  // real figure; what must never happen is a NULL becoming a 0 on the way out.
-  const [total] = await queryAs('administrator',
-    'select classifications, unmatched_share from cw.intake_coverage_summary',
-    [], ADMIN);
-  assert(Number(total.classifications) === 1, 'the fixture did not land');
-  assert(total.unmatched_share !== null,
-    'this fixture HAS answers, so the share must be a number here — if this '
-    + 'fails the case-when in cw.intake_coverage_summary has inverted');
+await test('a subject kind with no surface behind it is gone (0067)', async () => {
+  // The removal itself, checked as a SYSTEM fact rather than as a word: the
+  // route table no longer offers any pair for the retired kind, so there is
+  // nothing an administrator could raise about it even if a screen asked.
+  const routes = await rows(
+    "select 1 from cw.notice_route where subject_kind = 'intake_probe'");
+  eq(routes, [],
+    'the intake-probe route survived the removal of the surface it was '
+    + 'raised from, so the kind is offerable with nothing behind it');
 });
 
 console.log('\nrule 1 · a notice cites something its raiser can see');
@@ -121,20 +115,20 @@ console.log('\nrule 1 · a notice cites something its raiser can see');
 await test('the administrator may raise the gap they can actually see', async () => {
   await mustWrite('administrator', `
     insert into cw.notice (raised_by, to_role, subject_kind, subject_ref, note)
-    values ('ignored@clausewerk', 'legal_admin', 'intake_probe', 'need',
-            'Placeholder: this question is classifying nothing.')`, [], ADMIN);
+    values ('ignored@clausewerk', 'legal_admin', 'health_tile', '${TILE}',
+            'Placeholder: this check is not coming back clean.')`, [], ADMIN);
   const [raised] = await rows('select raised_by, to_role from cw.notice');
   eq(raised.raised_by, ADMIN,
     'the raiser was taken from the INSERT rather than from the connection — '
     + 'the one thing every act in this system binds');
 });
 
-await test('a probe nobody has ever failed to classify cannot be cited', async () => {
+await test('a tile nobody has ever seen cannot be cited', async () => {
   await throws(() => mustWrite('administrator', `
     insert into cw.notice (raised_by, to_role, subject_kind, subject_ref, note)
-    values ('x', 'legal_admin', 'intake_probe', 'a-probe-with-no-gap', 'x')`,
+    values ('x', 'legal_admin', 'health_tile', 'a-tile-on-no-screen', 'x')`,
     [], ADMIN), 'does not resolve',
-    'a notice was accepted citing a gap that does not exist. The subject '
+    'a notice was accepted citing a tile that does not exist. The subject '
     + 'reference is now a free-text field, which is rule 1 broken');
 });
 
@@ -150,12 +144,12 @@ await test('an unreachable person who is perfectly reachable cannot be cited', a
 console.log('\nrule 2 · who may notify whom is a table');
 
 await test('a pair absent from cw.notice_route is refused', async () => {
-  // The administrator has no route for an intake gap to a REQUESTER. Nothing
-  // about that is arbitrary — a requester cannot edit the question set — and
+  // The administrator has no route for a failing check to a REQUESTER. Nothing
+  // about that is arbitrary — a requester cannot answer for the evidence — and
   // the refusal names the table rather than the role.
   await throws(() => mustWrite('administrator', `
     insert into cw.notice (raised_by, to_role, subject_kind, subject_ref, note)
-    values ('x', 'requester', 'intake_probe', 'need', 'x')`,
+    values ('x', 'requester', 'health_tile', '${TILE}', 'x')`,
     [], ADMIN), 'cw.notice_route',
     'a notice landed on a role the route table does not permit');
 });
@@ -166,7 +160,7 @@ await test('naming an individual is not a way around the route table', async () 
   // to the requester by name instead of by role and it lands anyway.
   await throws(() => mustWrite('administrator', `
     insert into cw.notice (raised_by, to_person, subject_kind, subject_ref, note)
-    values ('x', '${BUYER}', 'intake_probe', 'need', 'x')`,
+    values ('x', '${BUYER}', 'health_tile', '${TILE}', 'x')`,
     [], ADMIN), 'cw.notice_route',
     'a person notice bypassed the route table — the recipient must be routed '
     + 'by the role they actually hold');
@@ -175,7 +169,7 @@ await test('naming an individual is not a way around the route table', async () 
 await test('a requester cannot raise a notice at all, having no route', async () => {
   await throws(() => mustWrite('requester', `
     insert into cw.notice (raised_by, to_role, subject_kind, subject_ref, note)
-    values ('x', 'legal_admin', 'intake_probe', 'need', 'x')`,
+    values ('x', 'legal_admin', 'health_tile', '${TILE}', 'x')`,
     [], BUYER), 'cw.notice_route',
     'a role with no seeded route raised one anyway');
 });
@@ -183,7 +177,7 @@ await test('a requester cannot raise a notice at all, having no route', async ()
 await test('a viewer holds no grant on the notice record at all', async () => {
   await mustNotWrite('viewer', `
     insert into cw.notice (raised_by, to_role, subject_kind, subject_ref, note)
-    values ('x', 'legal_admin', 'intake_probe', 'need', 'x')`, []);
+    values ('x', 'legal_admin', 'health_tile', '${TILE}', 'x')`, []);
 });
 
 console.log('\nrule 3 · it arrives where people already look');
@@ -246,7 +240,7 @@ await test('an acknowledged notice leaves the waiting list', async () => {
 await test('a bystander cannot acknowledge somebody else\'s notice', async () => {
   await db.exec(`select set_config('cw.actor', 'owner@clausewerk', false);
     insert into cw.notice (raised_by, to_role, subject_kind, subject_ref, note)
-    values ('${ADMIN}', 'legal_admin', 'intake_probe', 'need', 'second one');`);
+    values ('${ADMIN}', 'legal_admin', 'health_tile', '${TILE}', 'second one');`);
   const [second] = await rows(
     'select notice_id from cw.notice order by notice_id desc limit 1');
   // Non-vacuity: the reviewer CAN see the notice — Legal reads them all — so
