@@ -302,11 +302,30 @@ MUTATIONS = [
         # before the bytes do — documents.py's order — so a download nobody can
         # see afterwards is impossible. Delete the entry and the endpoint still
         # works perfectly; that is exactly why it needs a guard.
+        # REPOINTED 2026-08-05, THE SAME DAY IT WAS WRITTEN, and the way it went
+        # stale is worth more than the row itself.
+        #
+        # It was written against `cw.audit(...)`. Hours later, 0065 gave the
+        # auditor a narrow door onto the chain and this call became
+        # `cw.record_document_read(...)` — so the pattern stopped matching and
+        # the row silently guarded nothing. The SQL harness was run four times
+        # that day and is green; THIS harness was never run at all, which is
+        # why nobody noticed. CLAUDE.md names both.
+        #
+        # Found by a subagent's preflight, not by me. S220's shape for the
+        # sixth time: a check anchored on code that the same day's later work
+        # rewrote.
         "the supplier's document leaves without the chain recording it",
         "doorway/redlines.py",
-        '                "select cw.audit(%(event)s, %(subject)s, %(payload)s::jsonb)",',
-        '                "select 1 where %(event)s is null and %(subject)s is null'
-        ' and %(payload)s is null",',
+        # BOTH LINES of the call, replaced by a statement that RUNS CLEANLY and
+        # records nothing. Mutating only the first line would leave the second
+        # dangling and the statement would fail on a SQL syntax error — the test
+        # would go red for the wrong reason, proving the test is brittle rather
+        # than proving the guarantee is guarded. psycopg ignores the unused
+        # parameters in the mapping below, so this is a working no-op.
+        '                "select cw.record_document_read(%(negotiation)s, %(round)s,"\n'
+        '                " %(document)s, %(sha256)s, %(byte_size)s, %(direction)s)",',
+        '                "select 1 where false",',
         "test_redlines.py::test_the_fetch_is_on_the_chain_before_the_bytes_leave",
     ),
     (
