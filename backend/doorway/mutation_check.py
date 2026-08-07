@@ -594,6 +594,44 @@ MUTATIONS = [
         "    return False",
         "test_intake.py::test_a_denied_mention_proposes_nothing",
     ),
+
+    # ── A call the doorway never made is not billed (0068, 2026-08-06) ───────
+    # The SQL half of this rule — the `outcome <> 'not_asked'` filter in
+    # cw.model_calls_today() — is guarded in db/test/mutation-check.mjs. The
+    # PYTHON half, which decides WHICH outcome gets written, had ordinary tests
+    # and no deliberate attempt to break it. An ordinary test proves the code
+    # works today; these two prove somebody is told when it stops.
+    (
+        "the budget bills calls the doorway never made again",
+        "doorway/advisory.py",
+        '        return "absent" if self.asked else "not_asked"',
+        '        return "absent"',
+        "test_intake.py::test_with_no_key_the_seam_declines_and_says_why",
+    ),
+
+    # THE MORE DANGEROUS DIRECTION, and the reason this pair exists rather than
+    # just the one above. The original defect OVER-billed, which shows up as a
+    # budget running out early: visible, irritating, self-reporting. Flipping
+    # the default UNDER-bills — every dispatched call that then failed, timed
+    # out or came back unreadable would record 'not_asked' and go uncounted —
+    # and that is silent. The figure simply reads low, forever, in the one
+    # number somebody budgets from. advisory.py's own comment asks for this
+    # default; a comment asking is not a guard.
+    #
+    # ANCHORED ON `_no_proposal`'S SIGNATURE, not on the dataclass field, and
+    # the harness is what insisted: `asked: bool = True` appears twice and it
+    # refused to guess which. `_no_proposal` is the load-bearing one — every
+    # post-dispatch absence goes through it and takes this default, whereas the
+    # field default is only ever reached via that same function.
+    (
+        "a call that reached a provider and failed stops being billed",
+        "doorway/advisory.py",
+        "                 model_version: str = UNKNOWN_VERSION,\n"
+        "                 asked: bool = True) -> Proposal:",
+        "                 model_version: str = UNKNOWN_VERSION,\n"
+        "                 asked: bool = False) -> Proposal:",
+        "test_intake.py::test_a_provider_that_was_reached_and_failed_is_still_billed",
+    ),
 ]
 
 

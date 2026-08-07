@@ -5493,3 +5493,46 @@ boundary is the one the sweep covers.
 exists — this is the second time today ([[S248]] was the gap, this was not).
 The tell is the mutation harness: `grep` the `expect` strings, they name every
 guard in the repository in one place.
+
+## S250 — I guarded the billing rule in the schema and not in the code — 2026-08-07
+
+This morning's fix ([[S241]], 0068) stopped the daily AI budget being charged for
+calls the doorway decided not to make. I added a mutation row for the SQL half —
+the `outcome <> 'not_asked'` filter — and **none for the Python half**, which is
+the part that decides which outcome gets written. It had ordinary tests. An
+ordinary test proves the code works today; a mutation row proves somebody is
+told when it stops. This repository's rule is that every guarantee gets a
+deliberate attempt to break it, and I did half of it.
+
+**Two rows, and the second is the one worth having.** Reverting
+`return "absent" if self.asked else "not_asked"` restores the original defect —
+over-billing, which shows up as a budget running out early: visible, irritating,
+self-reporting. Flipping `_no_proposal`'s `asked` default to False **under**-bills:
+every dispatched call that then failed, timed out or came back unreadable would
+record `not_asked` and go uncounted. **That one is silent** — the figure simply
+reads low forever, in the number somebody budgets from. `advisory.py`'s own
+comment asks for the default; a comment asking is not a guard.
+
+**The harness corrected me twice today, and both corrections were right.**
+
+  · A row's `expect` must be the exact NAME of the catching test. My first
+    attempt named a sentence and was reported *imprecise*.
+  · `asked: bool = True` appears twice in advisory.py, so the harness reported
+    the row **STALE — "it would mutate the first, which may be the wrong one"**
+    and ran nothing. Re-anchored on `_no_proposal`'s multi-line signature, which
+    is the load-bearing occurrence: every post-dispatch absence takes that
+    default, and the dataclass field is only ever reached through it.
+
+**A harness that refuses an ambiguous anchor rather than guessing is the whole
+design.** Silently mutating the first match would have produced a green row
+guarding the wrong line — a guard that reports success while watching nothing,
+which is the failure this session has now found five times over.
+
+**All three harnesses were green before any of this**: 57/57 engine, 43/43
+doorway, 285/285 schema. Worth running unprompted — CLAUDE.md records both Python
+harnesses going silently red once in two days, and neither had been run this
+session.
+
+**How to apply:** when a fix spans the schema and the code, the guard has to span
+both. Ask which half a mutation would have to break to make the wrong thing
+happen quietly, and guard that one first.
