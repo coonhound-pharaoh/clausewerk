@@ -5403,3 +5403,48 @@ S246 sat in.
 
 **How to apply:** record the negative. Half of this pass was re-treading files an
 earlier pass had already cleared, because nothing said so.
+
+## S248 — 38 privileged functions, 2 guarded: the search_path sweep that was missing — 2026-08-07
+
+A `SECURITY DEFINER` function runs with its owner's rights. If its `search_path`
+is not pinned, the CALLER's path decides what the names inside it resolve to —
+so an ordinary role creates an object of their own with a matching name in a
+schema they can write to, calls the function, and their object runs with the
+owner's rights. Standard escalation against this kind of function, and it is a
+one-word omission in a migration.
+
+**All 38 are correct today. Nothing was keeping them that way.** Two mutation
+rows cover `cw.audit_chain` and `cw.audit_verify`, and both strip the
+definer-ness and the path TOGETHER, so neither isolates the pinning. Searching
+the whole test tree for `prosecdef` returned nothing.
+
+**The check existed once, as a sentence in a report.** `bug_report.md`
+(2026-07-28): "every one of the 26 privileged database functions is hardened
+against the classic escalation trick." True when written — checked once, by a
+person, at 32 migrations. There are now 69 migrations and 38 such functions.
+**The population grew by twelve with nothing carrying the check forward.** A
+finding in a report is not a guard; this is [[S246]] again, and the reason to
+convert a one-off verification into a sweep the day it is made.
+
+**READ FROM THE CATALOG, NOT THE MIGRATION SOURCES, and it is load-bearing.** A
+later `create or replace` can drop a `set search_path` the original definition
+had, and a scan of the source files would still find the old, correct one and
+report calm. `pg_proc.prosecdef` + `pg_proc.proconfig` is the authority.
+
+**Counting definitions is not counting functions.** The source scan said 47; the
+catalog says 38, because several are create-or-replace of the same function. The
+first population floor was set from the source number and the sweep's own
+vacuity guard caught it immediately — which is the guard doing its job on its
+first day.
+
+**Proved to bite before being believed**, by creating a definer function with no
+pinned path and watching the sweep name it. A sweep that has never been seen to
+fail is not protection — this repo has caught a test that could not fail before
+(2026-07-26).
+
+**Stated limit, not patched around:** this checks a path is PINNED, never that
+the pinned value is SAFE. A function pinned to a schema an ordinary role can
+create objects in would pass. All 38 are `cw, pg_temp` today.
+
+**How to apply:** when a one-off audit reports "all N of these are fine", ask what
+makes N+1 fine. If the answer is a person remembering, write the sweep then.
