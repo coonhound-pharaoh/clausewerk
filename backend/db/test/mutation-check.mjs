@@ -2828,6 +2828,18 @@ grant usage, select on sequence cw.notification_outbox_outbox_id_seq to cw_legal
     repl: `  or cw.app_role() = 'requester');`,
     expect: 'a requester sees the calls their own work caused and no others' },
 
+  // ── An append-only table cannot be emptied either (0070) ─────────────────
+  // TRUNCATE fires no row triggers, so a table that refuses a delete and allows
+  // a truncate has an immutability habit rather than a guarantee (0001's own
+  // words). role_grant is the one chosen here because it is the authority
+  // record — who holds which role — and emptying it leaves no per-row trace.
+  { suite: 'grants-and-policies.test.mjs',
+    name: 'the authority record can be emptied in one statement again',
+    find: `create trigger role_grant_no_truncate before truncate on cw.role_grant
+  execute function cw.no_truncate();`,
+    repl: 'select 1;',
+    expect: 'every table that guards truncate still guards it' },
+
   // ── The auditor's narrow door onto the chain (0065) ──────────────────────
   { suite: 'received-documents.test.mjs',
     name: 'the download door records whatever role it is told',

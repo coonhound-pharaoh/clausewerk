@@ -247,6 +247,92 @@ await test('the sweep is looking at something', async () => {
     + 'the population it claims to cover');
 });
 
+// ── An append-only table cannot be emptied either (0070, 2026-08-07) ───────
+//
+// 0001 built this defence and stated the rule better than a restatement would:
+// "A schema that raises loudly on `delete from cw.clause_version` and empties
+// the same table without complaint on `truncate cw.clause_version` does not
+// have an immutability guarantee; it has an immutability habit."
+//
+// TRUNCATE fires no row triggers and applies no ON DELETE rules, so the defence
+// must be STATEMENT-level. 0001 made cw.no_truncate() shared so that "a table
+// added later inherits the story by NAMING it". Forty-three named it; twenty-one
+// never did — including who holds which role, the model-spend ledger, and every
+// authorised departure from a legal objection. 0070 closed that.
+//
+// A NAMED LIST, NOT A DERIVED ONE, AND THE REASON IS WORTH READING. The obvious
+// sweep is "every table whose row trigger forbids update or delete must also
+// guard truncate", and deriving that set needs a way to tell an unconditional
+// append-only trigger from a conditional binding one. Three heuristics were
+// tried — any update/delete trigger, any trigger function containing a raise,
+// and a raise with no `if` in the body — and they gave 66, 66 and 57. Worse,
+// the third behaved differently in two files carrying byte-identical SQL, and
+// that was never explained. A guard nobody can explain is worse than no guard:
+// it reports calm for reasons no one understands. So the population is written
+// down instead of inferred.
+//
+// WHAT THIS CATCHES: a truncate guard REMOVED from any table that has one.
+// WHAT IT DOES NOT: a NEW append-only table shipped without one. That half is
+// stated rather than faked — it is the honest limit of a named list, and the
+// count check below is what notices the list drifting out of step.
+
+const TRUNCATE_GUARDED = [
+  'account', 'advisory_assessment', 'agreement_attorney',
+  'agreement_share', 'audit_event', 'clause',
+  'clause_draft', 'clause_tag', 'clause_version',
+  'concession', 'concession_approval', 'concession_settlement',
+  'concession_withdrawal', 'conflict_rule', 'executed_agreement',
+  'executed_document', 'executed_signatory', 'governance_setting',
+  'integrity_check', 'ladder_rung', 'legal_hold',
+  'model_call', 'negotiation_position', 'negotiation_round',
+  'notice', 'notice_acknowledgement', 'notification_address',
+  'notification_outbox', 'obligation_act', 'obligation_coverage_gap',
+  'obligation_instance', 'obligation_template', 'override_finding',
+  'override_request', 'override_socialisation', 'override_watcher',
+  'position_movement', 'received_document', 'records_delegate',
+  'required_approver', 'review_candidate', 'review_segment',
+  'review_ticket', 'risk_assessment', 'role_grant',
+  'round_analysis', 'ruleset', 'ruleset_member',
+  'run', 'run_decision', 'run_finding',
+  'signature_certificate', 'signature_envelope', 'signature_envelope_event',
+  'signature_recipient', 'snapshot', 'snapshot_ladder_rung',
+  'snapshot_member', 'sow_override', 'sow_override_approval',
+  'sow_override_settlement', 'supersession', 'supplier_unit',
+  'ticket_claim',
+];
+
+await test('every table that guards truncate still guards it', async () => {
+  const live = new Set((await rows(`
+    select c.relname as tbl
+      from pg_trigger t
+      join pg_class c on c.oid = t.tgrelid
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'cw' and not t.tgisinternal and (t.tgtype & 32) <> 0
+     group by c.relname`)).map(r => r.tbl));
+
+  const lost = TRUNCATE_GUARDED.filter(t => !live.has(t)).map(t => `cw.${t}`);
+  eq(lost, [],
+    'these lost their truncate guard, so one statement now empties a table '
+    + 'that refuses a delete — an immutability habit, not a guarantee');
+});
+
+await test('the truncate-guard list has not drifted', async () => {
+  // The named list cannot notice a new table shipped without a guard. This
+  // notices it drifting the other way — a table gaining a guard nobody added
+  // here — which is the prompt to re-derive the list.
+  const [{ n }] = await rows(`
+    select count(*)::int as n from (
+      select c.relname
+        from pg_trigger t
+        join pg_class c on c.oid = t.tgrelid
+        join pg_namespace nn on nn.oid = c.relnamespace
+       where nn.nspname = 'cw' and not t.tgisinternal and (t.tgtype & 32) <> 0
+       group by c.relname) g`);
+  eq(n, TRUNCATE_GUARDED.length,
+    `${n} tables guard truncate and the list names ${TRUNCATE_GUARDED.length}; `
+    + 'add the new one to TRUNCATE_GUARDED, or say why it does not belong');
+});
+
 // WHAT THIS DOES NOT CLAIM: that the pinned value is SAFE. A function pinned to
 // a schema an ordinary role may create objects in would satisfy this check.
 // Every one today is `cw, pg_temp`. Stated as a limit rather than patched
