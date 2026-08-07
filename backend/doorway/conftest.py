@@ -34,6 +34,7 @@ come from the compose file's development defaults.
 from __future__ import annotations
 
 import os
+import sys
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import psycopg
@@ -56,7 +57,93 @@ TEST_DATABASE = os.environ.get(
 
 # The prefix a stale database can be recognised by. Only ever used to clean up
 # databases this file created.
+#
+# THIS WAS A PROMISE NOTHING KEPT until 2026-08-07. The constant was declared,
+# the comment above TEST_DATABASE said stale ones "are cleaned up at the start of
+# the next" run, and no code anywhere read either. The only cleanup was the
+# teardown below, which drops THIS run's database, named for THIS process's pid,
+# and only when the session ends normally — so every killed or crashed run left a
+# full copy of the schema behind and nothing ever came back for it. Twenty-two
+# had accumulated on the development machine. `_sweep_stale_databases` is the
+# missing half.
 TEST_DATABASE_PREFIX = "clausewerk_doorway_"
+
+
+def _process_is_alive(pid: int) -> bool:
+    """Is a process with this id running?
+
+    NOT `os.kill(pid, 0)`, and the reason is worth stating plainly: on Windows
+    `os.kill` with any signal other than CTRL_C_EVENT or CTRL_BREAK_EVENT calls
+    TerminateProcess. The liveness check would kill the process it was asking
+    about — including, on a pid collision, something of the user's.
+
+    Unknown answers are "alive". This decides whether to DROP a database, so
+    every uncertainty resolves towards keeping it.
+    """
+    if pid <= 0:
+        return True
+    if sys.platform == "win32":
+        import ctypes
+        SYNCHRONIZE = 0x00100000
+        handle = ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+        if handle:
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return True
+        # ERROR_INVALID_PARAMETER (87) means no such process. Anything else —
+        # access denied above all — means it is there and not ours to inspect.
+        return ctypes.windll.kernel32.GetLastError() != 87
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return True
+    return True
+
+
+def _sweep_stale_databases() -> None:
+    """Drop test databases left behind by runs that never got to tidy up.
+
+    AT SESSION START, because teardown is precisely what does not run when a run
+    is killed or the server dies under it.
+
+    TWO SIGNALS, AND BOTH MUST AGREE, because the per-pid naming exists so that
+    suite runs can go in parallel — a sweep that took a live run's database would
+    break it in a way that looks like a product failure:
+
+      · the pid in the name is not a live process, and
+      · nothing is connected to the database
+
+    Pids are recycled, so a dead run's number may now belong to something else;
+    that reads as "alive" and the database is kept, which is the harmless
+    direction. The connection check catches the opposite case.
+
+    Failures are swallowed for the reason the teardown already gives: a run that
+    fails while tidying up reports the wrong thing.
+    """
+    maintenance = _with_database(DEFAULT_OWNER_URL, "postgres")
+    try:
+        with psycopg.connect(maintenance, autocommit=True) as conn:
+            candidates = conn.execute(
+                "select d.datname from pg_database d "
+                " where d.datname like %s and d.datname <> %s "
+                "   and not exists (select 1 from pg_stat_activity a "
+                "                    where a.datname = d.datname)",
+                (TEST_DATABASE_PREFIX + "%", TEST_DATABASE)).fetchall()
+            for (name,) in candidates:
+                suffix = name[len(TEST_DATABASE_PREFIX):]
+                if not suffix.isdigit() or _process_is_alive(int(suffix)):
+                    continue
+                try:
+                    conn.execute(_database_statement("drop database", name))
+                except psycopg.Error:
+                    # Somebody connected between the query and the drop. Theirs
+                    # now; the next run will look again.
+                    pass
+    except psycopg.Error:
+        pass
 
 
 def _database_statement(command: str, name: str) -> sql.Composed:
@@ -140,6 +227,9 @@ def _ensure_database_exists() -> None:
 @pytest.fixture(scope="session", autouse=True)
 def _this_run_s_database():
     """Build this run's database, and take it away again afterwards."""
+    # Before anything else: clear up after runs that never got to. Cheap, and it
+    # is the only moment that reliably happens — see _sweep_stale_databases.
+    _sweep_stale_databases()
     _ensure_database_exists()
     yield
     if os.environ.get("CW_TEST_DATABASE"):
