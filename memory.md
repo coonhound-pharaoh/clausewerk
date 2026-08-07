@@ -5702,3 +5702,49 @@ looks at a REGISTRY or at the CODE. A registry only contains things somebody
 already registered — which is never true of the mistake you are guarding
 against. Three sweeps this session were proved by breaking them; this is the
 only one that failed its first bite test, and it would have shipped green.
+
+## S255 — The web root served whatever was in it, to anyone — 2026-08-07
+
+Static files are served BEFORE any session exists — necessarily, since the shell
+has to load before anybody can sign in. So every file under the static root is
+readable by anyone who can open a socket. **It served every file it found**, not
+just the ones the screens are made of. Verified against a running server with no
+token:
+
+    GET /app/fonts/fetch-fonts.py  -> 200  text/x-python
+    GET /app/fonts/OFL.txt         -> 200  text/plain
+    GET /app/fonts/README.md       -> 200  application/octet-stream
+
+**The cause is a lookup table mistaken for a gate.** `MIME` named six web types,
+but the suffix was consulted only to CHOOSE A CONTENT TYPE — after the decision
+to serve — with `mimetypes.guess_type` and then `application/octet-stream`
+behind it. So an unknown suffix was served anyway, just less confidently.
+
+Nothing in there is sensitive today. The point is that it is an ordinary
+repository directory people add files to, and the day a database dump, a `.env`
+or a page of notes lands in it, that file is published and nothing says so.
+
+**The fix makes the table the gate**, checked before the bytes are read.
+
+**`.woff2` had to be ADDED in the same change, and that was the only real risk.**
+Eighteen font files were being served through the guess path; gating on the
+existing table would have refused every font and broken every screen — a failure
+no other test in the file would have caught. Closed by naming the type, never by
+leaving the gate open. A test now asserts fonts still load, for exactly that
+reason.
+
+**Proved by putting a secret in the web root**: a `.txt` holding a fake
+credential and a `.pem` were both refused; the CSS still served. Before the
+change both returned 200.
+
+**I had to correct my own claim, which is the habit worth keeping.** I wrote that
+a refused file gives 404. It gives **401** to an anonymous caller, because the
+fall-through reaches the session gate. That is BETTER — 401 is the same answer
+every unknown path gives, so it distinguishes nothing, where a 404 would confirm
+the path was handled. The comment was corrected to match the behaviour rather
+than left as a plausible-sounding claim.
+
+**How to apply:** when a table maps a value to a presentation detail, ask whether
+anything decides on membership. A lookup with a fallback answers "what shall I
+call this?"; only a gate answers "may this leave the building?". They look
+identical in code and are opposite in effect.

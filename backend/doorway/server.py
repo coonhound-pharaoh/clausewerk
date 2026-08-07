@@ -74,7 +74,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import mimetypes
 import os
 import re
 import sys
@@ -128,6 +127,26 @@ MAX_QUERY_FIELDS = 20
 # unauthenticated worker consume a document-sized body before returning 404.
 DOCUMENT_ENDPOINTS = frozenset({"/paper/ingest", "/negotiations/redline"})
 
+# THE SET OF THINGS THE SCREENS ARE MADE OF — and, since 2026-08-07, the GATE
+# on what may be served rather than a lookup table consulted after the decision.
+#
+# WHY IT HAD TO BECOME A GATE. Static files are served BEFORE the session is
+# established, necessarily: the shell has to load before anybody can sign in. So
+# every file under the static root is readable by anyone who can open a socket.
+# The suffix was previously used only to choose a content type, with a guess and
+# then application/octet-stream behind it — so `_serve_static` handed out
+# whatever it found. Verified against a running server: a Python utility in the
+# fonts folder was served in full as text/x-python, with no session.
+#
+# Nothing in there is sensitive today. The point is that it is an ordinary
+# directory in the repository that people add files to, and the day a database
+# dump, a .env or a page of notes lands in it, that file is published and
+# nothing says so.
+#
+# `.woff2` IS IN THIS LIST FOR A REASON WORTH KEEPING. Eighteen font files were
+# being served through the guess path. Making the table a gate without adding
+# them would have refused every font and broken every screen — the one real risk
+# in the change, closed by naming the type rather than by leaving the gate open.
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".jsx": "text/babel; charset=utf-8",
@@ -135,6 +154,7 @@ MIME = {
     ".css": "text/css; charset=utf-8",
     ".json": "application/json",
     ".svg": "image/svg+xml",
+    ".woff2": "font/woff2",
 }
 
 
@@ -626,9 +646,23 @@ class Handler(BaseHTTPRequestHandler):
         if not target.is_file():
             return False
 
+        # THE GATE, and it is checked BEFORE the bytes are read. A file whose
+        # suffix the screens are not made of is not served at all — see MIME
+        # above for why this is a gate rather than a lookup.
+        #
+        # `return False` — not served — rather than a 403. What the caller then
+        # gets is whatever the ordinary routing gives that path: 401 for an
+        # anonymous caller, because the fall-through reaches the session gate,
+        # and 404 for a signed-in one. Both are better than a 403, which would
+        # confirm to somebody probing that a file EXISTS at that path — the
+        # precise fact this refusal exists to withhold. The anonymous 401 is the
+        # stronger of the two: it is the same answer every unknown path gives,
+        # so it distinguishes nothing at all.
+        kind = MIME.get(target.suffix)
+        if kind is None:
+            return False
+
         content = target.read_bytes()
-        kind = MIME.get(target.suffix) or (
-            mimetypes.guess_type(target.name)[0] or "application/octet-stream")
         self.send_response(200)
         self.send_header("content-type", kind)
         self.send_header("content-length", str(len(content)))
