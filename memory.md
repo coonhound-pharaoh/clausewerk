@@ -5322,3 +5322,47 @@ string is what stops the next person from deleting the guarantee.
 *Related: [[clausewerk-owner-decisions-settle-in-later-migrations]] is the
 mirror of this — a decision can move in a later migration, so neither the
 migration nor the decision list is authoritative alone.*
+
+## S246 — The suite leaked a database every time it was interrupted, and the cleanup was a comment — 2026-08-07
+
+`conftest.py` builds a database per run named `clausewerk_doorway_<pid>` and
+drops it at session teardown. **Teardown is exactly what does not run when a run
+is killed or the server dies under it.** Every interrupted run left a full copy
+of the schema behind.
+
+**The cleanup was documented as already happening.** Two places said so — the
+comment above `TEST_DATABASE` ("stale ones with nobody connected are cleaned up
+at the start of the next") and `TEST_DATABASE_PREFIX` itself ("Only ever used to
+clean up databases this file created"). The constant was **read by nothing**.
+The teardown's own note said "The next run clears it"; the next run has a
+different pid, names a different database, and never looks.
+
+**Found while chasing something else, which is how it should be read.** A full
+suite came back with 50 errors, then 366, in different files each time, all
+`server closed the connection unexpectedly` during migration. Not a code
+failure: PostgreSQL had terminated abnormally twice (05:40, 05:57), on a host
+disk at 97%. 22 abandoned databases, 587 MB. After the sweep: 3, 31 MB.
+
+**TWO SIGNALS, BOTH REQUIRED, and the reason is the per-pid naming itself.**
+Databases are named per-pid so suite runs can go in PARALLEL, so a sweep that
+took a live run's database would break it in a way that looks like a product
+failure. A database is dropped only when the pid in its name is not a live
+process AND nothing is connected to it. Pids get recycled, so a dead run's
+number may now belong to something else — that reads as alive and the database
+is kept. **Every uncertainty resolves towards keeping it**; being too eager is
+the costly direction.
+
+**`os.kill(pid, 0)` IS NOT THE LIVENESS CHECK, and this one bites.** On Windows
+`os.kill` with any signal other than CTRL_C_EVENT/CTRL_BREAK_EVENT calls
+TerminateProcess — the check would kill the process it was asking about, and on
+a pid collision that could be something of Mike's. `ctypes.OpenProcess` on
+Windows, `os.kill` only on POSIX. A test pins both answers.
+
+**Proved in both directions outside pytest**, because the interesting case
+cannot be staged from inside a run: a database named for an impossible pid is
+dropped, and one named for the running process is left alone.
+
+**How to apply:** a comment describing cleanup is not cleanup. When a constant
+exists only to be used by a rule, grep for its uses before believing the rule
+runs — this is [[S241]]'s lesson again, one layer down: the thing that was
+supposed to be watching had never been wired up at all.
