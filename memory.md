@@ -5193,3 +5193,46 @@ catch something.
 you changed. Two separate defects this week ([[S241]] and this one) were guards
 left pointing at code that had moved — CLAUDE.md's mutation-harness rule is the
 same lesson written down for migrations only.
+
+## S243 — A test that tampered with a snapshot the schema had since sealed — 2026-08-06
+
+`test_a_snapshot_that_does_not_rebuild_produces_no_document` proved the doorway
+refuses to build a document when a run's pinned library no longer rebuilds to
+the stored fingerprint. To reach that state it added a clause to the pinned
+library after the run existed, as the Legal admin. **Migration 0058 closed that
+door**, and the test had been red on main ever since — failing in its own setup,
+never reaching the endpoint it was about.
+
+**The schema is right and did not move.** 0058's opening lines name the defect it
+closed: the original append-only guards stopped edits and deletes but still let a
+working role ADD a member afterwards, "permanently changing the replay input of
+every run already pointing at the id."
+
+**The test moved into the shape the same file already used one test below it.**
+`test_a_stored_member_with_no_clause_row_...` had faced this exact situation and
+handled it honestly — record that the condition cannot be induced through the
+front door, say why that is the schema working, then prove the WIRING. Same
+treatment here: the rebuild is driven to return a different id, and every
+assertion that mattered survives, including the one the test existed for — the
+refusal names BOTH ids, because "it does not rebuild" with no numbers is a dead
+end for whoever reads it.
+
+**NOT re-induced as the owner, and the old test said why before I did:** "a
+fixture that reaches past the row rules to break something can break things the
+system would never allow." A defence proved against a state the product cannot
+be in proves nothing.
+
+**A SECOND TEST WAS ADDED, and it is the more important half.** With the first
+test no longer reaching through 0058's rule, nothing in that file would have
+noticed if the rule were removed. `test_a_referenced_snapshot_cannot_gain_a_
+member_at_all` now asserts it directly, as the most privileged role holding
+insert on `cw.snapshot_member`. **When a test stops exercising a guarantee as a
+side effect, the guarantee needs its own test — otherwise hardening silently
+deletes coverage.**
+
+**Checked by breaking it, not by going green.** The both-ids assertion was proved
+to bite by temporarily dropping the rebuilt id from documents.py's message.
+
+*Third guard-pointing-at-moved-code defect in two days ([[S241]], [[S242]], this).
+The pattern is always the same: a correct change lands, and the thing watching
+the old behaviour is left where it was.*

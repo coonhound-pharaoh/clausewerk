@@ -157,19 +157,74 @@ def test_document_produced_carries_the_digest_of_the_exact_bytes_returned(librar
 # ── No document from a run that does not prove itself ───────────────────────
 
 
-def test_a_snapshot_that_does_not_rebuild_produces_no_document(library, schema):
-    """A stored member added behind the run's back. The fingerprint moves, and
-    the refusal must name BOTH ids — 'it does not rebuild' with no numbers is
-    unactionable."""
+def test_a_snapshot_that_does_not_rebuild_produces_no_document(
+    library, schema, monkeypatch
+):
+    """A run whose pinned library no longer rebuilds to the id stored against
+    it. The refusal must name BOTH ids — 'it does not rebuild' with no numbers
+    is unactionable, and that is the whole point of this test.
+
+    NO LONGER INDUCIBLE THROUGH THE FRONT DOOR, AND THAT IS THE SCHEMA WORKING.
+    This test used to add a clause to the run's pinned library after the fact,
+    as the Legal admin — the tampering shape, where the stored fingerprint stops
+    describing what is stored under it. Migration 0058 closed that:
+
+        "The original append-only guards prevented edits and deletes while
+         still allowing a working role to add a new member afterwards,
+         permanently changing the replay input of every run already pointing
+         at the id."
+
+    `cw.freeze_referenced_pin_member` now refuses the insert for every role the
+    system grants, so the setup raises before the endpoint is ever reached. The
+    rule is right and stays; the test moves.
+
+    NOT RE-INDUCED AS THE OWNER, deliberately — this test's own earlier note
+    refused that and it was correct: a fixture that reaches past the row rules
+    to break something can break things the system would never allow, and a
+    defence proved against a state the product cannot be in proves nothing.
+
+    What is proved here is therefore the WIRING, in the same shape the test
+    below uses for its own uninducible case: when the rebuild does come back
+    with a different id, the doorway refuses with 409, names both ids, and
+    produces no bytes."""
+    from doorway import documents as documents_module
+
     client, run = record_a_run(library)
 
-    # As the Legal admin, who holds insert on cw.snapshot_member. Not as the
-    # owner: a fixture that reaches past the row rules to break something can
-    # break things the system would never allow.
-    #
-    # A clause that did not exist when the run was taken, then written into the
-    # run's pinned library after the fact. That is the tampering shape: the
-    # stored fingerprint no longer describes what is stored under it.
+    REBUILT_AS = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+    class Rebuilt:
+        snapshot_id = REBUILT_AS
+
+    monkeypatch.setattr(documents_module.engine_run, "snapshot_from_rows",
+                        lambda *_args, **_kwargs: Rebuilt())
+
+    status, headers, data = download(library, client.token, run["run_id"])
+    assert status == 409, (status, data[:200])
+    body = refusal(data)
+    assert body["kind"] == "refused_on_merits"
+    assert run["snapshot_id"] in body["reason"], "the refusal does not name the stored id"
+    # BOTH ids, not one. A refusal naming only what it expected leaves nobody
+    # able to say what it actually got, which is the difference between a report
+    # somebody can act on and a dead end.
+    assert REBUILT_AS in body["reason"], "the refusal does not name the rebuilt id"
+    assert "rebuilt" in body["reason"]
+    assert not data.startswith(b"PK"), "bytes were produced anyway"
+
+
+def test_a_referenced_snapshot_cannot_gain_a_member_at_all(library, schema):
+    """The guarantee the test above used to reach through, asserted directly.
+
+    0058's rule is the thing actually protecting a run's replay input, and with
+    the test above no longer exercising it, nothing in this file would notice if
+    it were removed. Asserted as the Legal admin — the most privileged role that
+    holds insert on cw.snapshot_member — because the question is whether any act
+    the system permits can move a run's pinned library after the fact."""
+    import psycopg
+    import pytest as _pytest
+
+    _client, run = record_a_run(library)
+
     with as_person(schema, LEGAL_ADMIN, "legal_admin") as request:
         request.write(
             "insert into cw.clause (clause_id, category_key, severity) "
@@ -177,17 +232,13 @@ def test_a_snapshot_that_does_not_rebuild_produces_no_document(library, schema):
         request.write(
             "insert into cw.clause_version (clause_id, version, title, body) "
             "values ('DP-A-002', 1, 'added later', 'body added after the run')")
-        request.write(
-            "insert into cw.snapshot_member (snapshot_id, clause_id, version, selectable) "
-            "values (%s, 'DP-A-002', 1, true)", (run["snapshot_id"],))
+        with _pytest.raises(psycopg.errors.RaiseException) as refused:
+            request.write(
+                "insert into cw.snapshot_member "
+                "(snapshot_id, clause_id, version, selectable) "
+                "values (%s, 'DP-A-002', 1, true)", (run["snapshot_id"],))
 
-    status, headers, data = download(library, client.token, run["run_id"])
-    assert status == 409, (status, data[:200])
-    body = refusal(data)
-    assert body["kind"] == "refused_on_merits"
-    assert run["snapshot_id"] in body["reason"], "the refusal does not name the stored id"
-    assert "rebuilt" in body["reason"]
-    assert not data.startswith(b"PK"), "bytes were produced anyway"
+    assert "cannot gain or change members" in str(refused.value)
 
 
 def test_a_stored_member_with_no_clause_row_refuses_with_the_engine_s_sentence(
