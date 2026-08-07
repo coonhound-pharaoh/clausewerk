@@ -1269,3 +1269,59 @@ def test_the_two_routes_above_the_session_gate_behave_as_exemptions(schema):
                           query={}).status != 401
     finally:
         db.close()
+
+
+# ── The web root is not a file share ────────────────────────────────────────
+
+
+def test_the_static_root_serves_only_what_the_screens_are_made_of(running):
+    """Static files are served BEFORE any session exists — necessarily, since
+    the shell has to load before anybody can sign in. So every file under the
+    static root is readable by anyone who can open a socket.
+
+    IT USED TO SERVE WHATEVER IT FOUND. The suffix chose a content type, with
+    mimetypes.guess_type and then application/octet-stream behind it, so a
+    Python utility in the fonts folder came back in full as text/x-python with
+    no session. Nothing in there is sensitive today; the point is that it is an
+    ordinary repository directory that people add files to, and the day a
+    database dump, a .env or a page of notes lands in it, that file is published
+    and nothing says so.
+
+    NOT SERVED, rather than 403, and what the caller actually gets is whatever
+    the ordinary routing gives that path: 401 here, because an anonymous
+    fall-through reaches the session gate. That is the strongest of the
+    available answers — it is the same answer every unknown path gives an
+    anonymous caller, so it distinguishes nothing. A 403 would have confirmed
+    the file exists, which is the fact being withheld.
+    """
+    for path in ("/app/fonts/fetch-fonts.py", "/app/fonts/OFL.txt",
+                 "/app/fonts/README.md"):
+        try:
+            with urllib.request.urlopen(running + path) as response:
+                body = response.read()
+            raise AssertionError(
+                f"{path} was served to a caller with no session "
+                f"({response.status}, {len(body)} bytes); the static root is "
+                "handing out files the screens are not made of")
+        except urllib.error.HTTPError as refused:
+            assert refused.code in (401, 404), (
+                f"{path} answered {refused.code}; the file must not be served, "
+                "and the refusal must not distinguish it from any other path")
+
+
+def test_the_screens_and_their_fonts_are_still_served(running):
+    """The other half, and the one that would break everything if the gate were
+    wrong. Eighteen font files were served through the old guess path, so gating
+    without naming .woff2 would refuse every font and break every screen — a
+    failure no other test in this file would catch."""
+    for path, expected in (
+        ("/index.html", "text/html"),
+        ("/app/v6.css", "text/css"),
+        ("/app/api.jsx", "text/babel"),
+        ("/app/fonts/inter-latin-normal-var.woff2", "font/woff2"),
+    ):
+        with urllib.request.urlopen(running + path) as response:
+            assert response.status == 200, f"{path} is no longer served"
+            assert expected in response.headers["content-type"], (
+                f"{path} came back as {response.headers['content-type']}, "
+                f"not {expected}")
