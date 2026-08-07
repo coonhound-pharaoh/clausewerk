@@ -2800,14 +2800,27 @@ grant usage, select on sequence cw.notification_outbox_outbox_id_seq to cw_legal
     repl: `select 1;`,
     expect: 'the model-call ledger is append-only' },
 
+  // REPOINTED AT 0068. These two watch cw.model_calls_today(), and 0068
+  // replaces the whole function, so a mutation applied to 0066's copy is
+  // overwritten before any test sees it — the silent-green failure S110 and
+  // B10 both were. The text below is 0068's.
   { suite: 'model-intake.test.mjs',
     name: 'the daily count is scoped to the caller and undercounts',
-    find: `    (select count(*) from cw.model_call
-      where called_at >= date_trunc('day', now())),`,
-    repl: `    (select count(*) from cw.model_call
-      where called_at >= date_trunc('day', now())
+    find: `      where called_at >= date_trunc('day', now())
+        -- A call the doorway declined to make cost nothing and must not be
+        -- billed. Remove this line and a keyless deployment spends a budget it
+        -- never had. A mutation row watches it.
+        and outcome <> 'not_asked'),`,
+    repl: `      where called_at >= date_trunc('day', now())
+        and outcome <> 'not_asked'
         and actor = cw.app_actor()),`,
     expect: "the budget counts every call, not only the caller's own" },
+
+  { suite: 'model-intake.test.mjs',
+    name: 'a call the doorway never made is billed anyway',
+    find: `        and outcome <> 'not_asked'),`,
+    repl: `        ),`,
+    expect: 'a call the doorway declined to make is recorded but not billed' },
 
   { suite: 'model-intake.test.mjs',
     name: "a requester reads everybody's model calls",

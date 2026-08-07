@@ -1,4 +1,4 @@
-// The model intake's budget and ledger do what 0066 promises (AI-3).
+// The model intake's budget and ledger do what 0066 and 0068 promise (AI-3).
 //
 // WHAT IS ACTUALLY BEING GUARDED HERE, because none of it is about the model
 // being any good — that is not a property of this schema and not testable from
@@ -16,6 +16,13 @@
 //      may know the budget is spent without being shown whose work spent it.
 //   4. THE LEDGER IS APPEND-ONLY, like every other record of something that
 //      happened.
+//   5. A CALL NOBODY MADE IS NOT BILLED (0068). The doorway declines to ask a
+//      model in five situations before dispatching anything — no key installed
+//      above all, which is every development machine. Those rows are kept,
+//      because a deployment that silently never asks is something an
+//      administrator must see, and they are excluded from the daily count,
+//      because they cost nothing. Points 2 and 5 are the same principle read
+//      twice: the cap measures spend, and only spend.
 //
 //   node db/test/model-intake.test.mjs
 
@@ -178,6 +185,48 @@ await test('a purpose outside the named three is refused', async () => {
     values ('x', 'writing_the_contract', 'm', 'answered')`, [], DANA),
     'model_call_purpose_check',
     'a call was recorded for a purpose nobody added deliberately');
+});
+
+console.log('\na model that was never asked is not a call (0068)');
+
+await test('a call the doorway declined to make is recorded but not billed', async () => {
+  // THE DEFECT THIS CLOSES, 2026-08-06. 0066 counted every row, and the
+  // doorway writes a row even where it declined to dispatch anything — no key
+  // installed above all, which is every development machine. So a system that
+  // had never spoken to a provider still ran its allowance to zero, and past
+  // that point told requesters "today's budget is spent", which was false.
+  const before = Number((await one(
+    `select calls_today from cw.model_calls_today()`)).calls_today);
+
+  await record('requester', DANA, 'not_asked', 'no model key is configured');
+
+  const after = Number((await one(
+    `select calls_today from cw.model_calls_today()`)).calls_today);
+  eq(after, before,
+     'a call that reached no provider was charged against the day\'s budget');
+
+  // The other half, and it is not optional: the row still exists. How often
+  // the system falls back, and why, is what the cost reporting reads and what
+  // tells an administrator their deployment is not configured at all.
+  const [kept] = await rows(
+    `select outcome, absent_reason from cw.model_call
+      where outcome = 'not_asked'`);
+  assert(kept, 'the fallback stopped being recorded at all');
+  assert(kept.absent_reason, 'a not-asked row with no reason is a silence');
+});
+
+await test('a not-asked row must still carry its reason', async () => {
+  // The same rule as an absence, and for the same reason: "the model was not
+  // asked" with nothing beside it is the silent degradation ADR-0005 forbids.
+  await throws(() => record('requester', DANA, 'not_asked'),
+    'an_absence_carries_its_reason',
+    'the doorway could record declining to ask without saying why');
+});
+
+await test('an outcome outside the named three is refused', async () => {
+  await throws(() => record('requester', DANA, 'gave_up', 'x'),
+    'model_call_outcome_check',
+    'the outcome vocabulary is open, so a fourth meaning can arrive unnoticed');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

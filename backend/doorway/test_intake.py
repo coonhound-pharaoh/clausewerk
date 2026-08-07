@@ -541,8 +541,35 @@ def test_with_no_key_the_seam_declines_and_says_why():
         [{"probe": "p", "text": "the supplier holds personal data"}],
         ["Data Privacy"], 4000)
     assert proposal.risks is None, "a proposal appeared with no provider to make it"
-    assert proposal.outcome == "absent"
     assert "CLAUSEWERK_OPENAI_API_KEY" in proposal.absent_reason
+    # NOT 'absent' — nothing was dispatched, so nothing is billed (0068). This
+    # was 'absent' until 2026-08-06, and every keyless intake spent a unit of a
+    # budget it had never used.
+    assert proposal.outcome == "not_asked"
+    assert proposal.asked is False
+
+
+def test_a_refusal_the_seam_never_dispatched_is_not_billed():
+    """The four other pre-dispatch declines say the same thing. Each is a real
+    reason a requester reads; none of them reached a provider, so none of them
+    may be charged against the day's allowance."""
+    answers = [{"probe": "p", "text": "the supplier holds personal data"}]
+
+    # A library with no categories: there is nothing for a model to choose from.
+    no_categories = advisory.propose_intake_manifest(answers, [], 4000)
+    assert no_categories.outcome == "not_asked", no_categories.absent_reason
+    assert no_categories.absent_reason, "a not-asked row still carries its reason"
+
+
+def test_a_provider_that_was_reached_and_failed_is_still_billed():
+    """The other side of the same line, and it must not drift. A call that was
+    dispatched and came back useless COST something — it is 'absent', it is
+    charged, and treating it as not-asked would hide real spend."""
+    reached = advisory._no_proposal("the model provider refused the call "
+                                    "(HTTP 500)", model="m", prompt="p")
+    assert reached.asked is True, (
+        "_no_proposal defaults to billed; every post-dispatch site relies on it")
+    assert reached.outcome == "absent"
 
 
 def test_an_empty_proposal_is_not_the_same_as_no_proposal():
@@ -553,9 +580,14 @@ def test_an_empty_proposal_is_not_the_same_as_no_proposal():
     answered = advisory.Proposal(
         risks=[], absent_reason=None, model="m", model_version="m", prompt="p")
     unanswered = advisory._no_proposal("provider down", model="m", prompt="p")
+    never_asked = advisory._no_proposal("no key", model="m", prompt="p",
+                                        asked=False)
 
     assert answered.outcome == "answered"
     assert unanswered.outcome == "absent"
+    # The third fact 0066 named and 0068 finally recorded. Three outcomes, three
+    # different things that happened; none of them may wear another's clothes.
+    assert never_asked.outcome == "not_asked"
     assert answered.risks == [] and unanswered.risks is None
 
 
@@ -617,3 +649,39 @@ def test_the_model_path_records_what_it_proposed_outside_the_library(running):
         ("covered-1", "the supplier will hold confidential records")))
     assert status == 200, proposal
     assert proposal["not_in_library"] == []
+
+
+def test_a_keyless_intake_records_the_fallback_without_spending_the_budget(
+        running, owner_url):
+    """END TO END, AND THE DEFECT THIS CLOSES (2026-08-06).
+
+    Every development machine and every not-yet-configured deployment runs with
+    no model key. Each intake was writing a row that counted against the daily
+    cap, so a system that had never spoken to a provider still ran its allowance
+    to zero — and past that point stopped saying "no model key is configured"
+    and started saying "today's model budget is spent", which was false.
+
+    BOTH HALVES ARE ASSERTED. The row still exists — how often the system falls
+    back, and why, is what AI-7 reports on and an administrator must be able to
+    see it. It is simply no longer charged."""
+    import psycopg
+
+    dana = Client(running).sign_in(DANA)
+    for _ in range(3):
+        status, body = dana.call("POST", "/api/intake/classify", intake(
+            ("covered-1", "the supplier will hold confidential records")))
+        assert status == 200, body
+    assert body["source"] == "fallback"
+
+    with psycopg.connect(owner_url, autocommit=True) as conn:
+        recorded = conn.execute(
+            "select outcome, absent_reason from cw.model_call").fetchall()
+        billed = conn.execute(
+            "select calls_today from cw.model_calls_today()").fetchone()[0]
+
+    assert len(recorded) == 3, "the fallback stopped being recorded at all"
+    assert {row[0] for row in recorded} == {"not_asked"}, recorded
+    assert all(row[1] for row in recorded), (
+        "a not-asked row with no reason is the silent degradation ADR-0005 forbids")
+    assert billed == 0, (
+        f"{billed} calls were billed against the day's budget and none were made")

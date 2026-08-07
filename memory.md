@@ -5111,3 +5111,50 @@ blind to each other; the second was renumbered on integration. Worth knowing
 the next time work is split this way — a sequential id is a shared resource,
 and nothing stopped them both taking it.*
 
+
+## S241 — A model that was never asked is not a call: the budget was billing decisions — 2026-08-06
+
+`cw.model_calls_today()` (0066) counted every row in the model-call ledger. The
+doorway writes a row even where it **declined to dispatch anything** — no key
+installed, an unusable model name, a library with no categories, answers too
+large to send, every provider slot taken. The keyless case is not exotic: it is
+every development machine and every deployment not yet configured.
+
+**So a system that had never spoken to a provider in its life still ran its 200
+a day to zero**, and past that point stopped telling requesters "no model key is
+configured" and started telling them "today's model budget is spent (200 of
+200 calls)" — which was false. The administrator's cost figures carried the
+same inflation, in the one number somebody budgets from.
+
+**0066 had already written down the rule it then broke.** Above the table:
+"the whole point is that 'the model was not asked' and 'the model was asked and
+could not answer' are different facts, and neither may hide." The table it
+created has one `outcome` column with two values, and `absent` collapsed exactly
+those two facts. The sentence was right; the schema underneath it was not.
+
+**Verified before anything was written.** Three intakes on a keyless deployment
+→ three ledger rows, `calls_today` = 3, no provider contacted.
+
+**The fix says the third fact out loud** (0068): `outcome` takes a third value
+`not_asked`, still obliged to carry its reason, and the daily count skips it.
+`advisory.Proposal` gained `asked`, false at the five sites that return before
+dispatch and true from the dispatch onward — so a provider that WAS reached and
+failed is still `absent` and still billed. That line matters in both directions:
+under-billing a real failed call would hide real spend.
+
+**The row is kept, not removed, and that was the harder half of the decision.**
+How often the system falls back and why is what AI-7 reports on, and a
+deployment silently never asking is precisely what an administrator must be able
+to see. Recorded is not the same as billed.
+
+**A mutation row had to be REPOINTED, not just added.** The existing row
+watching `model_calls_today()` named 0066's text, and 0068 replaces the whole
+function with `create or replace` — so the mutation would have been overwritten
+before any test saw it, and the guard would have gone silently green. That is
+S110 and B10 for the third time; the harness's own "imprecise" report caught the
+new row's `expect` naming a sentence instead of a test name, which is worth
+knowing: `expect` is the TEST NAME, exactly.
+
+**How to apply:** when a counter exists to bound a cost, check what it counts
+against what actually costs. A cap charged for decisions rather than for spend
+is a cap that lies in the direction of doing less work than the owner paid for.
