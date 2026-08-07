@@ -349,11 +349,13 @@ def test_the_service_reads_exactly_one_header(running):
 
     assert "authorization" in read, "the bearer token is not being read at all"
     assert read == {"authorization", "content-length", "content-type",
-                    "content-disposition", "transfer-encoding"}, (
-        f"server.py reads {sorted(read)}. Only these five headers may be read: "
-        "the one naming the SESSION, and four describing the BODY — its "
-        "length, its kind, its transfer encoding, and, for a document, the name the caller gave it. "
-        "Anything else is a new way for a caller to influence a request."
+                    "content-disposition", "transfer-encoding", "host"}, (
+        f"server.py reads {sorted(read)}. Only these six headers may be read: "
+        "the one naming the SESSION, four describing the BODY — its length, "
+        "its kind, its transfer encoding, and, for a document, the name the "
+        "caller gave it — and HOST, which can only ever refuse a request and "
+        "never widen one. Anything else is a new way for a caller to influence "
+        "a request."
     )
     # WIDENED FROM TWO TO FOUR when the system learned to RECEIVE a document
     # (2026-07-27), and the distinction the rule actually protects is unchanged:
@@ -365,6 +367,24 @@ def test_the_service_reads_exactly_one_header(running):
     # session, the role still comes from the database, and the rows still come
     # from a policy. A header that influenced any of those three would be the
     # thing this test exists to stop, and none of these does.
+    #
+    # WIDENED TO SIX FOR HOST (2026-08-06), AND THE DELAY IS THE LESSON. The
+    # Host check landed in fb44d17 to close DNS rebinding — once an
+    # attacker-controlled name resolves to loopback, their page and this service
+    # look same-origin to the browser and CORS cannot help — and this guard was
+    # not updated with it. So it sat RED, and a guard that fails identically
+    # whether the rule holds or is genuinely broken is not a guard: it is noise
+    # the next person learns to scroll past. That is the real defect here, not
+    # the missing name.
+    #
+    # HOST PASSES THE RULE, and the rule is not "read few headers": it is that
+    # no header may say anything about who is calling or what they may do.
+    # `_host_is_ambiguous` runs first in do_GET, do_POST and do_OPTIONS and its
+    # only outcome is a 400; the names it accepts are fixed in serve() rather
+    # than taken from the request; nothing downstream reads the value. It can
+    # refuse a request and it can do nothing else. A seventh name arriving here
+    # deserves exactly this paragraph again — if one cannot be written for it,
+    # it does not belong.
 
 
 # ── Concurrency, which is new ───────────────────────────────────────────────
