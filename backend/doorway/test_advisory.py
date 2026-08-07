@@ -29,7 +29,6 @@ from __future__ import annotations
 import http.client
 import json
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 
@@ -197,45 +196,107 @@ def test_the_adapter_never_raises_at_its_caller(monkeypatch):
 
 
 def test_risk_judgments_share_the_provider_concurrency_ceiling(monkeypatch):
+    """Twelve callers, four slots: exactly four get through and eight are told
+    the provider is busy.
+
+    ORDERED BY A BARRIER, NOT BY A CLOCK, AND THAT IS THE POINT OF THIS SHAPE.
+    This test used to hold each slot for `time.sleep(0.05)`, which made the
+    assertion below true only if all twelve threads reached the semaphore within
+    50ms of each other. Thread start-up is not bounded by anything of the sort,
+    so under full-suite load the early callers released their slots before the
+    late ones arrived, more than four got through, and the test failed while the
+    product was working perfectly. It passed on its own and failed in the suite —
+    the worst way for a guard to behave, because it teaches the next person that
+    a red result here means nothing, and the first genuinely broken ceiling gets
+    the same shrug.
+
+    Nothing here needs elapsed time. It needs ORDERING: no slot may be released
+    until every caller has tried for one. So the attempts are counted where they
+    actually happen — at the semaphore — and the twelfth attempt opens the gate
+    that the in-flight calls are waiting on. That is true on any machine at any
+    load, which is why `peak` can now be asserted as EQUAL to the ceiling rather
+    than merely greater than one.
+    """
     class Reply(BytesIO):
         def close(self):
             pass
 
+    CALLERS = 12
     active = 0
     peak = 0
+    attempted = 0
     lock = threading.Lock()
+    everybody_tried = threading.Event()
     response = json.dumps({
         "model": "test-model",
         "choices": [{"message": {"content": json.dumps(
             {"score": 0.25, "basis": "test"})}}],
     }).encode()
 
-    def slow_open(_request, timeout):
+    class CountingSlots:
+        """The real semaphore, plus a count of who asked.
+
+        Counts on acquire whether or not a slot is granted: a caller turned away
+        has still arrived, and it is arrival — not success — that the barrier
+        waits for."""
+
+        def __init__(self, inner):
+            self._inner = inner
+
+        def acquire(self, blocking=True, timeout=None):
+            nonlocal attempted
+            got = self._inner.acquire(blocking=blocking, timeout=timeout)
+            with lock:
+                attempted += 1
+                if attempted >= CALLERS:
+                    everybody_tried.set()
+            return got
+
+        def release(self):
+            self._inner.release()
+
+    def held_open(_request, timeout):
         nonlocal active, peak
         assert timeout == advisory.TIMEOUT_SECONDS
         with lock:
             active += 1
             peak = max(peak, active)
-        time.sleep(0.05)
+        # Bounded, and the bound is asserted below rather than trusted. If the
+        # code under test ever stops consulting the semaphore, fewer than
+        # CALLERS attempts arrive and this gate never opens — waiting forever
+        # would turn a real regression into a hung suite, and a timeout must
+        # read as a failure, never as a pass.
+        everybody_tried.wait(timeout=30)
         with lock:
             active -= 1
         return Reply(response)
 
     monkeypatch.setenv(advisory.KEY_VARIABLE, "test-key")
-    monkeypatch.setattr(advisory.urllib.request, "urlopen", slow_open)
+    monkeypatch.setattr(advisory.urllib.request, "urlopen", held_open)
+    monkeypatch.setattr(advisory, "_JUDGMENT_SLOTS",
+                        CountingSlots(advisory._JUDGMENT_SLOTS))
 
-    with ThreadPoolExecutor(max_workers=12) as pool:
+    with ThreadPoolExecutor(max_workers=CALLERS) as pool:
         judgments = list(pool.map(
             lambda _n: advisory.judge_risk_exposure(AI_TEXT, APPROVED),
-            range(12)))
+            range(CALLERS)))
+
+    assert everybody_tried.is_set(), (
+        f"only {attempted} of {CALLERS} callers reached the semaphore; the "
+        "concurrency ceiling is no longer being consulted on this path")
 
     recorded = [j for j in judgments if j.outcome == "recorded"]
     busy = [j for j in judgments if j.outcome == "absent"
             and "concurrency limit" in j.absent_reason]
     assert len(recorded) == advisory.MAX_CONCURRENT_JUDGMENTS
     assert len(busy) == len(judgments) - advisory.MAX_CONCURRENT_JUDGMENTS
-    assert peak <= advisory.MAX_CONCURRENT_JUDGMENTS
-    assert peak > 1, "the test never exercised overlapping provider calls"
+    # EQUAL, not "at most" and not "more than one". With the barrier holding
+    # every slot open until the last caller has tried, the ceiling is reached
+    # exactly — so a ceiling that quietly stopped being enforced shows up here
+    # as a number, not as an intermittent failure somebody re-runs.
+    assert peak == advisory.MAX_CONCURRENT_JUDGMENTS, (
+        f"{peak} calls were in flight at once against a ceiling of "
+        f"{advisory.MAX_CONCURRENT_JUDGMENTS}")
 
 
 # ── 2. The pipeline, end to end, with no model in the world ─────────────────

@@ -5236,3 +5236,47 @@ to bite by temporarily dropping the rebuilt id from documents.py's message.
 *Third guard-pointing-at-moved-code defect in two days ([[S241]], [[S242]], this).
 The pattern is always the same: a correct change lands, and the thing watching
 the old behaviour is left where it was.*
+
+## S244 — A concurrency test that raced the machine it ran on — 2026-08-07
+
+`test_risk_judgments_share_the_provider_concurrency_ceiling` starts twelve
+callers against four provider slots and asserts exactly four get through. It held
+each slot with `time.sleep(0.05)`, so the assertion was only true if all twelve
+threads reached the semaphore within 50ms of each other. Thread start-up is not
+bounded by anything of the sort: **under full-suite load the early callers
+released before the late ones arrived, more than four got through, and the test
+failed while the product was working perfectly.** It passed run alone.
+
+**That is the worst way for a guard to behave** — worse than always-red, because
+the failure looks like a real one and re-running makes it disappear. The next
+person learns that a red result here means nothing, and the first genuinely
+unenforced ceiling gets the same shrug. Same disease as [[S242]], different
+symptom.
+
+**Nothing in it needed elapsed time; it needed ORDERING.** No slot may be
+released until every caller has tried for one. The attempts are now counted where
+they actually happen — a proxy around `_JUDGMENT_SLOTS` counting `acquire`
+whether or not a slot is granted, because **a caller turned away has still
+arrived**, and it is arrival, not success, the barrier waits for. The twelfth
+attempt opens the gate the in-flight calls wait on.
+
+**`peak` became an equality.** It was `<= ceiling` and `> 1`; with the barrier it
+is exactly the ceiling on any machine at any load. A weaker assertion was being
+paid for entirely by the flakiness.
+
+**The gate wait is bounded AND the bound is asserted.** If the code stops
+consulting the semaphore, fewer than twelve attempts arrive and the gate never
+opens — waiting forever would turn a real regression into a hung suite. The wait
+carries 30s and the test then asserts the gate opened, so a timeout reads as a
+failure, never as a pass. Verified: neutering the acquire on the risk path fails
+in 30s via that assertion rather than hanging.
+
+**The first probe was a bad probe, and it is worth recording why.** Raising
+`MAX_CONCURRENT_JUDGMENTS` from 4 to 7 left the test green — correctly, because
+it asserts the ceiling is ENFORCED, not that it is 4. A test that pinned the
+number would go red on a legitimate config change. The real probe is removing the
+enforcement.
+
+**Determinism proved by repetition, not by one green run** — 15 consecutive runs
+while the full doorway suite ran concurrently, all passing. "Passes once" is
+exactly what the old version also did.
