@@ -5280,3 +5280,45 @@ enforcement.
 **Determinism proved by repetition, not by one green run** — 15 consecutive runs
 while the full doorway suite ran concurrently, all passing. "Passes once" is
 exactly what the old version also did.
+
+## S245 — A "security finding" that was an owner decision, caught one step before the migration — 2026-08-07
+
+A scan of `cw.received_document` found `read_all ... using (cw.app_role() is not
+null)` and proved by probe that **the administrator reads the raw bytes of a
+counterparty document on a deal owned by somebody else.** A plan and migration
+0069 were written to narrow the policy and revoke the grant.
+
+**Both were deleted unmade. It is decision U5, working exactly as the owner
+settled it** (2026-07-26): the Administrator is *"Steward, with sight"* —
+content-visible and content-powerless. `docs/open-questions.md:61` states the
+accepted cost in the very words the probe reproduced: "the person who
+administers accounts can read every deal, manifest, negotiation position **and
+supplier redline** in the system", contained by the role being able to change
+none of it. The owner also said in terms **never to describe the role as
+content-blind**, which is precisely what the migration would have made it.
+
+**How the wrong conclusion got so far.** It was built entirely from migration
+prose, and the prose was genuinely suggestive: 0055 had closed the same
+asymmetry on the INSERT side, and 0065 withdrew the administrator's read of the
+whole negotiation family with the line "a door onto a record they cannot reach
+would be dead machinery". Three migrations pointing one way is a persuasive
+story. **0065 was not narrowing U5** — those tables' policies never admitted the
+administrator at all, so the grant was dead, and 0065 removed a dead grant rather
+than adding a policy, saying explicitly that widening a role's read is an owner
+decision. Different fact, same shape.
+
+**What actually stopped it: the existing test.** `received-documents.test.mjs`
+carries `test('the administrator reads (U5) — ...')`. The decision was cited in
+the test name. Had the test only asserted a count with no "(U5)", the migration
+would have gone in and taken a green suite with it, because the test would have
+been "fixed" alongside.
+
+**How to apply:** before narrowing any role's access, grep the role and the
+table against `docs/open-questions.md` and the U-decisions in `memory.md` —
+migration prose describes what the schema does, never what the owner chose. And
+when a test encodes a decision, **name the decision in the test name**; that
+string is what stops the next person from deleting the guarantee.
+
+*Related: [[clausewerk-owner-decisions-settle-in-later-migrations]] is the
+mirror of this — a decision can move in a later migration, so neither the
+migration nor the decision list is authoritative alone.*
