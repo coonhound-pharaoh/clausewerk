@@ -5536,3 +5536,43 @@ session.
 **How to apply:** when a fix spans the schema and the code, the guard has to span
 both. Ask which half a mutation would have to break to make the wrong thing
 happen quietly, and guard that one first.
+
+## S251 — 21 append-only tables could still be emptied in one statement — 2026-08-07
+
+TRUNCATE fires no row triggers and applies no ON DELETE rules: it empties a
+table in one statement leaving no per-row trace. 0001 named this exact failure
+and put it better than a restatement would — *"a schema that raises loudly on
+`delete from cw.clause_version` and empties the same table without complaint on
+`truncate cw.clause_version` does not have an immutability guarantee; it has an
+immutability habit."* It also made `cw.no_truncate()` shared so "a table added
+later inherits the story by NAMING it".
+
+**Forty-three tables named it. Twenty-one never did** — among them `role_grant`
+(who holds which role), `model_call` (the spend ledger) and the whole override
+apparatus (every authorised departure from a legal objection, and who it was
+socialised to). 0070 closed it.
+
+**Not a live hole, and it is not claimed as one.** No application role holds
+TRUNCATE; it is owner-only. This is defence against operator and
+maintenance-script error — exactly what it already was on the other 43.
+
+**THE SWEEP I SET OUT TO BUILD WAS NOT SHIPPED, AND THAT IS THE PART WORTH
+READING.** Deriving "which tables are append-only" needs telling an
+unconditional guard from a conditional binding trigger. Three heuristics were
+tried — any update/delete trigger, any trigger function containing a raise, a
+raise with no `if` in the body — giving 66, 66 and 57. The third then returned
+**different answers from byte-identical SQL in two files, in the same process**,
+and that was never explained. So it was abandoned in favour of a named list of
+the 64 guarded tables.
+
+**A guard nobody can explain is worse than no guard: it reports calm for reasons
+no one understands.** The named list is a smaller guarantee, honestly stated in
+the file — it catches a guard REMOVED, not a new append-only table shipped
+without one — with a count check to notice the list drifting. Both halves proved
+to bite by removing `role_grant`'s trigger.
+
+**The unexplained discrepancy is written into the test file rather than dropped**,
+so whoever picks this up starts where I stopped instead of re-deriving it.
+
+**Checked:** 39/39 schema suites, 286/286 mutations caught by their named test
+(up from 285 — the new row lands), 1695 Python tests passed.
