@@ -5366,3 +5366,40 @@ dropped, and one named for the running process is left alone.
 exists only to be used by a rule, grep for its uses before believing the rule
 runs — this is [[S241]]'s lesson again, one layer down: the thing that was
 supposed to be watching had never been wired up at all.
+
+## S247 — A scan pass that found nothing, written down so it is not repeated — 2026-08-07
+
+Recorded because an unrecorded negative gets re-run. Swept this pass, no defect
+found:
+
+**`manifests.py` (the trust boundary), `runs.py` (record/store), `executions.py`
+(the three gates), `redlines.py`, `analysis.py`, `notifications.py`.** All
+heavily guarded. Two claims were checked rather than taken on trust:
+
+  · `notifications._digest` says it cannot leak contract content "by
+    construction". True — the query hands it `kind, subject_ref, due_on, since`
+    and nothing else, so clause text, negotiation positions and document bytes
+    are never in scope to leak.
+  · `executions.execute` takes `agreement_id` and `run_id` through `.strip()`.
+    A non-string would crash into a 500, but `TEXT_FIELDS` rejects it at the
+    boundary first. Checked because the same shape WAS the B1 defect one layer
+    down.
+
+**A declared-but-never-used sweep across `doorway/` and `engine/`** — the shape
+that produced [[S246]] — found three constants only: `docx.NS`,
+`model.ORIGINS`, `model.SUPERSEDED`. All three are vocabulary mirroring database
+enums, held as documentation of the enum rather than enforcing anything. **Not
+written up as defects**: nothing claims they are enforced, which is the
+difference between these and S246, where two comments promised a cleanup that
+did not exist.
+
+**The guard-of-guards is real, and worth knowing about.** `mutation-check.mjs`
+already enforces that every rule's `find` text still appears in some source file
+and exits non-zero when one goes stale (its own note: "Absent means stale"). So
+the repointing failure S110/B10/S241 all shared is caught mechanically now — the
+same run also caught this session's new row naming a sentence instead of a test
+name. What it cannot catch is a rule that was never written, which is the gap
+S246 sat in.
+
+**How to apply:** record the negative. Half of this pass was re-treading files an
+earlier pass had already cleared, because nothing said so.
