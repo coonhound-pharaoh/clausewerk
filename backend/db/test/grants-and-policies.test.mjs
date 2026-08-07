@@ -188,6 +188,70 @@ await test('the two historical instances stay fixed', async () => {
     + 'this exact bug has already shipped once');
 });
 
+// ── A privileged function must be told where to look (2026-08-07) ──────────
+//
+// THE SHAPE THIS CATCHES. A SECURITY DEFINER function runs with the rights of
+// whoever owns it, not whoever called it. If its search_path is not pinned, the
+// caller's own path decides which objects the names inside it resolve to — so an
+// ordinary role creates a table or a function of their own with a matching name
+// in a schema they can write to, calls the privileged function, and their object
+// runs with the owner's rights. It is the standard escalation against this kind
+// of function, and it is a one-word omission in a migration.
+//
+// WHY A SWEEP AND NOT A LIST. bug_report.md recorded on 2026-07-28 that "every
+// one of the 26 privileged database functions is hardened against the classic
+// escalation trick". True when written, checked once, by a person, at 32
+// migrations. There are now 69 migrations and 38 such functions installed (47
+// definitions in the sources, several of them create-or-replace of the same
+// function) — the count grew by twelve with nothing carrying the check forward.
+// Two of them are covered by
+// mutation rows on cw.audit_chain and cw.audit_verify, and those strip the
+// definer-ness and the path TOGETHER, so neither isolates the pinning.
+//
+// READ FROM THE CATALOG, NOT THE MIGRATION TEXT, and that is load-bearing: a
+// later `create or replace` can drop a `set search_path` the original definition
+// had, and a scan of the source files would still find the old, correct one and
+// report calm.
+
+await test('every privileged function is told where to look', async () => {
+  const loose = await rows(`
+    select p.proname, pg_get_function_identity_arguments(p.oid) as args
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'cw'
+       and p.prosecdef
+       and not exists (
+             select 1 from unnest(coalesce(p.proconfig, '{}')) as c
+              where c like 'search_path=%')
+     order by p.proname`);
+
+  eq(loose.map(r => `cw.${r.proname}(${r.args})`), [],
+    'these run with the owner\'s rights and let the CALLER decide what their '
+    + 'names mean — the classic privilege-escalation shape. Add '
+    + '`set search_path = cw, pg_temp` to each');
+});
+
+await test('the sweep is looking at something', async () => {
+  // A sweep whose query matched nothing would pass for ever and protect
+  // nothing. This repository has already caught one test that could not fail
+  // (2026-07-26), so the population is asserted rather than assumed.
+  const [{ n }] = await rows(`
+    select count(*)::int as n from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'cw' and p.prosecdef`);
+  // 38 at the time of writing. The floor is well below that so that removing a
+  // function is not a false alarm, and well above zero so that a query which
+  // stops matching — a schema rename, a catalog change — is.
+  assert(n >= 30,
+    `only ${n} privileged functions found; the sweep above is not looking at `
+    + 'the population it claims to cover');
+});
+
+// WHAT THIS DOES NOT CLAIM: that the pinned value is SAFE. A function pinned to
+// a schema an ordinary role may create objects in would satisfy this check.
+// Every one today is `cw, pg_temp`. Stated as a limit rather than patched
+// around, in the same spirit as the limits at the top of this file.
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) {
   console.log('\nfailures:');
