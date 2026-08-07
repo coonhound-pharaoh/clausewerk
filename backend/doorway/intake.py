@@ -524,6 +524,13 @@ def classify_intake(db: Database, caller: Caller, body: dict | None,
                 # THE LEDGER ROW GOES IN EITHER WAY. A call that failed is a
                 # fact, and one nobody recorded makes the model look more
                 # reliable than it is — the figure AI-7 reports on.
+                #
+                # RECORDED IS NOT THE SAME AS BILLED (0068). `proposal.outcome`
+                # is 'not_asked' where the seam declined to dispatch anything —
+                # no key, no categories, every slot taken — and the daily count
+                # skips those rows. Billing them ran a keyless deployment's
+                # allowance to zero and then told requesters the budget was
+                # spent, which was false.
                 request.write(
                     """insert into cw.model_call
                          (actor, purpose, model, model_version, outcome,

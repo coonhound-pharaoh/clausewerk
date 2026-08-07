@@ -474,17 +474,36 @@ class Proposal:
     prompt: str
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    # WAS A PROVIDER ACTUALLY CONTACTED? False only where this module declined
+    # to dispatch anything at all — no key, an unusable model name, no
+    # categories to choose from, answers too large to send, or every provider
+    # slot already taken. THIS IS WHAT THE DAILY BUDGET IS BILLED ON (0068): a
+    # call nobody made cost nothing, and counting it ran a keyless deployment's
+    # allowance to zero and then told requesters the budget was spent — which
+    # was not true. Defaults True so that every path from the dispatch onward,
+    # including a provider refusal or an unreadable reply, is billed.
+    asked: bool = True
 
     @property
     def outcome(self) -> str:
-        return "answered" if self.risks is not None else "absent"
+        """The three values cw.model_call.outcome accepts, and they are three
+        for a reason 0066 wrote down and 0068 finished: "the model was not
+        asked" and "the model was asked and could not answer" are different
+        facts, and collapsing them hides a system that never asks at all."""
+        if self.risks is not None:
+            return "answered"
+        return "absent" if self.asked else "not_asked"
 
 
 def _no_proposal(reason: str, *, model: str, prompt: str,
-                 model_version: str = UNKNOWN_VERSION) -> Proposal:
-    """No proposal, said plainly. `_absent`'s argument, in this shape."""
+                 model_version: str = UNKNOWN_VERSION,
+                 asked: bool = True) -> Proposal:
+    """No proposal, said plainly. `_absent`'s argument, in this shape.
+
+    `asked=False` at every site that returns BEFORE the request is dispatched.
+    """
     return Proposal(risks=None, absent_reason=reason, model=model,
-                    model_version=model_version, prompt=prompt)
+                    model_version=model_version, prompt=prompt, asked=asked)
 
 
 def propose_intake_manifest(answers: list, categories: list,
@@ -498,17 +517,21 @@ def propose_intake_manifest(answers: list, categories: list,
     model = os.environ.get(MODEL_VARIABLE) or DEFAULT_MODEL
     prompt = INTAKE_PROMPT
 
+    # ── Nothing below this point has been dispatched yet ────────────────────
+    # Every refusal until the urlopen call is `asked=False`: no provider was
+    # contacted, nothing was spent, and 0068 does not bill it. The reason still
+    # travels to the screen and still lands on the ledger.
     if not model.strip() or not _representable_text(model):
         return _no_proposal(
             f"the configured model name in {MODEL_VARIABLE} is not usable",
-            model=DEFAULT_MODEL, prompt=prompt)
+            model=DEFAULT_MODEL, prompt=prompt, asked=False)
 
     key = os.environ.get(KEY_VARIABLE)
     if not key or not key.strip():
         return _no_proposal(
             f"no model key is configured: {KEY_VARIABLE} is not set in the "
             "environment, so the deterministic classifier answered instead",
-            model=model, prompt=prompt)
+            model=model, prompt=prompt, asked=False)
 
     if not categories:
         # Nothing to choose from. Asking anyway would invite exactly the
@@ -516,23 +539,23 @@ def propose_intake_manifest(answers: list, categories: list,
         return _no_proposal(
             "this library defines no risk categories, so there was nothing "
             "for a model to choose from",
-            model=model, prompt=prompt)
+            model=model, prompt=prompt, asked=False)
 
-    asked = json.dumps({
+    question = json.dumps({
         "categories": categories,
         "answers": [{"question": entry.get("probe"), "answer": entry.get("text")}
                     for entry in answers],
     })
-    if len(asked) > MAX_INPUT_CHARACTERS:
+    if len(question) > MAX_INPUT_CHARACTERS:
         return _no_proposal(
             "the answers were too large to send to the model provider",
-            model=model, prompt=prompt)
+            model=model, prompt=prompt, asked=False)
 
     body = json.dumps({
         "model": model,
         "messages": [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": asked},
+            {"role": "user", "content": question},
         ],
         # The owner's per-call budget (0066). SENT rather than assumed: a
         # ceiling nobody transmits is a ceiling nobody enforces.
@@ -548,7 +571,8 @@ def propose_intake_manifest(answers: list, categories: list,
     if not _JUDGMENT_SLOTS.acquire(blocking=False):
         return _no_proposal(
             "the model provider is already at its concurrency limit",
-            model=model, prompt=prompt)
+            model=model, prompt=prompt, asked=False)
+    # ── From here on a request is dispatched, and every outcome is billed ────
     try:
         try:
             with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as reply:
