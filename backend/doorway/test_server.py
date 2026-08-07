@@ -1141,3 +1141,131 @@ def test_the_serving_path_still_holds_no_privileged_connection(running, owner_ur
 
     assert not superuser, f"{login} is a superuser; every row-by-row rule is bypassed"
     assert not bypass, f"{login} bypasses row-level security"
+
+
+# ── Every route, refused to a stranger ──────────────────────────────────────
+
+
+def test_every_route_refuses_a_caller_with_no_session(schema):
+    """139 routes require a session. Nothing proved that until now.
+
+    WHAT PROTECTS THIS TODAY IS STRUCTURE, NOT A TEST. `App.handle` calls
+    `caller_for` before it dispatches, so a route registered in READS or WRITES
+    inherits the gate whether its author thought about it or not. That is good
+    design and it is why the count below is every route rather than most of
+    them.
+
+    IT IS NOT ENOUGH ON ITS OWN, and the two exemptions show exactly why: they
+    are early returns placed ABOVE the gate, and a third would look just like
+    them. The mistake this catches is not "somebody forgot a permission check" —
+    it is somebody adding an early return because their endpoint "doesn't need a
+    user", without noticing that "doesn't need a user" and "may be called by
+    anyone on the network" are the same sentence.
+
+    THE SPECIAL KEYS ARE PARSED OUT OF app.py RATHER THAN LISTED HERE. A list
+    would have to be remembered; a parse picks up the next specially-dispatched
+    endpoint on its own. That is the difference between a sweep and a second
+    thing to keep in step — this repository has paid for the latter repeatedly.
+    """
+    import re
+
+    from doorway.app import App
+    from doorway.db import Database
+    from doorway.reads import READS
+    from doorway.writes import WRITES
+
+    source = (Path(__file__).parent / "app.py").read_text(encoding="utf-8")
+    special = set(re.findall(r'key == "((?:GET|POST) /[a-z/-]+)"', source))
+    routes = sorted(set(READS) | set(WRITES) | special)
+
+    # A vacuity guard, the same shape as the schema sweeps': a regex that
+    # stopped matching, or an import that came back empty, would make every
+    # assertion below true of nothing.
+    assert len(routes) > 100, (
+        f"only {len(routes)} routes found; this sweep is not looking at the "
+        "service it claims to cover")
+    assert special, "no specially-dispatched route was found in app.py"
+
+    db = Database(schema)
+    app = App(db)
+    try:
+        answered = {
+            key: app.handle(key.split(" ")[0], key.split(" ")[1],
+                            token=None, body={}, query={}).status
+            for key in routes
+        }
+    finally:
+        db.close()
+
+    public = {key: status for key, status in answered.items() if status != 401}
+    assert public == {}, (
+        f"{sorted(public)} answered without a session. Only /sign-in and "
+        "/sign-out may sit above the gate in App.handle — sign-in is how a "
+        "session is obtained, and sign-out does nothing at all without a token "
+        "to end. Anything else reachable without a session is reachable by "
+        "anyone who can open a socket.")
+
+
+def test_nothing_but_sign_in_and_sign_out_sits_above_the_session_gate():
+    """The mistake this actually catches, checked where it happens: in the
+    SOURCE, above the line that establishes who is calling.
+
+    THE FIRST VERSION OF THIS GUARD DID NOT CATCH IT, and that is worth
+    recording. It enumerated READS, WRITES and the specially-dispatched keys and
+    drove each with no token — which proves the 139 known routes are gated, and
+    is blind to the one case that matters. A brand-new early return above the
+    gate is in none of those collections, so a deliberately-added public
+    `/health-probe` sailed through a green sweep. Found by trying it; a guard
+    never seen to fail is not protection.
+
+    So this reads app.py, finds the line that resolves the caller, and asserts
+    that the only request paths mentioned before it are the two exemptions.
+    Sign-in is how a session is obtained, and sign-out does nothing at all
+    without a token to end. A third name here means somebody has put an endpoint
+    where a stranger can reach it — which is what "it doesn't need a user"
+    always means, whether or not the person writing it noticed.
+    """
+    import re
+
+    source = (Path(__file__).parent / "app.py").read_text(encoding="utf-8")
+    # Anchored INSIDE `handle`, not on the first mention in the file:
+    # `preflight_session` resolves a caller too, and anchoring on that made an
+    # earlier version of this test scan an empty region and pass vacuously.
+    body = source[source.index("    def handle("):]
+    gate = body.index("caller_for(self._db, self._sessions, token)")
+    above = body[:gate]
+
+    # Every request path compared against in the routing body, before the gate.
+    # Both spellings the file uses: `path == "/x"` and `key == "GET /x"`.
+    paths = set(re.findall(r'path == "(/[a-z0-9/-]*)"', above))
+    paths |= {k.split(" ", 1)[1]
+              for k in re.findall(r'key == "(?:GET|POST) (/[a-z0-9/-]*)"', above)
+              for k in [f"X {k}"]}
+
+    assert paths == {"/sign-in", "/sign-out"}, (
+        f"{sorted(paths)} are routed BEFORE the session is established in "
+        "app.py. Only /sign-in and /sign-out may be: sign-in is how a session "
+        "is obtained, and sign-out does nothing without a token to end. "
+        "Anything else here is reachable by anyone who can open a socket.")
+
+
+def test_the_two_routes_above_the_session_gate_behave_as_exemptions(schema):
+    """The other half: the two that ARE exempt answer rather than refusing, so
+    the exemption is real and not a dead branch."""
+    from doorway.app import App
+    from doorway.db import Database
+
+    db = Database(schema)
+    app = App(db)
+    try:
+        assert app.handle("POST", "/sign-out", token=None, body={},
+                          query={}).status == 200, (
+            "sign-out no longer answers without a session; it is meant to, "
+            "because ending a session nobody presented is a no-op, not a refusal")
+        # Sign-in answers on its own merits (400 for an unknown person here),
+        # never 401 — asking for a session cannot require one.
+        assert app.handle("POST", "/sign-in", token=None,
+                          body={"person": "nobody@clausewerk"},
+                          query={}).status != 401
+    finally:
+        db.close()

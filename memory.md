@@ -5659,3 +5659,46 @@ self-contradicting section.
 **How to apply:** when a work package closes, grep the decision record for the
 sentences that described the gap it closed. The closing paragraph gets appended;
 the claims above it do not update themselves.
+
+## S254 — 139 routes require a session, and nothing checked it — 2026-08-07
+
+Every route in the doorway refuses a caller with no session. Two are
+deliberately exempt — `/sign-in` and `/sign-out` — and are handled ABOVE the
+gate. **Nothing proved any of it.**
+
+**What protects it today is structure, not a test.** `App.handle` calls
+`caller_for` before dispatching, so a route registered in READS or WRITES
+inherits the gate whether its author thought about it or not. That is why the
+count is 139/139 and why this is prevention rather than a live hole.
+
+**It is not sufficient, and the two exemptions show why:** they are early
+returns above the gate, and a third would look exactly like them. The mistake
+being guarded is not "somebody forgot a permission check" — it is somebody
+adding an early return because their endpoint "doesn't need a user", without
+noticing that **"doesn't need a user" and "may be called by anyone on the
+network" are the same sentence.**
+
+**MY FIRST GUARD DID NOT CATCH THAT, AND THE BITE TEST IS THE ONLY REASON I
+KNOW.** It enumerated READS, WRITES and the specially-dispatched keys and drove
+each with no token — which proves the 139 KNOWN routes are gated and is blind to
+the one case that matters. A deliberately added public `/health-probe` sailed
+through it green, because a brand-new early return is in none of those
+collections. **A guard that enumerates a registry cannot see something that was
+never registered.**
+
+**So the check moved to where the mistake happens** — the source. It finds the
+line inside `handle` that resolves the caller and asserts the only request paths
+above it are the two exemptions. That version names `/health-probe`.
+
+**A second, quieter fault, caught the same way:** anchoring on the first mention
+of `caller_for` in the file landed in `preflight_session`, not `handle`, so the
+scanned region was empty and the test passed over nothing — a vacuous pass
+wearing a green tick. The anchor is now inside `handle` with the reason beside
+it, and both faults are recorded in the test so the next person does not
+re-derive them.
+
+**How to apply:** when guarding against "somebody adds X", ask whether the guard
+looks at a REGISTRY or at the CODE. A registry only contains things somebody
+already registered — which is never true of the mistake you are guarding
+against. Three sweeps this session were proved by breaking them; this is the
+only one that failed its first bite test, and it would have shipped green.
