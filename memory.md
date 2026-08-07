@@ -5748,3 +5748,40 @@ than left as a plausible-sounding claim.
 anything decides on membership. A lookup with a fallback answers "what shall I
 call this?"; only a gate answers "may this leave the building?". They look
 identical in code and are opposite in effect.
+
+## S256 — Four security checks, all clean: the untrusted-input and outbound paths — 2026-08-07
+
+Recorded so the next pass does not re-tread them. Each was chased to a
+verifiable answer, not read and assumed.
+
+**The role lookup is a GATE, not a lookup-with-fallback.** `db.as_person` raises
+`UnknownRole` for anything outside the six. This was checked because [[S255]]
+had just found a table that looked like a gate and was not — the same shape here
+would let an unknown role reach a connection with no `set local role` at all.
+
+**Nothing exotic reaches the JSON encoder.** `_respond` serialises with
+`default=str`, a catch-all that would silently stringify whatever it was handed —
+a psycopg object or an exception could carry a connection string. Every read was
+driven as an administrator and the value types collected: **`datetime` and
+nothing else.** Intended and safe.
+
+**The vendor-paper ingest is bounded, and the docx reader is exemplary.**
+`paper.ingest` parses before it counts paragraphs, so the decompression caps are
+what stand between a 1 GB upload and memory — and they are real: 16 MB per part,
+64 MB per archive, 10,000 members, plus element depth, count and attribute caps
+enforced DURING the parse. The header records a reproduced attack with
+measurements (33.6 MB of nesting, no DOCTYPE, 18.7 s, 1.3 GB peak) and the
+conclusion that "size is the wrong dimension for that attack; depth is the right
+one". Nothing to add.
+
+**Mail header injection is impossible, twice over.** `notifications.channel`
+sets `message["To"]` from a database value; Python's `EmailMessage` refuses a
+linefeed or carriage return in a header value outright, and the channel wraps any
+raise into a recorded outbox failure. Separately, `cw.notification_address`
+takes inserts and updates from **the administrator alone** (0042), so no
+requester can redirect a colleague's digests.
+
+**How to apply:** a pass that finds nothing is worth the same write-up as one
+that finds something — the cost of this codebase is re-deriving what somebody
+already checked. Four negatives here, each with the query or probe that settled
+it, so the next reader can disagree with the method rather than repeat the work.
