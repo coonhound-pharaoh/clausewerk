@@ -5448,3 +5448,48 @@ create objects in would pass. All 38 are `cw, pg_temp` today.
 
 **How to apply:** when a one-off audit reports "all N of these are fine", ask what
 makes N+1 fine. If the answer is a person remembering, write the sweep then.
+
+## S249 — The view-scoping seam is already swept; three candidates chased to ground — 2026-08-07
+
+A view runs with its OWNER's rights and does **not** inherit the row-level
+policies of the tables beneath it (0017 wrote this down at length). So every
+view granted to a role must carry its own scoping clause. A catalog probe found
+**46 of 66 views granted with no scoping predicate in their definition**, which
+looks alarming and is not.
+
+**Three candidates were chased individually rather than reported as a set:**
+
+  · **Most of the 46 read company-wide reference data** — the library, ladders,
+    categories, the roster, and reporting aggregates granted only to Legal, the
+    auditor and the administrator. Nothing per-deal to scope.
+
+  · **`cw.sow_override_in_force` IS deal-scoped** (`sow_id` is a foreign key to
+    `cw.agreement`) and IS granted to the viewer unscoped — the one that looked
+    like a real finding. It is **deliberate**, and the reason is in memory.md at
+    2026-07-26: the system itself reads this view to decide whether a statement
+    of work may depart from its master, and scoping it made the system stop
+    seeing approvals and refuse properly authorised work. *"A saved question the
+    system consults to make a decision must answer the same way for everybody."*
+    Locking it turns a privacy control into a correctness fault.
+
+  · **The base table already admits the viewer anyway.** `read_scoped on
+    cw.sow_override` lists 'viewer' unconditionally, so the view exposes nothing
+    the policy does not. Worth knowing before writing up any view: check the
+    policy underneath before blaming the view.
+
+**THE SWEEP ALREADY EXISTS, and it is better than the one I was about to write.**
+`views-are-not-policies.test.mjs` lists every view a **viewer** can read and
+fails if one is not in a `REVIEWED` classification naming why it is safe. It is
+guarded by TWO mutation rows: one that adds an unclassified view, and one that
+leaves an entry claiming 'scoped' after the scoping was removed — so the LIST
+cannot rot either, which is the failure mode a classification list normally has.
+
+**Viewer is the right role to sweep, and only viewer.** Requester breadth is
+Mike's decided openness model, Legal and the auditor read the record by
+definition, and the administrator is U5. The one role with a genuinely narrow
+boundary is the one the sweep covers.
+
+**How to apply:** before building a sweep, search for the one that already
+exists — this is the second time today ([[S248]] was the gap, this was not).
+The tell is the mutation harness: `grep` the `expect` strings, they name every
+guard in the repository in one place.
