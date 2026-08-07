@@ -5576,3 +5576,48 @@ so whoever picks this up starts where I stopped instead of re-deriving it.
 
 **Checked:** 39/39 schema suites, 286/286 mutations caught by their named test
 (up from 285 — the new row lands), 1695 Python tests passed.
+
+## S252 — A security tripwire that had been warning about a hole already closed — 2026-08-07
+
+`test_unprotected_tables.py` exists to make a developer stop before a new file
+reaches the five run-store tables directly. Its stated premise: those tables
+have **no row-level security**, so nothing but the doorway's own discipline
+prevents a read across every deal. **Both halves were false by the time the file
+landed.**
+
+    16:44  6fb4c97  "Scope run pins to visible runs" — enables RLS AND adds
+                    read/write policies to all five
+    18:57  62f0257  adds the tripwire, asserting the five have no RLS
+
+Two hours apart, the same day. Almost certainly parallel work integrated in
+sequence: the author verified against a tree that predated the fix. **Nobody was
+careless — the guard arrived AFTER its danger was gone**, which is this
+codebase's recurring defect ([[clausewerk-guards-point-at-moved-code]]) seen
+from the other end, and the only instance so far that runs that way round.
+
+**What made it worth fixing rather than leaving: the failure message stated a
+false thing about the system's security.** It told a developer that resolving
+through `cw.run` was the only thing standing between a caller and every deal's
+evidence. It is not — 0005's policies scope a requester to pins "visible through
+cw.run". Two costs, both real: somebody takes a risk elsewhere believing this
+rule is uniquely load-bearing, and somebody who finds out the claim is false has
+been handed a reason to distrust the test and delete it.
+
+**Kept, not deleted, and the reasoning matters.** The catastrophic case it
+warned about is now refused by the database, so its value drops from "the only
+control" to defence in depth and house style — but resolving through `cw.run` is
+still how this system reasons, and a file skipping it should be read by somebody.
+Deleting would trade a true guard for nothing.
+
+**`UNPROTECTED` was renamed to `RUN_STORE`.** The old name was the false premise
+in one word, and **a name is what a reader trusts when they do not read the
+comment**. Fixing a long docstring while leaving the identifier saying the
+opposite would have fixed the smaller half.
+
+**Re-checked and left alone:** `cw.audit_checkpoint` and `cw.schema_migration`
+genuinely have no RLS and are deliberately outside the tripwire — neither holds
+per-deal evidence. Verified against the installed catalog, not the comment.
+
+**How to apply:** when a guard's premise is a factual claim about the system,
+re-verify the claim, not just the test result. This one passed every run for ten
+days while describing a system that no longer existed.
