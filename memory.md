@@ -5158,3 +5158,38 @@ knowing: `expect` is the TEST NAME, exactly.
 **How to apply:** when a counter exists to bound a cost, check what it counts
 against what actually costs. A cap charged for decisions rather than for spend
 is a cap that lies in the direction of doing less work than the owner paid for.
+
+## S242 — The header guard had been red since the Host check landed — 2026-08-06
+
+`test_the_service_reads_exactly_one_header` reads server.py's own source and
+refuses to let the set of headers the service consults grow. It had been
+**failing on main** since fb44d17 ("Require an unambiguous HTTP Host") added a
+sixth, `host`, and nobody updated the list.
+
+**The missing name is not the defect. The red guard is.** A test that fails
+identically whether the rule holds or is genuinely broken reports nothing: the
+next person reads it as noise and scrolls past, and the protection is gone while
+still looking present. It sat that way through at least one full-suite run.
+
+**`host` does belong on the list, and the reasoning is the point.** The rule is
+not "read few headers" — it is that no header may say anything about who is
+calling or what they may do. `_host_is_ambiguous` runs first in do_GET, do_POST
+and do_OPTIONS and its only outcome is a 400; the names it accepts are fixed in
+`serve()` (`localhost`, `127.0.0.1`), not taken from the request; nothing
+downstream reads the value. It can refuse and do nothing else. It exists to close
+DNS rebinding, which CORS cannot: once an attacker-controlled name resolves to
+loopback, their page and this service look same-origin to the browser.
+
+**Widened WITH its justification written beside it**, and a line saying a
+seventh name deserves the same paragraph — if one cannot be written for it, it
+does not belong. A number raised silently is how a guard becomes a rubber stamp.
+
+**Checked in both directions, not just green.** After the fix, a seventh header
+(`x-forwarded-for`) was temporarily added to server.py and the guard failed as
+it should; server.py was then restored. A guard is only proved by watching it
+catch something.
+
+**How to apply:** when a security change lands, check what was watching the thing
+you changed. Two separate defects this week ([[S241]] and this one) were guards
+left pointing at code that had moved — CLAUDE.md's mutation-harness rule is the
+same lesson written down for migrations only.
