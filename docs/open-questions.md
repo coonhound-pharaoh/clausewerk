@@ -257,12 +257,17 @@ widened, and no write of any kind added. `library-ladder-views.test.mjs` asserts
 the read; `administrator.test.mjs`'s whole-schema sweep still asserts the role
 can write nothing.
 
-## 9b. WP-U13 cannot close: six governed acts have no endpoint — **IN SCOPE, D-5 settled 2026-08-02**
+## 9b. WP-U13: six governed acts had no endpoint — **CLOSED 2026-08-02 (D-5)** ✅
+
+> **All six shipped on 2026-08-02 — see the D-5 paragraph below.** Everything
+> from here to that paragraph is the gap AS IT WAS FOUND on 2026-07-27, kept
+> because the reasoning about why two of these needed designing before building
+> is what D-5 was answering. Nothing in it describes the system today.
 
 Found 2026-07-27 while building the Legal admin's workspace. Its **reading**
-halves are built ([`library.jsx`](../prototype/v4/app/library.jsx) — the library
-and the ladders). Its **acting** halves cannot be, because the endpoints do not
-exist:
+halves were built ([`library.jsx`](../prototype/v4/app/library.jsx) — the library
+and the ladders). Its **acting** halves could not be, because the endpoints did
+not exist:
 
 | act | WP-U13 deliverable |
 |---|---|
@@ -295,12 +300,14 @@ the package complete on the strength of its read halves.
 the owner rather than engineering time:**
 
 - **Retention destruction** — U9. Never automatic; the authority is the
-  Administrator's alone, revoked from legal_admin. Built in `0022`. **The
-  endpoint is still absent**, so the act cannot yet be performed from a screen.
+  Administrator's alone, revoked from legal_admin. Built in `0022`. ~~The
+  endpoint is still absent~~ — **built 2026-08-02 as `POST /retention/destroy`
+  (`writes.py`), confirmed by typing the record's own id.**
 - **Clause supersession** — U10. Mints a new version and never rewrites wording
   already committed to; signed AND in-flight deals are flagged as carrying
   obsolete language rather than corrected. The flagging half is built in `0022`
-  (`cw.run_drift`); **the superseding endpoint is still absent.**
+  (`cw.run_drift`); ~~the superseding endpoint is still absent~~ — **built
+  2026-08-02 as `POST /library/supersede`, over `cw.supersede_clause()` (0062).**
 
 **SETTLED 2026-08-02 (D-5): the six acts are IN SCOPE — and BUILT the same
 day.** Mike's decision, recorded in `memory.md` S218. Migration `0062`, the

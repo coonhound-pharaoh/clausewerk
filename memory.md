@@ -5621,3 +5621,41 @@ per-deal evidence. Verified against the installed catalog, not the comment.
 **How to apply:** when a guard's premise is a factual claim about the system,
 re-verify the claim, not just the test result. This one passed every run for ten
 days while describing a system that no longer existed.
+
+## S253 — The decision record said two shipped capabilities were missing — 2026-08-07
+
+`docs/open-questions.md` §9b asserted in the present tense that six governed acts
+**have no endpoint**, and named two as still absent outright: retention
+destruction and clause supersession. Both shipped on 2026-08-02. `writes.py`
+carries `POST /retention/destroy`, `POST /library/supersede` and
+`POST /library/retire`.
+
+**The file already contained its own correction, ten lines below** — the D-5
+paragraph saying the six acts were "BUILT the same day" with migration 0062. The
+paragraph was appended when the work landed; the present-tense claims above it
+were left alone. So the section contradicted itself within one screenful.
+
+**Same defect as the tripwire fixed the same day ([[S252]], c2aa7a6), one layer
+out.** There, a test's premise was a factual claim about the system that stopped
+being true and nothing re-checked it. Here it is the decision record. Both had
+been wrong for days while everything around them passed.
+
+**Corrected without erasing the history.** The reasoning about WHY those two acts
+needed designing before building is what D-5 was answering, so it is kept and
+framed as the gap AS FOUND, with a banner at the top of the section and each
+stale sentence struck through and answered rather than deleted. A decision record
+that quietly rewrites itself is worth less than one that shows its working.
+
+**Why it counts as a defect and not tidying:** this is not product content — the
+placeholder rule covers clause language and example contracts, not the record of
+what is decided and built. Somebody reading it builds a capability twice, or
+tells a customer the product cannot do something it does. And a section that
+contradicts itself costs the WHOLE file its authority, which is worse than the
+two wrong lines, because the rest of it is accurate and load-bearing.
+
+**Spot-checked and accurate, left alone:** U11, U12, U13, U15. §9b was the only
+self-contradicting section.
+
+**How to apply:** when a work package closes, grep the decision record for the
+sentences that described the gap it closed. The closing paragraph gets appended;
+the claims above it do not update themselves.
