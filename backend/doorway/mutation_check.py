@@ -205,6 +205,19 @@ MUTATIONS = [
         "test_server.py::test_a_download_filename_cannot_change_the_response_headers",
     ),
     (
+        # The actor-column guard DERIVES its set from the migrations (2026-08-08),
+        # which buys it the failure a hand-typed list cannot have: deriving
+        # NOTHING. A pattern that stops matching the schema turns both actor
+        # guards into vacuous passes wearing green ticks — S254's exact shape.
+        # `person_columns()` therefore asserts a floor on what it found, and this
+        # row is what proves that floor is load-bearing rather than decoration.
+        "the person-column derivation matches nothing",
+        "doorway/test_writes.py",
+        "    r\"^\\s+(?!p_)(\\w+_by|actor|approver|reviewer|requester|owner)\\s+\"",
+        "    r\"^\\s+(?!p_)(zzz_no_such_column)\\s+\"",
+        "test_writes.py::test_the_declaration_covers_every_person_column_the_schema_has",
+    ),
+    (
         # Bytes in, and the mirror of the row above. A .docx is a zip: read as
         # JSON it is refused as malformed, so the system simply cannot be given
         # a document — which is the state this package found.

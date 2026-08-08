@@ -93,6 +93,23 @@ NEVER_FROM_THE_BODY = frozenset({
     # name somebody else would put another person's name on a commercial
     # decision they did not make.
     "baseline_chosen_by",
+    # ── The seventeen that were simply never added (2026-08-08) ─────────────
+    #
+    # THE COMMENT ABOVE DESCRIBED THIS LIST'S FAILURE MODE AND THEN THE LIST WENT
+    # ON FAILING THAT WAY. The schema holds 33 columns carrying a person's name;
+    # this declaration held 17 of them. Nothing had gone wrong yet — every entry
+    # in WRITES was driven against all 33 and none takes one of these from a body
+    # — but "no endpoint has made that mistake yet" is not a guard, and this list
+    # is the only thing that would notice the first one.
+    #
+    # `test_the_declaration_covers_every_person_column_the_schema_has` now DERIVES
+    # the set from backend/db/migrations and fails naming anything missing here.
+    # So a migration that adds `escalated_by` next month breaks that test, and
+    # this list stops growing by whatever the last endpoint happened to be called.
+    "acknowledged_by", "analysed_by", "assessed_by", "assigned_by",
+    "destroyed_by", "granted_by", "raised_by", "ran_by", "received_by",
+    "released_by", "retired_by", "sent_by", "set_by", "shared_by",
+    "tagged_by", "withdrawn_by",
 })
 
 

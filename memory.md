@@ -5847,3 +5847,65 @@ name, which is a fact rather than a guess, and it arrives.
 copy. Ask which layer OWNS the constraint — usually the one that would break —
 and make the other ask it. Two validations of one value that were written
 separately have never once agreed in this codebase.
+
+## S258 — The list of names a request body may not carry was half the list — 2026-08-08
+
+No write endpoint may take an actor from the request body: the name on a recorded
+act comes from the connection. Two guards enforce that and **both were hand-typed
+lists that nobody derived from anything.**
+
+    writes.NEVER_FROM_THE_BODY                    17 names
+    test_any_recorded_actor_comes_from_the_       10 names, its own separate
+      connection                                  list, inline in the test
+
+**The schema holds 33 columns carrying a person's name.** So one guard was missing
+seventeen and the other twenty-three, and the two did not agree with each other.
+
+**writes.py already described this failure in its own comment** — `requester` was
+absent until the mutation harness broke a deals endpoint and nothing noticed, and
+the note ends "which is exactly how a list like this goes wrong: it grows by
+whatever the last endpoint happened to be called." It was still growing that way.
+The comment was accurate and had changed nothing, which is worth more attention
+than the missing names: **writing down a failure mode is not a guard against it.**
+
+**NOTHING WAS LIVE, AND I CHECKED BEFORE SAYING SO.** Every `WRITES` entry was
+driven against all 33 columns. One matched — `POST /ladders/publish` declares
+`Field("owner")` — and it is **legitimate and stays**: `cw.ladder.owner` is
+stewardship, read by a view and by no policy; only a legal admin may publish; the
+real actor is recorded separately by `cw.audit`. It is now a NAMED exception with
+that reasoning beside it, so it is a decision on the record rather than a silence.
+No statement assigns any of the 33 from anything but `current_setting`.
+
+**The fix derives the set from `backend/db/migrations`** and feeds both guards
+from it. The declaration stays a plain frozenset in `writes.py` — a runtime module
+must not read the migrations folder to answer a question about its own fields —
+and a test holds it against the derived set. A migration adding `escalated_by`
+next month now breaks that test, which is the moment somebody DECIDES whether a
+body may carry it.
+
+**THE OBVIOUS COMPANION TEST WAS WRITTEN, RUN AND DELETED, and that is the part
+worth keeping.** "The declaration names nothing the schema does not have" failed
+on `countersigned_by` and `person_acting` — and both entries are CORRECT. Neither
+column exists: 0013 considered `countersigned_by` and chose an action row instead,
+and `person_acting` is nowhere in the schema. **They belong in the list anyway,
+because it bans BODY FIELD NAMES and not columns.** A form posting `person_acting`
+is claiming to name the actor whatever the column is called. The schema is a
+FLOOR under this list, never a ceiling, so the containment runs one way only. A
+symmetric test would have looked tidier and would have been wrong.
+
+**The derivation's own failure mode is deriving NOTHING** — S254's vacuous pass.
+`person_columns()` asserts a floor on what it found, and a mutation row
+(`the person-column derivation matches nothing`) proves that floor is
+load-bearing. `p_…` is excluded because it is the schema's parameter prefix and
+`p_by` was reported as an unguarded column on the first run; a guard that cries
+wolf gets its exception list padded until it means nothing.
+
+Proved by breaking it both ways: removing `withdrawn_by` from the declaration
+fails naming it, and adding `escalated_by` to a scratch copy of the migrations
+fails naming that. 47 mutation patterns resolve exactly once.
+
+**How to apply:** when a guard is a list, ask what the list is a list OF, and
+whether that thing can be counted somewhere else. If it can, count it — and check
+both directions before asserting either, because the one that looks symmetric may
+be describing a rule the system does not hold. See
+[[clausewerk-guards-point-at-moved-code]].
