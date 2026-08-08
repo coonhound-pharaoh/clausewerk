@@ -5992,3 +5992,75 @@ suites.
 the WEAKEST one. The instinct is that the least privileged role is the risky
 case; it is the opposite — the weakest role is the one nobody grants anything to,
 so a guard keyed on it sees the least. See [[clausewerk-guards-point-at-moved-code]].
+
+## S260 — A requester could write a document read onto the audit chain for a deal they cannot see — 2026-08-08
+
+`cw.record_document_read` is SECURITY DEFINER and callable by a requester, both
+Legal roles and the auditor. It took a negotiation, a round, a document, a
+SHA-256, a byte size and a direction — **all six from the caller** — and wrote an
+event onto `cw.audit_event`. **It checked none of them.**
+
+    Rita (requester), Ben's negotiation:
+      select count(*) from cw.negotiation where negotiation_id = 4   ->  0
+      select cw.record_document_read(4, 99, 12345, 'ffff…ff', 999999, 'received')
+        ->  ACCEPTED, permanently
+
+Round 99 does not exist. Document 12345 does not exist. The hash is invented.
+**And `cw.audit_verify()` returned clean** — the chain guarantees nothing was
+ALTERED or deleted, never that anything recorded is TRUE. Worth keeping that
+sentence: a verified chain and a truthful chain are different claims, and the
+system only makes the first.
+
+**The defect is five words in 0065's own description.** It says the function
+writes fields "either derived here or **bounded by its own arguments**". An
+argument is not a bound; it is whatever the caller says. 0065's judgement was
+otherwise right — it refused the auditor blanket INSERT on `cw.audit_event`
+because that "trades the integrity of the record they audit for one download" —
+so the door was made narrow in EVENT TYPE and left wide open in CONTENT.
+
+**IT LOOKED CHECKED, WHICH IS WHY IT SURVIVED A SWEEP.** The body opens with
+`case current_setting('role', true)`, so anything grepping for role-awareness
+finds it — and that expression fills the `actor_role` COLUMN and decides nothing.
+[[S255]] exactly: a lookup mistaken for a gate. I nearly scored it "checked" with
+the same regex before reading the body.
+
+**All 38 definer functions were checked, not just this one.** Every other one
+callable by an application role either restates its scoping —
+`socialise_override_request` states the house rule in its own comment: "SECURITY
+DEFINER bypasses the request table's row policy, so the function must restate
+the grant's two intended branches itself" — or is deliberately unscoped for a
+reason that holds (chain verification must see the whole chain; role facts are
+public by 0013; the rest are granted only to unconditional readers). This was the
+only write-capable one with no gate.
+
+**NO BROWSER PATH TO IT, said plainly.** The doorway has no arbitrary-SQL
+endpoint and the only caller is `redlines.fetch`, which resolves the round under
+the caller's own row rules first. Defence in depth, not a live exploit — fixed
+anyway because the whole design promises the DATABASE refuses independently of
+the doorway, and because a false event is worse than a missing one: an auditor
+reconciling reads against documents finds events naming negotiations the actor
+cannot see and cannot tell a bug from a forgery.
+
+**The fix: the function records what it VERIFIED.** The round's read policy is
+restated inside it, and every field on the event is read from the record.
+`p_sha256`, `p_byte_size` and `p_direction` are now **ignored entirely** —
+verified by having a legal admin call with a wrong hash, wrong size and wrong
+direction and watching the true three land.
+
+**Refusing on a mismatched claim was considered and rejected**: it would let a
+caller break their own legitimate download with a typo. An argument that cannot
+be believed should not be able to stop anything either.
+
+**THE OLD TEST PINNED THE BUG.** `received-documents.test.mjs` called the
+function with negotiation 1, round 1, document 1 and byte size 4200 — none of
+which existed — and asserted 4200 came back out of the chain. It passed for as
+long as it existed. What it proved was that whatever the caller said got written
+down. Rewritten to assert the opposite, with the history kept above it.
+
+288/288 mutations. Proved by breaking it: without 0072 the three new tests fail,
+one naming the invented hash on the chain.
+
+**How to apply:** when a function reads the caller's role, ask what it does with
+the answer. Labelling and deciding look identical at a grep and are opposite in
+effect — and a function that labels honestly is the most convincing possible
+disguise for one that decides nothing. See [[clausewerk-guards-point-at-moved-code]].
