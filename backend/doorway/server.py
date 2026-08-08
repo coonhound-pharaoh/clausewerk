@@ -84,7 +84,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import ParseResult, parse_qs, unquote, urlparse
 
-from doorway.app import App, Download, Response, Upload
+from doorway.app import App, Download, Response, Upload, transportable_filename
 from doorway.db import Database
 
 # A body bigger than this is refused unread. The JavaScript destroyed the socket
@@ -727,11 +727,13 @@ class Handler(BaseHTTPRequestHandler):
         # syntax boundary here. Validate it here as well as at today's sole
         # producer so a future producer cannot turn a quote or control byte
         # into a second header (or make http.server abort mid-response).
-        if (not download.filename
-                or any(ord(char) < 32 or ord(char) > 126
-                       for char in download.filename)
-                or '"' in download.filename
-                or "\\" in download.filename):
+        # THE RULE IS ASKED FOR, NOT RESTATED (app.transportable_filename). It
+        # was spelled out here until 2026-08-08 while the producers spelled a
+        # laxer version of it themselves, and the two disagreed: a stored
+        # document with an accent in its name was answered 500 rather than
+        # handed back. This stays a 500 and stays a backstop — a producer that
+        # did not ask is our bug, and must not reach the wire.
+        if not transportable_filename(download.filename):
             self._respond(Response(500, {"error": "the service failed"}))
             return
 

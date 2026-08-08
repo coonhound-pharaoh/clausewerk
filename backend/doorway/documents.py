@@ -86,7 +86,8 @@ def contract(db: Database, caller: Caller, query: dict) -> "Response | Download"
     # this module, so a module-level import of it would be a cycle. The reply
     # types stay where they are — app.py owns them, and DOCX_TYPE has exactly
     # one spelling in the repository, which is the thing worth protecting.
-    from doorway.app import DOCX_TYPE, Download, Response
+    from doorway.app import (
+        DOCX_TYPE, Download, Response, transportable_filename)
 
     run_id = (query or {}).get("run")
     if not isinstance(run_id, str) or not run_id.strip():
@@ -98,10 +99,18 @@ def contract(db: Database, caller: Caller, query: dict) -> "Response | Download"
     # quoted into a content-disposition header and server.py deliberately does
     # not rewrite it. A transport that edits its payload's name is a transport
     # that can be argued with about what the name was.
-    if '"' in run_id or "\n" in run_id or "\r" in run_id:
+    #
+    # THE NAME THAT IS TESTED IS THE ONE THAT WILL BE SENT, `{run_id}.docx`, and
+    # the test is the transport's own (app.transportable_filename). Until
+    # 2026-08-08 this listed a quote and a line break, which is narrower than
+    # what the transport accepts — so a run named with an accent in it passed
+    # here and was answered 500 by `_send_download`. A caller's mistake reported
+    # as our outage is the failure class this layer exists to avoid.
+    if not transportable_filename(f"{run_id}.docx"):
         return Response(400, {
             "error": "refused",
-            "reason": "a run name cannot contain a quote or a line break",
+            "reason": "a run name must be plain printable text without a quote "
+                      "or a backslash — it becomes the document's filename",
             "kind": "rejected"})
 
     try:

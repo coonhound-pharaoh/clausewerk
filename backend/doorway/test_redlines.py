@@ -408,3 +408,69 @@ def test_the_route_reaches_the_fetch_with_its_selector(seeded, db):
                                  "round": str(where["round_no"])})
     assert response.status == 200, getattr(response, "body", response)
     assert response.body == MARKUP
+
+
+# ── The name it comes back under (2026-08-08) ───────────────────────────────
+#
+# The counterparty chooses the filename and this system stores it unedited. Two
+# rules used to decide whether it could leave again — `fetch`'s, which looked
+# for a quote and a line break, and the transport's, which accepts only plain
+# printable ASCII — and where they disagreed the answer was 500 "the service
+# failed" for a document that had been accepted, stored and put on the chain.
+#
+# These tests are written against `app.transportable_filename`, deliberately,
+# rather than against a list of characters spelled out here. A test carrying its
+# own copy of the rule passes as soon as it agrees with a stale copy, which is
+# the failure it is supposed to catch.
+
+
+@pytest.mark.parametrize("filename", [
+    "Contrat Été.docx",          # an accent — the ordinary case, and it was 500
+    "合同.docx",                  # not Latin at all
+    "MSA v2\\final.docx",        # a backslash escapes inside a quoted-string
+    'quoted".docx',              # the injection the rule started out guarding
+])
+def test_a_name_the_transport_cannot_carry_comes_back_under_the_records_name(
+        seeded, db, filename):
+    """The document is handed over. It is the BYTES that were asked for."""
+    answered = redlines.record(
+        db, OWNING_REQUESTER,
+        Upload(body=MARKUP, content_type=DOCX_TYPE, filename=filename),
+        {"agreement": "AG-100"})
+    assert answered.status == 200, answered.body
+
+    got = redlines.fetch(db, OWNING_REQUESTER, {
+        "negotiation": str(answered.body["negotiation_id"]),
+        "round": str(answered.body["round_no"])})
+
+    assert got.status == 200, getattr(got, "body", got)
+    assert got.body == MARKUP, "the document did not come back"
+    assert got.filename == (f"negotiation-{answered.body['negotiation_id']}"
+                            f"-round-{answered.body['round_no']}")
+
+
+def test_every_name_fetch_hands_on_is_one_the_transport_will_accept(seeded, db):
+    """THE AGREEMENT BETWEEN THE TWO HALVES, asserted rather than assumed.
+
+    The stored name is unedited caller input, so the set of names reaching
+    `_send_download` is unbounded. This drives the awkward ones and holds the
+    producer's output against the transport's own predicate — so the two cannot
+    drift apart again without this failing.
+    """
+    from doorway.app import transportable_filename
+
+    names = ["redline.docx", "Contrat Été.docx", "合同.docx", "a\tb.docx",
+             "MSA v2\\final.docx", 'quoted".docx', " ", "réponse"]
+    for filename in names:
+        answered = redlines.record(
+            db, OWNING_REQUESTER,
+            Upload(body=MARKUP, content_type=DOCX_TYPE, filename=filename),
+            {"agreement": "AG-100"})
+        assert answered.status == 200, answered.body
+        got = redlines.fetch(db, OWNING_REQUESTER, {
+            "negotiation": str(answered.body["negotiation_id"]),
+            "round": str(answered.body["round_no"])})
+        assert got.status == 200, getattr(got, "body", got)
+        assert transportable_filename(got.filename), (
+            f"fetch handed the transport {got.filename!r}, which it refuses "
+            f"with a 500 — the stored name was {filename!r}")
