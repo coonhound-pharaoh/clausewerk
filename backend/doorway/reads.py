@@ -172,10 +172,17 @@ READS: dict[str, Read] = {
                  subject_kind, subject_ref, note, state, acknowledged_by,
                  acknowledged_at, acknowledgement_note
           from cw.notice_state order by notice_id desc""",
-        rule="cw.notice read_scoped policy (0064) reached through "
-             "cw.notice_state — your own raised notices, the ones addressed to "
-             "you or your role, and Legal and the Auditor in full. No viewer "
-             "grant of any kind",
+        # THIS NOTE WAS FALSE FOR AS LONG AS IT EXISTED, and it is worth one
+        # line of history because a note is what a reviewer trusts INSTEAD of
+        # checking. It said the policy was "reached through cw.notice_state".
+        # It was not: a view runs with its owner's rights, so the policy under
+        # it was never consulted, and one requester read another requester's
+        # private notes in full through this endpoint. 0071 put the policy's own
+        # predicate into the view, which is what makes the sentence true.
+        rule="cw.notice read_scoped policy (0064), repeated as cw.notice_state's "
+             "own WHERE clause by 0071 — your own raised notices, the ones "
+             "addressed to you or your role, and Legal and the Auditor in full. "
+             "No viewer grant of any kind",
     ),
 
     # The permitted raiser → recipient pairs, so a screen can offer only the

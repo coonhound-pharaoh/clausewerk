@@ -1940,11 +1940,36 @@ where cw.app_role() in ('legal_reviewer','legal_admin','auditor','administrator'
   // A new view reaches a viewer and nobody has classified it. This is the
   // everyday case — somebody adds a grant, and the leak arrives with it.
   { suite: 'views-are-not-policies.test.mjs',
-    name: 'a view is granted to a viewer with nobody having classified it',
+    // REWRITTEN 2026-08-08, AND THE FIRST ATTEMPT IS THE INTERESTING PART.
+    // This used to grant cw.review_quality to a viewer, which worked while the
+    // inventory was keyed on cw_viewer: the view was unlisted, so it became an
+    // unclassified reader. Now that the inventory covers every role,
+    // review_quality IS listed — classified 'privileged' — so that mutation
+    // trips the PRIVILEGED test instead, and this row scored imprecise. I had
+    // written a comment claiming it would trip both. It trips one.
+    //
+    // So the mutation now adds a view nobody could have classified, which is
+    // the mistake this test actually guards: somebody writes a view, grants it,
+    // and never says which case it is. The privileged test gets its own row
+    // below rather than sharing this one.
+    name: 'a view is granted with nobody having classified it',
     find: '-- A live SOW under a terminated master.',
     repl: `-- A live SOW under a terminated master.
-grant select on cw.review_quality to cw_viewer;`,
-    expect: 'every view a viewer can read has been classified' },
+create view cw.unclassified_probe as select ticket_id from cw.review_ticket;
+grant select on cw.unclassified_probe to cw_requester;`,
+    expect: 'every view any role can read has been classified' },
+
+  { suite: 'views-are-not-policies.test.mjs',
+    // The other half, and the one that would have caught the five views 0071
+    // scoped had anybody classified them. 'privileged' means unscoped over
+    // person-scoped tables and safe ONLY because privileged roles alone can
+    // read it — so the grant is the whole fence, and a grant is one line in a
+    // later migration away from moving.
+    name: 'a privileged view is handed to the requester',
+    find: '-- A live SOW under a terminated master.',
+    repl: `-- A live SOW under a terminated master.
+grant select on cw.review_quality to cw_requester;`,
+    expect: "every view marked 'privileged' is granted to privileged roles only" },
 
   // And the other way the list rots: an entry says 'scoped' long after the
   // scoping was taken out. A list that keeps claiming a control nobody enforces
@@ -2578,14 +2603,19 @@ grant update on cw.obligation_template to cw_legal_reviewer;`,
 
   { suite: 'obligations.test.mjs',
     name: 'the lead window never opens — nothing ever reads due',
-    find: `         when current_date >= i.due_on - i.lead_days then 'due'`,
+    // REPOINTED TO 0071. This used to patch 0038's spelling of the view, which
+    // 0071 replaces — so the mutation was undone by a later migration and the
+    // harness scored it imprecise. The parentheses are 0071's, and they are why
+    // the old string stopped matching.
+    find: `         when current_date >= (i.due_on - i.lead_days) then 'due'`,
     repl: `         when false then 'due'`,
     expect: 'an obligation inside its lead window reads due' },
 
   { suite: 'obligations.test.mjs',
     name: 'the close gate is pinned open',
-    find: `       (count(s.obligation_id) filter
-         (where s.survives and s.closed_as is null) = 0) as closeable`,
+    // REPOINTED TO 0071, for the same reason as the row above.
+    find: `       count(s.obligation_id) filter (where s.survives and s.closed_as is null) = 0
+         as closeable`,
     repl: `       true as closeable`,
     expect: 'an unanchored survivor reads pending, and blocks close' },
 

@@ -784,3 +784,98 @@ def test_no_permission_check_lives_in_the_reads():
             "belong in the schema's policies and in db.py's role map — an endpoint "
             "that knows a role name is an endpoint about to decide something."
         )
+
+
+# ── The five views 0071 scoped (2026-08-08) ─────────────────────────────────
+#
+# THIS IS THE SHAPE THAT HAS NOW SHIPPED EIGHT TIMES. A view runs with its
+# OWNER's rights and row-level security is ENABLED rather than FORCED, so the
+# policy under a view is never consulted and the view hands back everything.
+#
+# The endpoints below were all leaking to a requester until 0071. GET /notices
+# is the one to keep in mind: its rule note in reads.py CLAIMED this scoping —
+# "cw.notice read_scoped policy (0064) reached through cw.notice_state" — while
+# the policy was never reached at all. A sentence like that is what a reviewer
+# relies on instead of checking, so these tests check.
+#
+# Written against a requester rather than a viewer deliberately: the guard that
+# should have caught these enumerated what a VIEWER could read, and the viewer
+# is the least privileged role in the system. None of the five was ever granted
+# to one.
+
+
+@pytest.fixture
+def two_requesters_with_notices(two_requesters_and_a_viewer, db: Database,
+                                owner_url: str):
+    """A deal and a notice each. The smallest arrangement in which "sees their
+    own" can fail."""
+    with psycopg.connect(owner_url, autocommit=True) as owner:
+        owner.execute("insert into cw.agreement (agreement_id,counterparty,requester) "
+                      "values ('AG-BEN','Southwind','ben@clausewerk')")
+        # BOTH DEALS ARE EXECUTED, and that is not decoration. Without a row in
+        # cw.executed_agreement there is nothing for cw.agreement_close_eligibility
+        # to leak, so its test passed with the migration REMOVED — a green tick
+        # over an unexercised path, which is the vacuous pass this codebase keeps
+        # catching. Found by removing 0071 and watching which tests noticed.
+        owner.execute("select set_config('cw.actor','admin@clausewerk',true)")
+        owner.execute(
+            "insert into cw.executed_agreement (agreement_id,executed_on,effective_on) "
+            "values ('AG-1',current_date,current_date),"
+            "       ('AG-BEN',current_date,current_date)")
+        owner.execute(
+            "insert into cw.notice (raised_by,to_role,subject_kind,subject_ref,note) "
+            "values ('ben@clausewerk','legal_admin','health_tile','AG-BEN',"
+            "        'Bens private note'),"
+            "       ('rita@clausewerk','legal_admin','health_tile','AG-1',"
+            "        'Ritas own note')")
+    return db
+
+
+def test_a_requester_reads_only_their_own_notices(two_requesters_with_notices, db):
+    """The leak, and the half that proves the fix is not "return nothing".
+
+    A view scoped to nothing passes "no leak" perfectly and is useless, so this
+    asserts Rita still gets her own notice in the same breath.
+    """
+    rows = run(db, REQUESTER, "GET /notices")
+    theirs = [r for r in rows if r["raised_by"] == REQUESTER.person]
+    others = [r for r in rows if r["raised_by"] != REQUESTER.person]
+    assert not others, (
+        f"GET /notices handed a requester {len(others)} notice(s) raised by "
+        f"somebody else, note text included: "
+        f"{[r['note'] for r in others]}")
+    assert theirs, "the scoping went too far — a requester lost their own notices"
+
+
+def test_a_requester_reads_only_their_own_closeable_deals(
+        two_requesters_with_notices, db):
+    rows = run(db, REQUESTER, "GET /agreements/closeable")
+    others = [r["agreement_id"] for r in rows if r["agreement_id"] != "AG-1"]
+    assert not others, (
+        f"GET /agreements/closeable named another requester's deals: {others}")
+
+
+def test_a_requester_reads_friction_only_for_their_own_counterparties(
+        two_requesters_with_notices, db):
+    """cw.vendor_friction aggregates by counterparty, so the leak is not a row
+    of somebody else's — it is somebody else's deal COUNTED into a number, under
+    a counterparty name the caller has no deal with."""
+    rows = run(db, REQUESTER, "GET /vendors/friction")
+    others = [r["counterparty"] for r in rows if r["counterparty"] != "Northwind"]
+    assert not others, (
+        f"GET /vendors/friction named counterparties from another requester's "
+        f"deals: {others}")
+
+
+def test_legal_still_reads_every_notice(two_requesters_with_notices, db):
+    """THE OTHER RISK IN 0071, and the one that would look like a fix working.
+
+    Scoping a view is one WHERE clause away from narrowing Legal too, which is
+    a broken product rather than a closed hole — and every "sees only their own"
+    test above would still pass.
+    """
+    legal = Caller(person="leah@clausewerk", role="legal_admin")
+    raised = {r["raised_by"] for r in run(db, legal, "GET /notices")}
+    assert {"rita@clausewerk", "ben@clausewerk"} <= raised, (
+        f"a legal admin saw notices from {raised or 'nobody'} — 0071 narrowed "
+        "Legal, who reads every notice by policy")
