@@ -1141,6 +1141,19 @@ grant usage, select on sequence cw.override_watcher_watcher_id_seq to cw_legal_r
   // THE TAB SET DRIFTING FROM THE ARCHITECTURE. Nobody notices this one: the
   // screen still works, it just quietly stops being what was agreed.
   { target: 'shell', suite: 'shell.test.mjs',
+    // 2026-08-08. The named leak's guard, and its list of transports was three
+    // names short of the promise its own header makes — every call goes through
+    // API. EventSource and WebSocket are not hypothetical: this system has
+    // digests and a waiting-on-you list, and making them push is the obvious
+    // next feature. Nothing used them when the list was widened; the guard
+    // simply would not have said so.
+    name: 'a pane opens its own live connection',
+    find: `function NoticesWaiting({ me }) {`,
+    repl: `const liveNotices = new EventSource('/api/notices/stream');
+function NoticesWaiting({ me }) {`,
+    expect: "every call goes through the API module's fixed endpoint list" },
+
+  { target: 'shell', suite: 'shell.test.mjs',
     name: 'a role gains a tab the architecture never gave it',
     find: `      { key: 'my-record', label: 'my record' },`,
     repl: `      { key: 'my-record', label: 'my record' },

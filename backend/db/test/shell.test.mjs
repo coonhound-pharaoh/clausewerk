@@ -204,14 +204,38 @@ await test('third-party code cannot change underneath the authenticated shell', 
   const html = readFileSync(join(V4, 'index.html'), 'utf8');
   assert(!html.includes('cdn.tailwindcss.com'),
     'the authenticated shell executes Tailwind CDN code at runtime');
-  const remoteScripts = [...html.matchAll(
-    /<script\b(?=[^>]*\bsrc=["']https:\/\/)[^>]*>/gi)].map((match) => match[0]);
-  assert(remoteScripts.length > 0, 'the control found no remote scripts');
-  for (const tag of remoteScripts) {
+  // ANY REMOTE RESOURCE, NOT JUST A SCRIPT. This matched
+  // `<script src="https://…">` alone until 2026-08-08, which left three things
+  // it could not see — in a file that is hand-edited, with no build step between
+  // it and the authenticated shell:
+  //
+  //   · <link rel=stylesheet href="https://…"> — remote CSS is not inert. It
+  //     restyles the shell, and through attribute selectors and background URLs
+  //     it reports what is on the page. It takes an integrity lock the same way.
+  //   · <iframe src="https://…"> — remote content inside the shell.
+  //   · src="//…" and src="http://…" — the old pattern required a literal
+  //     https://, so these were not unlocked remote scripts, they were INVISIBLE
+  //     to it. Both are refused outright below rather than merely required to
+  //     carry a lock: neither can be trusted to arrive unaltered, so a hash of
+  //     what did arrive proves nothing worth having.
+  //
+  // Nothing in index.html used any of them when this was widened. The three
+  // remote scripts were, and remain, correctly locked.
+  const remote = [...html.matchAll(
+    /<(?:script|link|iframe|img|source)\b[^>]*\b(?:src|href)=["'](?:https?:)?\/\/[^"']*["'][^>]*>/gi)]
+    .map((match) => match[0]);
+  assert(remote.length > 0, 'the control found no remote resources');
+  for (const tag of remote) {
+    assert(!/\b(?:src|href)=["']http:\/\//i.test(tag),
+      'remote resource is fetched over plain http, which no integrity lock can '
+      + `make trustworthy: ${tag}`);
+    assert(!/\b(?:src|href)=["']\/\//i.test(tag),
+      'remote resource is protocol-relative, so what it loads depends on how '
+      + `the page was reached: ${tag}`);
     assert(/\bintegrity=["']sha384-[A-Za-z0-9+/=]+["']/i.test(tag),
-      `remote script has no SHA-384 integrity lock: ${tag}`);
+      `remote resource has no SHA-384 integrity lock: ${tag}`);
     assert(/\bcrossorigin=["']anonymous["']/i.test(tag),
-      `integrity-locked remote script has no anonymous CORS mode: ${tag}`);
+      `integrity-locked remote resource has no anonymous CORS mode: ${tag}`);
   }
   const compiled = readFileSync(join(APPDIR, 'tailwind.css'), 'utf8');
   assert(compiled.length > 5_000, 'the local Tailwind build is missing or empty');
@@ -477,7 +501,15 @@ await test('every call goes through the API module\'s fixed endpoint list', asyn
     const src = stripComments(read(f));
     assert(!/\bfetch\s*\(/.test(src),
       `${f} calls fetch directly instead of going through API`);
-    assert(!/XMLHttpRequest|axios/.test(src), `${f} opens its own transport`);
+    // THE LIST IS THE WAYS A BROWSER OPENS A CONNECTION WITHOUT fetch, and it
+    // was three names short until 2026-08-08 while the header above promised
+    // that EVERY call goes through API. EventSource and WebSocket are not
+    // hypothetical here: this system has digests and a waiting-on-you list, and
+    // the obvious next feature is to make them push. sendBeacon is the third.
+    // Nothing used any of them when this was widened; the guard simply would
+    // not have said so.
+    assert(!/XMLHttpRequest|axios|EventSource|WebSocket|sendBeacon/.test(src),
+      `${f} opens its own transport`);
   }
 });
 
