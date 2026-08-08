@@ -306,3 +306,56 @@ def test_sign_in_reads_as_the_least_privileged_role(people, db: Database):
             request.write(
                 "insert into cw.audit_event (event_type, actor, subject) "
                 "values ('forged', 'x', 'y')")
+
+
+def test_the_inheritance_check_runs_before_the_login_is_granted(
+        schema, owner_url, monkeypatch):
+    """ORDER, NOT PRESENCE. The check that cw_app must not inherit its roles has
+    always been here; until 2026-08-08 it ran AFTER prepare() had granted the
+    login and set the password.
+
+    On a cluster where somebody had cleared NOINHERIT that meant prepare() first
+    handed the tampered role a working login and then refused. `alter role` is
+    autocommit here, so the raise unwound nothing — the refusal was accurate and
+    arrived after the door was open. The comment beside it already said it was
+    applied too late, and nothing had moved it.
+
+    Asserted by watching WHICH STATEMENTS RUN: with inheritance set, no `alter
+    role … login …` may be issued at all.
+
+    CW_APP_PASSWORD_RESET IS SET, AND WITHOUT IT THIS TEST PROVES NOTHING. The
+    first version omitted it and passed against BOTH orders — cw_app can already
+    log in by the time this runs, so prepare() issues no `alter role … login`
+    either way and there was nothing for the assertion to see. A guard that
+    cannot fail is not a guard; found by putting the old order back and watching
+    this stay green.
+    """
+    import psycopg
+
+    from doorway import setup as setup_module
+
+    monkeypatch.setenv(setup_module.RESET_PASSWORD_VARIABLE, "1")
+    with psycopg.connect(owner_url, autocommit=True) as conn:
+        conn.execute("alter role cw_app inherit")
+    try:
+        issued = []
+        original = psycopg.Connection.execute
+
+        def watched(self, query, params=None, **kwargs):
+            issued.append(str(query))
+            return original(self, query, params, **kwargs)
+
+        monkeypatch.setattr(psycopg.Connection, "execute", watched)
+        with pytest.raises(RuntimeError, match="inherit"):
+            setup_module.prepare(owner_url=owner_url)
+    finally:
+        monkeypatch.undo()
+        with psycopg.connect(owner_url, autocommit=True) as conn:
+            conn.execute("alter role cw_app noinherit")
+
+    granted = [q for q in issued
+               if "alter role" in q.lower() and "login" in q.lower()]
+    assert not granted, (
+        f"prepare() issued {granted} before refusing an inheriting cw_app. The "
+        "refusal is only worth having if it comes first: this one arrived after "
+        "the tampered role had been given a working login.")

@@ -191,6 +191,27 @@ MUTATIONS = [
         "test_server.py::test_a_download_leaves_as_bytes_with_its_own_content_type",
     ),
     (
+        # 2026-08-08. The ledger's checksum catches an EDITED migration; these
+        # two catch a migration that LEFT the repository and one INSERTED below
+        # the high-water mark. Both were demonstrated silent against a database
+        # with all 71 migrations applied, and both end the same way: the
+        # installation and the tree disagree about what the schema is, with
+        # nothing saying so.
+        "a migration that left the repository goes unnoticed",
+        "doorway/migrate.py",
+        "    missing = sorted(set(recorded) - set(on_disk))",
+        "    missing = []",
+        "test_migration_ledger.py::test_a_migration_that_left_the_repository_stops_the_next_start_up",
+    ),
+    (
+        "a migration inserted below the high-water mark goes unnoticed",
+        "doorway/migrate.py",
+        "        late = sorted(name for name in on_disk\n"
+        "                      if name not in recorded and name < high_water)",
+        "        late = []",
+        "test_migration_ledger.py::test_a_migration_inserted_below_the_high_water_mark_is_refused",
+    ),
+    (
         # A dispatched route renamed in app.py and nowhere else (2026-08-08).
         # notifications.py says an external scheduler POSTs this path and that
         # there is deliberately no timer in the service, so the string IS the

@@ -88,6 +88,26 @@ class MigrationChanged(Exception):
     """An already-applied migration's file is not the file that was applied."""
 
 
+class MigrationMissing(Exception):
+    """A migration this installation ran has no file in the directory.
+
+    Its own type rather than a MigrationChanged, because the two need different
+    answers. An edited migration is fixed by superseding it; a missing one is
+    either a file somebody deleted — put it back — or a database that ran
+    something this repository no longer contains, which is a fact about the
+    installation and not about the tree.
+    """
+
+
+class MigrationOutOfOrder(Exception):
+    """A new migration sorts below one that has already been applied.
+
+    Its own type for the same reason. This one is not drift that has happened;
+    it is drift about to happen, and the answer is to renumber the file before
+    it lands anywhere.
+    """
+
+
 def digest_of(path: Path) -> str:
     """The migration's content, as a stable fingerprint.
 
@@ -128,16 +148,79 @@ def _check_nothing_applied_has_changed(
     not be settled from the ledger's design and had to be settled by querying
     every developer database by hand.
 
-    WHAT THIS CANNOT DO, stated plainly rather than left to be discovered. Rows
-    written before this column existed carry no digest, so there is nothing to
-    compare them against. They are given one from whatever is on disk NOW. That
-    blesses the present state and proves nothing whatsoever about the past: if a
-    migration was edited last week, this records the edited version as correct.
-    It establishes a baseline going forward, and it says so out loud rather than
-    reporting a clean bill of health it has not earned.
+    THREE KINDS OF DRIFT, AND THIS USED TO SEE ONE. Until 2026-08-08 it compared
+    content and nothing else, so two other ways for a repository and an
+    installation to disagree went past in silence. Both were demonstrated
+    against a database with all 71 migrations applied:
+
+      · A RECORDED MIGRATION DELETED FROM DISK produced no complaint whatever.
+        The loop below iterates the files that EXIST, so a ledger row with no
+        file was never looked at. This installation kept everything that
+        migration built; a database created from the repository today would not
+        have it, and nothing said so.
+
+      · A NEW FILE SORTING BELOW THE HIGH-WATER MARK was applied last.
+        `0007a_inserted_late.sql` added after 71 later migrations went in at
+        ledger position 71 of 72, while its NAME sorts eighth. The same
+        repository therefore builds two different schemas depending on the age
+        of the database — which is a reproducibility hole in a system whose
+        promise is that a manifest and a snapshot id reproduce forever, and is
+        how a harmless insertion becomes a broken one the day somebody inserts
+        a file that references a table created above it.
+
+    WHAT THIS STILL CANNOT DO, stated plainly rather than left to be discovered.
+
+    Rows written before the checksum column existed carry no digest, so there is
+    nothing to compare them against. They are given one from whatever is on disk
+    NOW. That blesses the present state and proves nothing whatsoever about the
+    past: if a migration was edited last week, this records the edited version
+    as correct. It establishes a baseline going forward, and it says so out loud
+    rather than reporting a clean bill of health it has not earned.
+
+    And the two checks added below compare the LEDGER to the DIRECTORY by name,
+    so a migration renamed and re-added under a new name with identical content
+    reads as one file removed and one added — the removal is caught, which is
+    the point, but the message will talk about a deletion rather than a rename.
     """
     changed = []
     baselined = []
+    on_disk = {path.name: path for path in migration_files(directory)}
+
+    # ── The ledger has a row and the directory has no file ───────────────────
+    missing = sorted(set(recorded) - set(on_disk))
+    if missing:
+        raise MigrationMissing(
+            "this database has applied " + ", ".join(missing) + ", and there is "
+            "no such file in " + str(directory) + ". A database built from this "
+            "repository today would not have whatever those migrations created, "
+            "so the installation and the tree now disagree about what the schema "
+            "is — silently, which is the whole failure the checksum beside this "
+            "check exists to prevent. Put the file back. If a migration really "
+            "must leave the repository, remove its ledger row by hand, "
+            "deliberately, on every database that ran it, and write down why."
+        )
+
+    # ── A new file that would sort below something already applied ───────────
+    # Compared against the highest APPLIED name rather than against every one:
+    # what matters is whether this file would run in a different position on a
+    # fresh database than it will run here, and only the high-water mark decides
+    # that. A new file above the mark runs last in both places, which is the
+    # ordinary case and must stay silent.
+    if recorded:
+        high_water = max(recorded)
+        late = sorted(name for name in on_disk
+                      if name not in recorded and name < high_water)
+        if late:
+            raise MigrationOutOfOrder(
+                ", ".join(late) + " sort(s) below " + high_water + ", which this "
+                "database has already applied. On a fresh database they would run "
+                "in their sorted position; here they would run last, so the same "
+                "repository would build two different schemas depending on when "
+                "the database was created. Renumber the file above " + high_water
+                + " — a migration's number is its place in the order, and the "
+                "order is the only thing that makes a schema reproducible."
+            )
+
     for path in migration_files(directory):
         if path.name not in recorded:
             continue
