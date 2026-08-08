@@ -18,6 +18,13 @@
 //
 //   node db/test/obligations.test.mjs
 
+// THESE READS GO THROUGH cw.obligation_state, THE SCOPED VIEW, and that is
+// deliberate: every one of them runs inside queryAs(role, …), so there is a
+// bound application role and the view answers as that person would see it.
+// A legal_admin reads every obligation by policy, so the assertions are
+// unchanged by 0071's scoping — and if that ever stops being true, these fail,
+// which is the right place to find out.
+
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';

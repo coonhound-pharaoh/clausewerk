@@ -5909,3 +5909,86 @@ whether that thing can be counted somewhere else. If it can, count it — and ch
 both directions before asserting either, because the one that looks symmetric may
 be describing a rule the system does not hold. See
 [[clausewerk-guards-point-at-moved-code]].
+
+## S259 — Five views handed one requester another requester's rows — 2026-08-08
+
+A view runs with its OWNER's rights. The owner ran the migrations and row-level
+security is ENABLED rather than FORCED, so **a view does not inherit the policies
+of the tables under it.** This codebase knows that: it has shipped four times and
+`db/test/views-are-not-policies.test.mjs` exists because of it.
+
+**It shipped five more times and the guard could not see any of them.** Two
+requesters, one deal each, Rita's connection bound to `cw_requester`:
+
+    select * from cw.notice                    ->  0 rows   (the policy works)
+    select * from cw.notice_state              ->  Ben's notice, note text,
+                                                   who raised it, his deal
+    select agreement_id from cw.executed_agreement    ->  AG-RITA
+    select * from cw.agreement_close_eligibility      ->  AG-RITA and AG-BEN
+    select * from cw.vendor_friction           ->  both counterparties
+
+`cw.obligation_state` and `cw.obligation_unowned` carry the identical shape and
+were empty on that seed — scoped ON SHAPE, not on evidence, the call 0019 made
+for `agreement_drift`. All five sit on live endpoints.
+
+**WHY THE GUARD WAS BLIND, and it is one line:** its inventory is built from
+`has_table_privilege('cw_viewer', …)`. **The viewer is the LEAST privileged role
+in the system.** Every one of the five is granted to `cw_requester` and to no
+viewer, so all five were outside the inventory from the day they were written and
+the file's good reverse check never ran against one. 21 views are readable by a
+viewer; 45 more by some other role. The guard covered 21 of 66.
+
+**THE WIDENING WAS ALREADY WRITTEN DOWN IN THAT FILE, and deferred for a good
+reason** — five requester-only views had the leaking shape and belonged to nobody
+in that change. Those five were scoped later; nobody came back for the widening,
+and five NEW unscoped views landed behind it. **A note saying "widen this later"
+protected nothing for as long as it sat there.** That is the lesson, not the SQL.
+
+**Worst single fact:** `reads.py` documented `GET /notices` as "cw.notice
+read_scoped policy (0064) reached through cw.notice_state". The policy was never
+reached. [[report-verified-facts-not-tidy-narratives]] — a rule note is what a
+reviewer trusts INSTEAD of checking.
+
+**THE FIX BROKE THREE DB SUITES, AND THE CAUSE WAS TWELVE LINES ABOVE THE CODE.**
+Adding the WHERE clauses made every notice and every due obligation vanish from
+the workspace panel and the daily digest: `cw.waiting_for` is SECURITY DEFINER,
+so `cw.app_role()` is NULL inside it and a predicate asking `app_role()` matches
+nothing. 0064 says so in a comment right above the query. This is 0019's
+`sow_override_in_force` lesson exactly, and its conclusion still holds —
+**access scoping belongs on views PEOPLE read.**
+
+So the derivation and the scoping stopped being one object: `cw.*_state_all`
+holds the derivation and is granted to NOBODY; the scoped view is that plus the
+policy. `cw.waiting_for` reads `_all` and loses no scoping, because its own guard
+already refuses to answer for anybody but the signed caller.
+
+**Rejected: `or cw.app_role() is null` in the predicate.** One line, no new
+object, unreachable from a browser since a doorway caller always has a role. It
+writes an escape hatch into a security predicate, and the next reader cannot tell
+from the line whether the hatch is safe.
+
+**The new seam is guarded the day it was built:** no view named `_all` may be
+granted to any application role, matched BY SUFFIX so a third one next year is
+covered without anybody remembering.
+
+**Two changes for people, named rather than discovered:** an administrator stops
+reading every notice (they have no read policy on `cw.notice` at all — if they
+should, that is a policy, not a view quietly ignoring one), and `vendor_friction`
+becomes "friction across the deals you can see."
+
+**Two mistakes of mine the harnesses caught, both worth recording.** (1) I wrote
+0071 with CRLF endings while every other migration is LF, and a multi-line
+mutation pattern stopped matching — `.gitattributes` normalises on commit, so
+this would have been invisible in the diff and only ever bitten the harness.
+(2) Three mutation rows went imprecise: one named a test I renamed, two patched
+0038's spelling of views that 0071 replaces, so a **later migration silently
+undid the mutation**. The CLAUDE.md rule about running the harness after touching
+a migration earned itself twice in one change.
+
+Proved by breaking it four ways. 286/286 mutations, 8/8 guard tests, 39/39 db
+suites.
+
+**How to apply:** when a guard enumerates by ROLE, ask whether it enumerates by
+the WEAKEST one. The instinct is that the least privileged role is the risky
+case; it is the opposite — the weakest role is the one nobody grants anything to,
+so a guard keyed on it sees the least. See [[clausewerk-guards-point-at-moved-code]].

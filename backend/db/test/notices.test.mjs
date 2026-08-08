@@ -16,6 +16,14 @@
 //
 //   node db/test/notices.test.mjs
 
+// READ THROUGH cw.*_state_all, THE UNSCOPED DERIVATION (0071). These suites
+// run as the database owner, where cw.app_role() is null — so the people-facing
+// cw.notice_state and cw.obligation_state, which scope on app_role(), correctly
+// answer nothing here. What is asserted below is the DERIVATION (open versus
+// acknowledged, due versus overdue, who closed it), and that is what _all is.
+// Whether the scoping works is asserted where the scoping lives:
+// views-are-not-policies.test.mjs and doorway/test_reads.py.
+
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -224,7 +232,7 @@ await test('the addressed role can acknowledge', async () => {
     insert into cw.notice_acknowledgement (notice_id, acknowledged_by, note)
     select notice_id, 'ignored@clausewerk', 'Placeholder: fixed the term list.'
     from cw.notice order by notice_id limit 1`, [], LEGAL);
-  const [state] = await rows('select state, acknowledged_by from cw.notice_state');
+  const [state] = await rows('select state, acknowledged_by from cw.notice_state_all');
   eq(state.state, 'acknowledged', 'the derived state did not move');
   eq(state.acknowledged_by, LEGAL,
     'the acknowledger came from the INSERT rather than the connection');

@@ -1,10 +1,15 @@
-// Every view a viewer can read has been looked at — migration-independent guard.
+// Every view ANY ROLE can read has been looked at — migration-independent guard.
 //
-// WHY THIS FILE EXISTS. The same bug has now shipped three times:
+// WHY THIS FILE EXISTS. The same bug has now shipped eight times:
 //
 //   · 0017, the reading room — caught by its own suite on the first run.
 //   · cw.override_status  — found by the Python session porting the reads.
 //   · cw.override_passes  — found by checking whether the first one had siblings.
+//   · five more, found on 2026-08-08 by asking the catalogue the same question
+//     THIS FILE ASKS, with cw_viewer swapped for every role. cw.notice_state
+//     handed one requester another requester's private notes, in full, on
+//     GET /notices — whose own rule note in reads.py claimed the scoping this
+//     file exists to check. Scoped by 0071.
 //
 // Each time the shape is identical. A view over a table whose read policy scopes
 // BY PERSON, with no scoping of its own, granted to roles that should only see
@@ -16,11 +21,11 @@
 // Three occurrences is a pattern, not bad luck. Handoff 07 §5.1 has warned about
 // it in prose since the first one, and prose did not stop the second or the
 // third. So this is the mechanical version: an inventory that FAILS when a view
-// reaches a viewer and nobody has written down which case it is.
+// reaches ANY role and nobody has written down which case it is.
 //
 // WHAT THIS IS NOT. It cannot tell a safe view from a leaking one — that needs a
 // human to know what the view is for. What it can do is refuse to let a new one
-// through silently. Adding a view for a viewer now costs one line here and the
+// through silently. Adding a view for anybody now costs one line here and the
 // sentence that goes with it, and the sentence is the point: it is the moment
 // somebody asks "does this need a WHERE clause?", which is the question that was
 // never asked three times running.
@@ -44,13 +49,28 @@ async function test(name, fn) {
 function assert(c, m) { if (!c) throw new Error(m || 'assertion failed'); }
 
 // ── The inventory ─────────────────────────────────────────────────────────
-// One entry per view readable by cw_viewer. The verdict is the deliverable.
+// One entry per view readable by ANY application role. The verdict is the
+// deliverable.
 //
 //   'scoped'   — the view carries its own WHERE clause repeating the policy.
 //                It leaked, or it would have. The scoping is load-bearing.
+//   'scoped-through:<view>'
+//              — it has no WHERE clause of its own and does not need one: every
+//                row it can reach comes through the named view, which is itself
+//                'scoped'. Written as a NAMED DEPENDENCY rather than as prose,
+//                so the test can check the parent is still scoped. If the
+//                parent's WHERE clause is ever removed, both fail.
 //   'read-all' — every table under it has a read policy of "any signed-in
 //                role", so there is no per-person scoping to bypass and the
 //                grant is what gates it.
+//   'privileged'
+//              — unscoped, over person-scoped tables, and granted ONLY to roles
+//                whose read policy on those tables is unconditional
+//                (legal_reviewer, legal_admin, auditor, administrator). The
+//                view hands back exactly what the policies already permit, so
+//                there is nothing to bypass. THE GRANT IS THE WHOLE FENCE: add
+//                cw_requester or cw_viewer to one of these and it becomes the
+//                leak this file is about, which the test below checks for.
 //   'derived'  — aggregate or reference data with no person in it at all.
 //   'enforcement'
 //              — the SCHEMA ITSELF reads this view to decide something, so it
@@ -110,6 +130,90 @@ const REVIEWED = {
   // watcher_coverage counts how many people would be told about an override in
   // each category. It names nobody and carries no contract content.
   watcher_coverage:        'derived',
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Added 2026-08-08, when the enumeration above stopped asking about the
+  // viewer alone. Everything below this line was readable by somebody and had
+  // never been classified by anybody.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── Scoped by 0071, because they leaked ──
+  // Demonstrated on two requesters with one deal each, before the migration:
+  // Rita read Ben's notice in full through cw.notice_state while cw.notice
+  // itself correctly answered her nothing.
+  notice_state:                'scoped',
+  agreement_close_eligibility: 'scoped',
+  vendor_friction:             'scoped',
+  // Identical shape over cw.obligation_instance, empty on that seed. Scoped on
+  // shape, not on evidence — the same call made for agreement_drift above.
+  obligation_state:            'scoped',
+  obligation_unowned:          'scoped',
+
+  // ── Scoped already, by the migration that owned them ──
+  // 0025 (the run store) and 0027 (the negotiation and concession record). The
+  // note at the bottom of this file named five of these as blocking the
+  // widening; they were scoped, and the widening is now done.
+  run_summary:             'scoped',
+  run_contract:            'scoped',
+  run_drift:               'scoped',
+  portfolio_run:           'scoped',
+  concession_in_force:     'scoped',
+  concession_state:        'scoped',
+  position_current:        'scoped',
+  position_revival:        'scoped',
+  renewal_drift:           'scoped',
+  ticket_metrics:          'scoped',
+  waiting_on_you:          'scoped',
+
+  // ── Scoped through a parent view ──
+  // Neither reads a base table directly: every row arrives through
+  // cw.portfolio_run, whose own WHERE clause is the fence. Recording the
+  // dependency by name means removing that WHERE clause fails here too.
+  portfolio_position:      'scoped-through:portfolio_run',
+  portfolio_unresolved:    'scoped-through:portfolio_run',
+
+  // ── Privileged: the grant is the whole fence ──
+  // Each is unscoped over person-scoped tables and granted ONLY to roles whose
+  // read policy on those tables is unconditional. Adding cw_requester or
+  // cw_viewer to any one of them reopens the bug this file is about.
+  //
+  // Legal's review-quality and library instrumentation, over cw.review_ticket.
+  clause_entrance:            'privileged',
+  concession_rate:            'privileged',
+  edit_quality:               'privileged',
+  edit_quality_by_agreement:  'privileged',
+  edit_quality_by_category:   'privileged',
+  review_quality:             'privileged',
+  ticket_route:               'privileged',
+  // The portfolio reports, legal_admin and the auditor only.
+  policy_shift_exposure:      'privileged',
+  report_clause_contest:      'privileged',
+  report_queue_state:         'privileged',
+  report_reviewer_throughput: 'privileged',
+  report_risk_exposure:       'privileged',
+  report_velocity:            'privileged',
+  // The health tiles and the chain, auditor and administrator only.
+  health_chain:               'privileged',
+  health_document:            'privileged',
+  health_summary:             'privileged',
+  // Who did what, over cw.audit_event. legal_admin, auditor, administrator.
+  person_activity:            'privileged',
+  // Retention and holds, and the auditor's own snapshot read.
+  retention_due:              'privileged',
+  run_snapshot:               'privileged',
+
+  // ── Over read-all tables, or derived ──
+  // Clause, ladder and library reference data (0002, 0003, 0062): readable by
+  // anybody signed in, so there is no per-person scoping to bypass.
+  library_origin_mix:      'read-all',
+  library_proposal:        'read-all',
+  run_origin_mix:          'read-all',
+  // Counts and reference rows with no person in them.
+  access_summary:          'derived',
+  health_checkpoint:       'derived',
+  health_rebuild:          'derived',
+  notification_gap:        'derived',
+  redaction_state:         'derived',
 };
 
 const db = await PGlite.create();
@@ -117,22 +221,52 @@ for (const f of readdirSync(MIGRATIONS).filter(f => f.endsWith('.sql')).sort())
   await db.exec(readFileSync(join(MIGRATIONS, f), 'utf8'));
 const rows = async (s, p) => (await db.query(s, p)).rows;
 
-// Every view in cw that cw_viewer holds select on. Asked of the catalogue, so a
-// view added tomorrow appears here without anybody remembering to list it.
+// Every view in cw that ANY application role holds select on. Asked of the
+// catalogue, so a view added tomorrow appears here without anybody remembering
+// to list it.
+//
+// IT ASKED ABOUT cw_viewer ALONE UNTIL 2026-08-08, AND THAT IS HOW FIVE MORE
+// SHIPPED. The viewer is the LEAST privileged role in the system, so a view
+// granted to the requester and not to the viewer sat outside this inventory
+// from the day it was written — and the reverse check below, which is the good
+// one, never ran against it. 21 views are readable by a viewer; 45 more are
+// readable by some other role and by no viewer. The guard covered 21 of 66.
+//
+// THE WIDENING WAS ALREADY WRITTEN DOWN as the right thing to do, at the bottom
+// of this file, and deferred for a stated reason: five requester-only views had
+// the leaking shape and belonged to nobody in that change. Those five were
+// scoped in the meantime and nobody came back for the widening — so
+// cw.notice_state, cw.agreement_close_eligibility, cw.obligation_state,
+// cw.obligation_unowned and cw.vendor_friction landed unscoped behind it, and
+// cw.notice_state was handing one requester another requester's private notes.
+// 0071 scopes those five. This is the follow-through that note asked for.
+const APPLICATION_ROLES = ['cw_viewer', 'cw_requester', 'cw_legal_reviewer',
+                           'cw_legal_admin', 'cw_auditor', 'cw_administrator'];
+
+// The roles whose read policies on the base tables are UNCONDITIONAL — written
+// as `app_role() in (...)` with no per-person clause. A view readable ONLY by
+// these hands back exactly what the policies already permit, which is what the
+// 'privileged' verdict means below.
+const UNCONDITIONAL = new Set(['cw_legal_reviewer', 'cw_legal_admin',
+                               'cw_auditor', 'cw_administrator']);
+
 const readable = await rows(`
-  select c.relname as view_name
+  select c.relname as view_name,
+         array(select r.rolname from unnest($1::text[]) as r(rolname)
+                where has_table_privilege(r.rolname, c.oid, 'SELECT')) as readers
   from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'cw' and c.relkind = 'v'
-    and has_table_privilege('cw_viewer', c.oid, 'SELECT')
-  order by c.relname`);
+    and exists (select 1 from unnest($1::text[]) as r(rolname)
+                 where has_table_privilege(r.rolname, c.oid, 'SELECT'))
+  order by c.relname`, [APPLICATION_ROLES]);
 
-console.log(`\n${readable.length} views are readable by a viewer\n`);
+console.log(`\n${readable.length} views are readable by at least one role\n`);
 
-await test('every view a viewer can read has been classified', async () => {
+await test('every view any role can read has been classified', async () => {
   const unlisted = readable.map(r => r.view_name).filter(v => !(v in REVIEWED));
   assert(unlisted.length === 0,
-    `these views are readable by a viewer and nobody has said why that is safe:\n` +
+    `these views are readable by some role and nobody has said why that is safe:\n` +
     unlisted.map(v => `         · cw.${v}`).join('\n') +
     `\n       Add each to REVIEWED in this file with a verdict — 'scoped',\n` +
     `       'read-all' or 'derived' — and check it before you do. A view does\n` +
@@ -145,7 +279,7 @@ await test('the inventory has no entries for views that no longer exist', async 
   const live = new Set(readable.map(r => r.view_name));
   const ghosts = Object.keys(REVIEWED).filter(v => !live.has(v));
   assert(ghosts.length === 0,
-    `the inventory lists views a viewer cannot read (renamed, dropped, or the ` +
+    `the inventory lists views no role can read (renamed, dropped, or the ` +
     `grant changed): ${ghosts.map(v => 'cw.' + v).join(', ')}`);
 });
 
@@ -190,6 +324,11 @@ await test("no view marked 'read-all' or 'derived' sits over a person-scoped tab
     // that is the entry's whole content. The residual exposure is written up in
     // 0019 rather than asserted away here.
     if (verdict === 'enforcement') continue;
+    // 'privileged' and 'scoped-through' are unscoped over person-scoped tables
+    // BY DEFINITION — that is what each verdict says. Each has its own test
+    // below, which is where the claim is actually checked.
+    if (verdict === 'privileged') continue;
+    if (verdict.startsWith('scoped-through:')) continue;
     const [d] = await rows(`select pg_get_viewdef($1::regclass, true) as def`,
       [`cw.${view}`]);
     // Word-boundary match so `cw.agreement` does not match `cw.agreement_share`.
@@ -201,20 +340,101 @@ await test("no view marked 'read-all' or 'derived' sits over a person-scoped tab
   }
 });
 
+await test("every view marked 'privileged' is granted to privileged roles only",
+  async () => {
+    // THE WHOLE CONTENT OF THAT VERDICT. These views are unscoped over
+    // person-scoped tables and safe for exactly one reason: nobody who should
+    // see only their own rows can read them. That reason is a GRANT, and a
+    // grant is one line in a later migration away from changing.
+    //
+    // This is the check that would have caught the five that 0071 scoped, had
+    // they ever been classified — each was 'privileged' in shape and granted to
+    // cw_requester, which is the contradiction below.
+    for (const row of readable) {
+      if (REVIEWED[row.view_name] !== 'privileged') continue;
+      const broad = row.readers.filter(r => !UNCONDITIONAL.has(r));
+      assert(broad.length === 0,
+        `cw.${row.view_name} is marked 'privileged' — unscoped over ` +
+        `person-scoped tables, safe only because privileged roles alone can ` +
+        `read it — but ${broad.join(', ')} now hold select on it. Either give ` +
+        `it a WHERE clause of its own or take the grant back.`);
+    }
+  });
+
+await test('no unscoped derivation view is reachable by an application role',
+  async () => {
+    // 0071's new seam, guarded on the day it was built rather than after it
+    // leaks. cw.notice_state_all and cw.obligation_state_all are the derivations
+    // WITHOUT the scoping — they exist because cw.waiting_for is SECURITY
+    // DEFINER, where cw.app_role() is null and a scoping predicate matches
+    // nothing. They are unscoped over person-scoped tables BY DESIGN, and the
+    // only thing between them and the leak 0071 closes is that no application
+    // role holds select.
+    //
+    // Named by SUFFIX rather than listed, so a third one written next year is
+    // covered without anybody remembering this file. The suffix is the promise:
+    // if you call a view `_all`, it is granted to nobody.
+    const reachable = await rows(`
+      select c.relname as view_name,
+             array(select r.rolname from unnest($1::text[]) as r(rolname)
+                    where has_table_privilege(r.rolname, c.oid, 'SELECT')) as readers
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'cw' and c.relkind = 'v' and c.relname like '%\\_all'
+        and exists (select 1 from unnest($1::text[]) as r(rolname)
+                     where has_table_privilege(r.rolname, c.oid, 'SELECT'))`,
+      [APPLICATION_ROLES]);
+    assert(reachable.length === 0,
+      reachable.map(r => `cw.${r.view_name} is granted to ${r.readers.join(', ')}`)
+        .join('; ') + `. A view named _all carries a derivation WITHOUT its ` +
+      `scoping. Read it from a SECURITY DEFINER function, never from a session ` +
+      `that belongs to a person.`);
+  });
+
+await test("every 'scoped-through' view names a parent that is still scoped",
+  async () => {
+    // A view with no WHERE clause of its own, resting on one that has one. The
+    // dependency is named so it cannot rot quietly: if the parent is
+    // reclassified or its scoping removed, this fails and names both.
+    for (const [view, verdict] of Object.entries(REVIEWED)) {
+      if (!verdict.startsWith('scoped-through:')) continue;
+      const parent = verdict.slice('scoped-through:'.length);
+      assert(REVIEWED[parent] === 'scoped',
+        `cw.${view} is marked 'scoped-through:${parent}', but cw.${parent} is ` +
+        `marked '${REVIEWED[parent] ?? 'nothing at all'}'. The fence it rests ` +
+        `on is not there.`);
+      const [d] = await rows(`select pg_get_viewdef($1::regclass, true) as def`,
+        [`cw.${view}`]);
+      assert(new RegExp(`\\b${parent}\\b`).test(d.def),
+        `cw.${view} is marked 'scoped-through:${parent}' but its definition ` +
+        `no longer reads cw.${parent} — it is getting its rows from somewhere ` +
+        `else now, and nobody has said what fences them`);
+    }
+  });
+
 await test('the two run views scope themselves in their own WHERE clause', async () => {
   // The standing guard on migration 0025. Both views answered with EVERY run
   // to anybody granted them: a view runs with its owner's rights, and
   // row-level security on cw.run is ENABLED rather than FORCED, so cw.run's
   // read policy was never consulted through either of them.
   //
-  // WHY THIS IS A NAMED TEST RATHER THAN A WIDENING OF THE INVENTORY ABOVE.
-  // The catalogue query is built from what cw_viewer can read (21 views).
-  // Widening it to cw_requester (29) was measured rather than guessed: five of
-  // the eight requester-only views — cw.concession_in_force, cw.concession_state,
-  // cw.position_current, cw.position_revival and cw.renewal_drift — have this
-  // exact shape TODAY and belong to the negotiation and concession work, not
-  // to the run store. Widening here would fail this harness on five views
-  // nobody in this change owns. They are recorded as needing an owner.
+  // WHY THIS IS STILL A NAMED TEST NOW THAT THE INVENTORY IS WIDE. It used to
+  // be a named test BECAUSE the inventory was narrow: widening it then would
+  // have failed on five requester-only views — cw.concession_in_force,
+  // cw.concession_state, cw.position_current, cw.position_revival and
+  // cw.renewal_drift — that had this exact shape and belonged to nobody in that
+  // change. They were recorded as needing an owner, and they got one: all five
+  // are scoped and classified above.
+  //
+  // THE DEFERRAL COST SOMETHING, and it is worth naming. Nobody came back for
+  // the widening, so five NEW unscoped views landed behind it over the
+  // following weeks — one of them handing a requester another requester's
+  // private notes. A note saying "this should be widened later" protected
+  // nothing for as long as it sat there. It is widened now.
+  //
+  // The test stays because it is more specific than the inventory: the
+  // inventory asks whether somebody classified a view, and this asks whether
+  // these two particular WHERE clauses are still present.
   //
   // A SECOND LIMITATION, recorded rather than fixed: the reverse check above
   // would not have caught cw.run_contract even after widening. Its risky-table

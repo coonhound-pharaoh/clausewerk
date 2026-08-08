@@ -12,6 +12,14 @@
 //
 //   node db/test/obligation-evidence.test.mjs
 
+// READ THROUGH cw.*_state_all, THE UNSCOPED DERIVATION (0071). These suites
+// run as the database owner, where cw.app_role() is null — so the people-facing
+// cw.notice_state and cw.obligation_state, which scope on app_role(), correctly
+// answer nothing here. What is asserted below is the DERIVATION (open versus
+// acknowledged, due versus overdue, who closed it), and that is what _all is.
+// Whether the scoping works is asserted where the scoping lives:
+// views-are-not-policies.test.mjs and doorway/test_reads.py.
+
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -116,7 +124,7 @@ await test('satisfy-with-document closes the duty, evidence linked', async () =>
     insert into cw.obligation_act (obligation_id,act,note,document_ref,acted_by)
     values (${DUTY},'satisfied','the insurance certificate, as received',
             ${SAME_DEAL_DOC},'x')`, [], RITA);
-  const s = await one(`select state, closed_by from cw.obligation_state
+  const s = await one(`select state, closed_by from cw.obligation_state_all
                         where obligation_id = ${DUTY}`);
   eq([s.state, s.closed_by], ['satisfied', RITA]);
   const a = await one(`select document_ref from cw.obligation_act
@@ -145,7 +153,7 @@ await test('an acknowledgement records against the document and closes nothing',
     insert into cw.obligation_act (obligation_id,act,note,document_ref,acted_by)
     values (${DUTY2},'counterparty_ack','their confirmation letter',
             ${SAME_DEAL_DOC},'x')`, [], RITA);
-  const s = await one(`select state from cw.obligation_state
+  const s = await one(`select state from cw.obligation_state_all
                         where obligation_id = ${DUTY2}`);
   eq(s.state, 'pending', 'an ack is evidence; the duty is still open');
 });
@@ -155,7 +163,7 @@ await test('the acknowledged duty can still be satisfied afterwards', async () =
     insert into cw.obligation_act (obligation_id,act,note,document_ref,acted_by)
     values (${DUTY2},'satisfied','done, ack on file',${SAME_DEAL_DOC},'x')`,
     [], RITA);
-  const s = await one(`select state from cw.obligation_state
+  const s = await one(`select state from cw.obligation_state_all
                         where obligation_id = ${DUTY2}`);
   eq(s.state, 'satisfied');
 });
