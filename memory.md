@@ -6132,3 +6132,71 @@ who bypasses RLS. The code was right and my harness was wrong.
 **How to apply:** when a string is written in two files, ask which one the test
 reads. A test that reads the same file as the code proves they agree with
 themselves. See [[clausewerk-guards-point-at-moved-code]].
+
+## S262 — A clean pass, and two guards that claimed more than they checked — 2026-08-08
+
+**Nothing live was broken.** Seven areas were driven to a verifiable answer and
+came back correct. Recorded because the cost of this codebase is re-deriving what
+somebody already checked ([[S256]]'s precedent).
+
+1. **The snapshot fingerprint cannot be made ambiguous.** It hashes canonical
+   JSON — sorted keys, no whitespace — and `Snapshot.build` sorts clauses and
+   ladders, so database row order cannot move a snapshot id.
+2. **The audit chain's preimage is length-prefixed.** `cw.lp` writes
+   `octet_length || ':' || value`, so no field's content can be made to look like
+   another field's. The classic concatenation collision is closed by construction.
+3. **The engine is order-deterministic.** Every dict or set iteration feeding
+   output is sorted afterwards; nothing rides on hash order, so "reproducible
+   forever" survives a different PYTHONHASHSEED.
+4. **The screens call no endpoint the router does not serve** — 114 distinct
+   calls in `api.jsx` against 141 routes. The one apparent miss was a template
+   segment, `/health-checks/${which}`, whose two live values both exist.
+5. **No DELETE or TRUNCATE grant reaches evidence.** Nine DELETE grants, all on
+   configuration, claim or session tables, each with a policy scoping it.
+   Thirty-four UPDATE grants, none on a table lacking an update policy.
+6. **The `__signin__` sentinel cannot be impersonated.** `cw.session`'s policy
+   trusts that actor name, and `cw.account` carries
+   `person_is_not_a_reserved_identity` refusing any person beginning `__`. 0033
+   documents that exact attack in its own header.
+7. **No XSS vector in the panes** — no `dangerouslySetInnerHTML`, no `innerHTML`,
+   no `eval`, no `new Function`, no `href`/`src` built from data.
+
+**WHAT DID TURN UP: two guards in `shell.test.mjs` state a promise and check a
+hand-typed subset of it.** Neither was exploited — verified, not assumed.
+
+**(a) "Every call goes through the API module's fixed endpoint list"** refused
+`fetch`, `XMLHttpRequest` and `axios`. A browser has more ways than three.
+`EventSource` and `WebSocket` are the realistic ones HERE, because this system
+has digests and a waiting-on-you list and the obvious next feature is to make
+them push; `sendBeacon` is the third.
+
+**(b) The remote-resource guard matched `<script src="https://…">` and nothing
+else.** Three things it could not see, in a hand-edited file with no build step
+between it and the authenticated shell: a remote `<link rel=stylesheet>` (remote
+CSS is not inert — it restyles the shell and reports what is on the page through
+attribute selectors), a remote `<iframe>`, and `src="//…"` or `src="http://…"` —
+which were not merely unlocked but **invisible**, because the pattern required a
+literal `https://`. Both of the last two are now refused outright rather than
+required to carry a lock: neither can be trusted to arrive unaltered, so a hash
+of what did arrive proves nothing worth having.
+
+**Why fix a guard when nothing is wrong: the guard is the whole control.** There
+is no bundler here. `index.html` is hand-edited and the panes are plain `.jsx`
+served as text, so this file is the only thing between a hand-added CDN `<link>`
+and the authenticated shell.
+
+**RAISED, NOT FIXED — there is no Content-Security-Policy**, and the reason is
+real rather than a deferral. The shell compiles `text/babel` in the browser, so
+any CSP that would help must carry `'unsafe-eval'` plus `https://unpkg.com`,
+which removes most of what a CSP buys. Doing it properly means precompiling the
+JSX — a build step this project has deliberately not taken. That is the owner's
+decision. [[warn-stakeholders-dont-gate-on-approval]].
+
+Proved by breaking it seven ways: three transports in a pane, and a remote
+stylesheet, an `http://` script, a protocol-relative script and an `<iframe>` in
+`index.html`.
+
+**How to apply:** when a guard's comment says "every X" and its code names three
+Xs, the comment is the specification and the code is a sample. Ask what the
+complete set is — and if it cannot be enumerated, say so in the comment rather
+than letting three names stand in for it. See [[clausewerk-guards-point-at-moved-code]].
