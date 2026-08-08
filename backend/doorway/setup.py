@@ -55,18 +55,20 @@ def prepare(owner_url: str = OWNER_URL, app_password: str = APP_PASSWORD) -> lis
         # pure assertion the way NOINHERIT can. The next best thing: write only
         # when there is something to establish. Once the role can log in, a
         # repeat prepare() writes nothing at all.
-        can_login = conn.execute(
-            "select rolcanlogin from pg_roles where rolname = 'cw_app'"
-        ).fetchone()[0]
-        if not can_login or os.environ.get(RESET_PASSWORD_VARIABLE):
-            conn.execute(
-                sql.SQL("alter role cw_app login password {}").format(
-                    sql.Literal(app_password)
-                )
-            )
         # Stated as a check rather than trusted: NOINHERIT is the single word
         # that stops the doorway's login holding all six roles' privileges at
         # once, and a hand-edited role is exactly the thing nobody would notice.
+        #
+        # IT RUNS BEFORE THE PASSWORD IS SET, AND THAT ORDER IS THE POINT.
+        # Until 2026-08-08 it ran after — the comment two lines below already
+        # said it was "applied two lines too late" and nothing had moved it. On
+        # a cluster where somebody had cleared NOINHERIT, `prepare()` would
+        # first GIVE THAT ROLE A WORKING LOGIN and then refuse. The refusal was
+        # accurate and arrived after the door was open; `alter role` is
+        # autocommit here, so the raise unwinds nothing.
+        #
+        # It must still come after migrate(), because 0016 is what creates the
+        # role and re-asserts NOINHERIT on every rebuild.
         inherits = conn.execute(
             "select rolinherit from pg_roles where rolname = 'cw_app'"
         ).fetchone()[0]
@@ -75,6 +77,16 @@ def prepare(owner_url: str = OWNER_URL, app_password: str = APP_PASSWORD) -> lis
                 "cw_app is set to inherit its roles, which would give every "
                 "connection all six roles' privileges before any request has said "
                 "who it is. Migration 0016 sets NOINHERIT; something has changed it."
+            )
+
+        can_login = conn.execute(
+            "select rolcanlogin from pg_roles where rolname = 'cw_app'"
+        ).fetchone()[0]
+        if not can_login or os.environ.get(RESET_PASSWORD_VARIABLE):
+            conn.execute(
+                sql.SQL("alter role cw_app login password {}").format(
+                    sql.Literal(app_password)
+                )
             )
     return applied
 

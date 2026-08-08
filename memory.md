@@ -6200,3 +6200,64 @@ stylesheet, an `http://` script, a protocol-relative script and an `<iframe>` in
 Xs, the comment is the specification and the code is a sample. Ask what the
 complete set is — and if it cannot be enumerated, say so in the comment rather
 than letting three names stand in for it. See [[clausewerk-guards-point-at-moved-code]].
+
+## S263 — The migration ledger noticed an edited file and nothing else — 2026-08-08
+
+`migrate.py` refuses to start if an already-applied migration's file no longer
+hashes to what was applied. Its docstring explains why: an edited migration "was
+skipped in silence on every database that already ran it — forever, with no
+mechanism by which the drift could ever become visible."
+
+**It caught content drift and neither membership nor order drift.** Both produce
+the identical outcome. Demonstrated against a database with all 71 applied:
+
+    0045 deleted from the directory   ->  migrate() returned [], said nothing
+    0007a added below the mark        ->  applied LAST, at ledger position 71
+                                          of 72, while its NAME sorts eighth
+
+The first means this installation carries everything 0045 built and a database
+created from the repository today would not — **the same silence, mirrored**. The
+second means **the same repository builds two different schemas depending on the
+age of the database**, which is a reproducibility hole in a system whose promise
+is that a manifest and a snapshot id reproduce forever. It is also how a harmless
+insertion becomes a broken one, the day somebody inserts a file that references a
+table created above it.
+
+**The guard's own "WHAT THIS CANNOT DO" paragraph was incomplete**, which is the
+sharper half. That paragraph is exactly the right habit — it names the
+null-checksum baseline honestly — so a reader takes it as the complete list of
+gaps and is misled by a document that was trying not to mislead. It now names
+what remains after the fix: a rename reads as one removal plus one addition, and
+the removal is what gets reported.
+
+**An existing test was pointing `migrate()` at a directory holding one file while
+the ledger held seventy-two**, as a shortcut, and the new check correctly read it
+as seventy-one missing. The test now copies the real directory — which is the
+more faithful arrangement anyway, since a racing service instance sees the real
+directory with one new file in it. **The check was right and the shortcut
+described a state no deployment has.**
+
+**A second, smaller finding in the same privileged path.** `setup.py` checked
+that `cw_app` does not inherit its roles — the one word stopping the doorway's
+login from holding all six roles' privileges — **after** granting the login and
+setting the password. On a tampered cluster `prepare()` handed that role a
+working login and then refused; `alter role` is autocommit, so the raise unwound
+nothing. **The comment beside the check already said it was "applied two lines
+too late" and nothing had moved it** — [[S253]]'s shape: a note that records a
+defect is not a fix, and reads afterwards like one.
+
+**MY TEST FOR THAT ORDERING PROVED NOTHING AND THE BITE TEST FOUND IT.** It
+asserted that no `alter role … login` runs before the refusal — but `cw_app` can
+already log in by then, so that statement is issued under NEITHER order and the
+assertion had nothing to see. It passed against the old order. Setting
+`CW_APP_PASSWORD_RESET` makes the statement reachable, and it now fails when the
+order is restored. Second time in three passes that a first-draft guard was
+vacuous and only breaking it revealed that.
+
+Proved by breaking all three. 50 doorway mutation patterns resolve, and both new
+rows verified to fire.
+
+**How to apply:** when a guard compares two things, ask what "the same" means for
+them. Content, membership and order are three different sameness questions, and a
+check that answers one reads like a check that answers all three. See
+[[clausewerk-guards-point-at-moved-code]].
