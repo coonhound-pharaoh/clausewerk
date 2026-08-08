@@ -362,15 +362,106 @@ def test_no_write_takes_an_actor_from_the_body(key: str):
     )
 
 
+# ── The set of person columns, DERIVED and not typed out ────────────────────
+#
+# The migrations are what a person column actually is. A hand-written list is a
+# snapshot of the schema on the day somebody last looked, and this one was
+# seventeen names out of date when it was measured on 2026-08-08 — while its own
+# comment in writes.py described exactly that failure and named the time it had
+# already happened (`requester`).
+#
+# ONE DERIVATION, TWO GUARDS. Below it feeds both the declaration check and the
+# statement check. They were separate hand-typed lists — 17 names and 10 — of one
+# concept, which is S257's defect in a different file: two copies written apart
+# have never once agreed in this codebase.
+
+MIGRATIONS = Path(writes_module.__file__).resolve().parents[1] / "db" / "migrations"
+
+# A column declaration whose name says it holds a person: at the start of a line,
+# with a text type straight after.
+#
+# `p_…` IS EXCLUDED BECAUSE IT IS THIS SCHEMA'S PARAMETER PREFIX, not out of
+# tidiness. Function parameters are declared in the same shape as columns and
+# `p_by` was picked up on the first run — a name no body could ever collide with,
+# reported as an unguarded column. A guard that cries wolf gets its exception
+# list padded until it means nothing.
+PERSON_COLUMN = re.compile(
+    r"^\s+(?!p_)(\w+_by|actor|approver|reviewer|requester|owner)\s+"
+    r"(?:text|citext|varchar)\b", re.MULTILINE)
+
+# THE ONE COLUMN THAT LOOKS LIKE AN ACTOR AND IS NOT, kept as a NAMED exception
+# so that it is a decision on the record rather than a silence.
+#
+# `cw.ladder.owner` is stewardship — who to ask about a ladder — and `POST
+# /ladders/publish` takes it from the body deliberately. It defaults to the actor
+# (`coalesce(p_owner, old_owner, cw.app_actor())`, 0062) which is why it matches
+# the pattern, but NO POLICY READS IT: it is selected into a view and nowhere
+# else. Only a legal admin may publish, and who actually published is recorded
+# separately by cw.audit. Naming a colleague as a ladder's steward is an ordinary
+# act, not an unattributed one.
+NOT_AN_ACTOR = frozenset({"owner"})
+
+
+def person_columns() -> set[str]:
+    """Every column in the schema that holds a person's name."""
+    found: set[str] = set()
+    for migration in sorted(MIGRATIONS.glob("*.sql")):
+        found.update(PERSON_COLUMN.findall(
+            migration.read_text(encoding="utf-8")))
+    assert len(found) > 25, (
+        f"only {len(found)} person columns were derived from {MIGRATIONS}. The "
+        "pattern has stopped matching the schema, and a guard that derives "
+        "nothing passes everything")
+    return found
+
+
+def test_the_declaration_covers_every_person_column_the_schema_has():
+    """THE GUARD THAT LOOKS AT THE SCHEMA RATHER THAN AT THE LAST ENDPOINT.
+
+    `NEVER_FROM_THE_BODY` is the doorway's own declaration and stays a plain
+    frozenset — a runtime module must not read the migrations folder to answer a
+    question about its own fields. This is what makes the declaration keep up:
+    add `escalated_by` to a migration and this fails naming it, which is the
+    moment somebody decides whether a body may carry it.
+    """
+    missing = sorted(person_columns() - NOT_AN_ACTOR - NEVER_FROM_THE_BODY)
+    assert not missing, (
+        f"the schema holds {missing}, which carry a person's name, and "
+        "writes.NEVER_FROM_THE_BODY does not list them. Add them there, or add "
+        "the column to NOT_AN_ACTOR above with the reason it is not an actor."
+    )
+
+
+# THE REVERSE IS DELIBERATELY NOT ASSERTED, and the reason is worth writing down
+# because it was tried and was wrong.
+#
+# The obvious companion test — "the declaration names nothing the schema does not
+# have" — was written, run, and deleted. It failed on `countersigned_by` and
+# `person_acting`, and BOTH of those entries are correct. No such column exists:
+# 0013 considered `countersigned_by` as a column and chose an action row instead
+# (`action in ('granted','countersigned','revoked')`), and `person_acting` is in
+# the schema nowhere at all.
+#
+# They belong in the declaration anyway, because it bans BODY FIELD NAMES, not
+# columns. A form posting `person_acting` is claiming to name the actor whatever
+# the schema calls the column, and the ban should already be there when somebody
+# adds the column. The schema is a FLOOR under this list, never a ceiling — so
+# the containment runs one way only.
+
+
 @pytest.mark.parametrize("key", sorted(WRITES))
 def test_any_recorded_actor_comes_from_the_connection(key: str):
     """Where a statement writes a name into a column, that name is
-    `current_setting('cw.actor')` and nothing else."""
+    `current_setting('cw.actor')` and nothing else.
+
+    THE COLUMNS COME FROM THE SCHEMA (person_columns above), not from a list
+    typed here. That list held ten names against the schema's thirty-three, so
+    a statement setting `settled_by` or `granted_by` from anywhere at all was
+    invisible to it.
+    """
     sql = WRITES[key].sql
-    for column in ("created_by", "opened_by", "added_by", "removed_by",
-                   "revoked_by", "decided_by", "approved_by", "approver",
-                   "requester", "acted_by"):
-        for assigned in re.findall(rf"{column}\s*=\s*([^\s,]+)", sql):
+    for column in sorted(person_columns() - NOT_AN_ACTOR):
+        for assigned in re.findall(rf"\b{column}\s*=\s*([^\s,)]+)", sql):
             assert "current_setting" in assigned, (
                 f"{key} sets {column} to {assigned}, which did not come from the "
                 "connection"
