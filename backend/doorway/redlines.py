@@ -172,7 +172,7 @@ def fetch(db: Database, caller: Caller, query: dict):
     """
     # IMPORTED HERE FOR documents.py's REASON, and it is the same cycle: app.py
     # routes to this module, so a module-level import of app.py would close it.
-    from doorway.app import Download, Response
+    from doorway.app import Download, Response, transportable_filename
 
     selector = query or {}
     negotiation = str(selector.get("negotiation") or "").strip()
@@ -266,10 +266,17 @@ def fetch(db: Database, caller: Caller, query: dict):
 
     # The name the counterparty's file arrived under, unedited — `record` did
     # not rewrite it on the way in and this does not rewrite it on the way out.
-    # A round with no recorded name gets one built from the record, which is a
-    # fact rather than a guess.
+    # A round whose name the transport cannot carry gets one built from the
+    # record, which is a fact rather than a guess.
+    #
+    # THE TEST IS app.transportable_filename AND NOT A LIST SPELLED HERE. Until
+    # 2026-08-08 this looked for a quote and a line break, which is a narrower
+    # rule than the transport's — so a document called `Contrat Été.docx` came
+    # through here unchanged and `_send_download` answered 500. The counterparty
+    # chooses the name; whether it can be quoted into a header is a fact about
+    # the transport, so the transport is the thing asked.
     name = str(found["filename"] or "").strip()
-    if not name or '"' in name or "\n" in name or "\r" in name:
+    if not transportable_filename(name):
         name = (f"negotiation-{round_row['negotiation_id']}"
                 f"-round-{round_row['round_no']}")
     return Download(200, bytes(found["bytes"]),

@@ -5785,3 +5785,65 @@ requester can redirect a colleague's digests.
 that finds something — the cost of this codebase is re-deriving what somebody
 already checked. Four negatives here, each with the query or probe that settled
 it, so the next reader can disagree with the method rather than repeat the work.
+
+## S257 — A document with an ordinary foreign name could not be downloaded — 2026-08-08
+
+The counterparty names their own file and this system stores that name unedited,
+deliberately: a service that quietly renames somebody's document is a service
+that can be argued with about what the document was called. Handing it back out,
+**two rules decided whether the name was usable and they did not agree.**
+
+    redlines.fetch   refused a quote and a line break
+    _send_download   refuses anything outside plain printable ASCII, with a 500
+
+So `Contrat Été.docx` was accepted, stored in `cw.received_document`, recorded on
+the audit chain — and then answered **`500 {"error": "the service failed"}`** to
+everybody who asked for it. The document was unreachable and the person asking
+was told the service was broken. Nothing was broken. `documents.py` had the same
+gap one step earlier: it listed a quote and a line break, then composed
+`{run_id}.docx`, so an accented run name reached the transport and got the 500
+as the caller's own request.
+
+**THE TRANSPORT WAS NOT THE THING THAT WAS WRONG, and this is the part worth
+keeping.** Its rule is correct — a quote ends the quoted string and starts a
+second filename, a CRLF starts a second header, and `http.server` encodes headers
+as latin-1 so anything above it aborts the reply mid-response. It was already
+proved by `test_a_download_filename_cannot_change_the_response_headers`. The 500
+is right too: a producer handing the transport an unusable name IS our bug. The
+defect was that the producers **guessed at that rule instead of asking it**, and
+guessed narrower.
+
+**One function, `app.transportable_filename`, and the producers now choose what
+to do about a no** — redlines falls back to the name built from the record, which
+is what that fallback was already for; documents refuses at the boundary with a
+400 that names the caller's mistake. The transport asks the same question and
+keeps its 500, which is now a backstop against a producer that did not ask rather
+than the only place the rule exists. It lives in `app.py` for the reason
+`DOCX_TYPE` does: that file owns `Download`, and what a Download's name may be is
+a fact about the type.
+
+**This is [[clausewerk-guards-point-at-moved-code]] in its other spelling** — not
+a guard pointing at code that moved, but two copies of one rule that were never
+the same rule. The costs are opposite and both real: the strict copy turned a
+good document into an outage, and a lax copy in that position is a header
+injection.
+
+**The tests are written against the predicate, never against a character list.**
+A test carrying its own copy of the rule passes the moment it agrees with a stale
+copy — which is the exact failure being fixed. Both were proved by breaking them:
+with the old narrow condition restored, four fail naming `'Contrat Été.docx'`.
+
+**A mutation row was added** (`any filename is transportable` → `return True`),
+because a rule that is now one copy is a rule somebody can soften in one edit.
+All 46 patterns still resolve exactly once.
+
+**Not fixed, and deliberately: the name is still ASCII-or-nothing.** Carrying
+`Contrat Été.docx` through properly means RFC 5987 `filename*=UTF-8''…`, which
+decides what the browser saves the file as — a product decision, not something
+to slip in behind a bug fix. Today the document arrives under the record's own
+name, which is a fact rather than a guess, and it arrives.
+
+**How to apply:** when two layers both validate the same value, one of them is a
+copy. Ask which layer OWNS the constraint — usually the one that would break —
+and make the other ask it. Two validations of one value that were written
+separately have never once agreed in this codebase.

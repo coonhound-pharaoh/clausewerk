@@ -448,3 +448,33 @@ def test_nothing_is_stored(library, schema):
         assert request.one("select count(*) from cw.executed_document")[0] == before
         assert request.one("select count(*) from cw.run")[0] == 1, (
             "producing a document recorded a second run")
+
+
+# ── The run name becomes the filename (2026-08-08) ──────────────────────────
+
+
+@pytest.mark.parametrize("run", [
+    "RUN-Été",       # an accent
+    "RUN-合同",       # not Latin at all
+    "RUN\\7",          # a backslash escapes inside a quoted-string
+    'RUN"7',            # the injection the rule started out guarding
+])
+def test_a_run_name_the_filename_cannot_carry_is_the_callers_mistake(run):
+    """A 400 that names the problem, never the 500 that says WE broke.
+
+    `{run_id}.docx` is quoted into a content-disposition header, and the
+    transport refuses a name it cannot put there — with a 500, correctly, since
+    a producer handing it one is our bug. This guard used to list a quote and a
+    line break only, so the first two names above reached the transport and the
+    caller was told the service had failed.
+
+    No database is needed: the refusal is decided before anything is asked.
+    """
+    from doorway import documents
+    from doorway.identity import Caller
+
+    answered = documents.contract(None, Caller(person=SAM, role="requester"),
+                                  {"run": run})
+    assert answered.status == 400, getattr(answered, "body", answered)
+    assert answered.body["error"] == "refused"
+    assert answered.body["kind"] == "rejected"

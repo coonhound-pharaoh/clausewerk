@@ -191,6 +191,20 @@ MUTATIONS = [
         "test_server.py::test_a_download_leaves_as_bytes_with_its_own_content_type",
     ),
     (
+        # The one spelling of what a Download's filename may be (2026-08-08).
+        # Opened up, a producer's name goes straight into a quoted header: a
+        # quote ends the string and starts a second filename, a CRLF starts a
+        # second header outright. It is one function precisely BECAUSE it used
+        # to be two disagreeing copies, so this row exists to notice if the
+        # single copy is ever softened into a formality.
+        "any filename is transportable",
+        "doorway/app.py",
+        "    return bool(name) and all(\n"
+        "        32 <= ord(char) <= 126 and char not in '\"\\\\' for char in name)",
+        "    return True",
+        "test_server.py::test_a_download_filename_cannot_change_the_response_headers",
+    ),
+    (
         # Bytes in, and the mirror of the row above. A .docx is a zip: read as
         # JSON it is refused as malformed, so the system simply cannot be given
         # a document — which is the state this package found.

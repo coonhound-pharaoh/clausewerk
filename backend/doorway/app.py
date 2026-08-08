@@ -102,6 +102,41 @@ class Upload:
 DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
+def transportable_filename(name: str | None) -> bool:
+    """Can a Download carrying this name actually leave the building?
+
+    THE ONE SPELLING OF THIS RULE, for the reason DOCX_TYPE is one spelling. It
+    lives here because this file owns `Download`, and what a Download's filename
+    may be is a fact about that type, not about whoever built one.
+
+    IT WAS TWO SPELLINGS UNTIL 2026-08-08, AND THEY DISAGREED. The name is
+    quoted into a content-disposition header and deliberately never rewritten in
+    transit — so the transport refuses anything outside printable ASCII, and
+    that refusal is a 500, because a producer that hands it an unusable name is
+    OUR bug and must not reach the wire. Meanwhile the producers checked for a
+    quote and a line break and nothing else. A received document called
+    `Contrat Été.docx` was therefore accepted, stored, recorded on the chain —
+    and answered "the service failed" when anybody asked for it back.
+
+    So the producers ask this, and get to choose what to do about a no: redlines
+    falls back to a name built from the record, documents refuses the request at
+    the boundary. The transport asks the same question and keeps its 500, which
+    is now a backstop against a producer that did not ask rather than the only
+    place the rule exists.
+
+    WHY THE RULE IS THIS STRICT rather than "no quote, no newline". A quote ends
+    the quoted string and a CRLF starts a second header — those two are the
+    injection. The rest is representability: `http.server` encodes headers as
+    latin-1, so a character outside it aborts the reply mid-response, and a
+    backslash is an escape inside a quoted-string that recipients disagree
+    about. Widening this to carry a foreign name properly means RFC 5987
+    `filename*=UTF-8''…`, which is a product decision about what the browser
+    saves the file as — not something to slip in behind a bug fix.
+    """
+    return bool(name) and all(
+        32 <= ord(char) <= 126 and char not in '"\\' for char in name)
+
+
 class App:
     """The whole service, minus the socket."""
 
