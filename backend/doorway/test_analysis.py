@@ -569,3 +569,51 @@ def _vendor_paper() -> bytes:
         z.writestr(zipfile.ZipInfo("_rels/.rels"), engine_docx.RELS)
         z.writestr(zipfile.ZipInfo("word/document.xml"), document)
     return buf.getvalue()
+
+
+# ── The routes, not just the functions (2026-08-08) ─────────────────────────
+
+
+@pytest.mark.parametrize("route", [
+    "/negotiations/analyse",
+    "/negotiations/analyse/supplier",
+    "/concessions/assess-risk",
+])
+def test_each_analysis_route_reaches_its_handler(seeded, owner_url, route):
+    """Every test above calls `analysis.analyse(...)` and friends directly, so
+    the WIRING between the route string and the handler was checked by nothing.
+    Renaming all three keys in app.py left the suite green.
+
+    This is the second copy of each string, in a different file, which is the
+    only thing that pins it — see test_server.py's
+    `test_every_specially_dispatched_route_is_driven_through_the_router`, which
+    fails if a dispatched route stops appearing in any test.
+
+    IT HAS TO SIGN SOMEBODY IN, and that is not incidental. `App.handle`
+    resolves the caller BEFORE it dispatches, so a request with no token gets
+    401 whether or not the route exists — a version of this test without a
+    session would pass for a route that had been renamed to nonsense, which is
+    the exact failure it is written to catch. This suite seeds no accounts of
+    its own, so it makes one here.
+
+    ONLY THE ROUTER IS UNDER TEST. These calls carry no selector, so the handler
+    refuses them for want of one — a 400 or a 409 is a pass, because it proves a
+    handler was reached. The one failure is App.handle's own 404.
+    """
+    from doorway.app import App
+
+    with psycopg.connect(owner_url, autocommit=True) as owner:
+        owner.execute(
+            "select cw.bootstrap(%s,%s,%s,%s,%s,%s)",
+            ("owner@clausewerk", ADMIN, "The Administrator",
+             LEAH, "Leah Legal", "Legal"))
+
+    app = App(seeded, email_channel=lambda *_: None)
+    token = app.sign_in(LEAH).body["token"]
+    answered = app.handle("POST", route, token=token, body={}, query={})
+
+    assert not (answered.status == 404
+                and answered.body.get("error") == "no such endpoint"), (
+        f"POST {route} is dispatched in app.py and the router does not "
+        "recognise it; the string is spelt one way there and another in the "
+        "branch that handles it")

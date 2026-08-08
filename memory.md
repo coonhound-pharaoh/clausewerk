@@ -6064,3 +6064,71 @@ one naming the invented hash on the chain.
 the answer. Labelling and deciding look identical at a grep and are opposite in
 effect — and a function that labels honestly is the most convincing possible
 disguise for one that decides nothing. See [[clausewerk-guards-point-at-moved-code]].
+
+## S261 — Four endpoints were wired into the router and nothing ever asked for them — 2026-08-08
+
+`App.handle` dispatches sixteen routes by matching a literal string. Four were
+driven by nothing anywhere in the repository — no test, no screen, no script:
+
+    POST /notifications/tick
+    POST /negotiations/analyse
+    POST /negotiations/analyse/supplier
+    POST /concessions/assess-risk
+
+Their handlers are well tested. `test_notifications.py` calls
+`notifications.tick(...)` directly eleven times. **Every one of those tests calls
+the FUNCTION; nothing asked the ROUTER.** All four keys renamed to nonsense in
+`app.py` → **139 tests passed.**
+
+**Why the tick matters most.** `notifications.py`'s header states the contract:
+an external scheduler POSTs `/notifications/tick`, and there is deliberately no
+timer inside the service. **That string IS the feature.** Mistype it and every
+digest stops, nobody is told anything is waiting on them, the scheduler quietly
+collects 404s, and the suite stays green. `POST /concessions/assess-risk` appears
+exactly once in the whole repository — in `app.py` itself.
+
+**This is [[S254]]'s lesson one layer over.** That sweep proved all 139 routes
+REQUIRE a session, by reading the source rather than a registry. The same file
+has the mirror gap: every route proved GATED, four never proved REACHABLE. **A
+route that 404s is perfectly gated.**
+
+The reads and writes do not have this problem, and the reason is the lesson: they
+are dispatched by `key in reads.READS`, so the registry IS the route table and one
+parametrised test covers all of them. The sixteen specially-dispatched routes are
+the ones where the string is typed TWICE — once in `app.py`, once in whatever asks
+for it — and only one copy was checked.
+
+**MY FIRST GUARD WAS NEARLY TAUTOLOGICAL AND ITS OWN BITE TEST FOUND IT.** It
+parsed the keys out of `app.py` and then asked `App.handle` for each — so
+renaming a route renamed it in BOTH halves and the guard agreed with itself. It
+passed while the thing it existed to catch was happening. **A guard that reads
+only the file it guards cannot see a rename**; it can only see a key that was
+never wired at all, which is not the failure that occurs.
+
+The working version compares TWO sources: the keys `app.py` dispatches against
+the route strings the test suite drives. It excludes its own function body,
+because the keys appear in its docstring and failure message and matching those
+would find every key by construction — a vacuous pass, [[S254]] again.
+
+**A second trap, caught the same way: the route tests must sign somebody in.**
+`App.handle` resolves the caller BEFORE dispatching, so no-token requests get 401
+whether or not the route exists. A session-less version of these tests would pass
+for a route renamed to nonsense.
+
+**Checked and dismissed before settling on this:** `cw.audit_event` attribution
+(the restrictive policy works; the unbound `actor` is documented in 0007 and
+ARCHITECTURE.md §5 with a sound reason), `run_decision`/`run_finding` transitive
+scoping through `cw.run` (works), `cw.notice` INSERT (bound by a trigger that
+checks routing and subject visibility), no READ exposing bytes or tokens, every
+write placeholder having a declared field, and the 20 GET endpoints no test names
+by path (covered by `test_reads.py`'s parametrisation over `sorted(READS)`).
+
+**One of those checks I got wrong first and caught myself:** my initial
+attribution probe showed a requester forging `actor_role`, because `c.commit()`
+between attempts dropped the `SET LOCAL role` and later inserts ran as the OWNER,
+who bypasses RLS. The code was right and my harness was wrong.
+[[report-verified-facts-not-tidy-narratives]] — one transaction per attempt.
+
+**How to apply:** when a string is written in two files, ask which one the test
+reads. A test that reads the same file as the code proves they agree with
+themselves. See [[clausewerk-guards-point-at-moved-code]].

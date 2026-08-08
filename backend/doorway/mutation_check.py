@@ -191,6 +191,22 @@ MUTATIONS = [
         "test_server.py::test_a_download_leaves_as_bytes_with_its_own_content_type",
     ),
     (
+        # A dispatched route renamed in app.py and nowhere else (2026-08-08).
+        # notifications.py says an external scheduler POSTs this path and that
+        # there is deliberately no timer in the service, so the string IS the
+        # feature: mistype it and every digest stops silently while the tick's
+        # own tests go on passing, because they call the function.
+        #
+        # The row names the META-GUARD rather than the route test, because the
+        # meta-guard is the one that generalises: it fails for ANY dispatched
+        # route no test asks for, including one added next year.
+        "a dispatched route is renamed in app.py alone",
+        "doorway/app.py",
+        'if key == "POST /notifications/tick":',
+        'if key == "POST /notifications/tickle":',
+        "test_server.py::test_every_specially_dispatched_route_is_driven_through_the_router",
+    ),
+    (
         # The one spelling of what a Download's filename may be (2026-08-08).
         # Opened up, a producer's name goes straight into a quoted header: a
         # quote ends the string and starts a second filename, a CRLF starts a
