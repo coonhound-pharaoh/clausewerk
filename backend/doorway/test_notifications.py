@@ -330,3 +330,34 @@ def test_a_failed_delivery_may_be_retried_the_same_day(seeded: Database):
     assert retried.body["sent"] == 1, "a failure is not a delivery; the retry is owed"
     outcomes = [r["outcome"] for r in outbox(seeded)]
     assert outcomes == ["failed", "sent"]
+
+
+# ── The route, not just the function (2026-08-08) ───────────────────────────
+
+
+def test_the_tick_is_reachable_at_the_route_a_scheduler_posts_to(seeded):
+    """THE STRING IS THE FEATURE, and until now nothing checked it.
+
+    This module's header says an external scheduler POSTs /notifications/tick
+    on an Administrator's session, and that there is deliberately no timer
+    inside the service. So a typo in that route means every digest stops:
+    nobody is told anything is waiting on them, the scheduler quietly collects
+    404s, and every test above goes on passing — because all of them call
+    `notifications.tick(...)` and none of them asks the router.
+
+    Renaming the key in app.py left 139 tests green. This is the second copy of
+    the string, in a different file, which is the only thing that pins it.
+
+    WHAT IS ASSERTED IS THAT THE ROUTER FOUND A HANDLER. Whatever the tick then
+    decides is the business of the tests above.
+    """
+    from doorway.app import App
+
+    app = App(seeded, email_channel=lambda *_: None)
+    token = app.sign_in(ADMIN).body["token"]
+    answered = app.handle("POST", "/notifications/tick", token=token, body={})
+
+    assert not (answered.status == 404
+                and answered.body.get("error") == "no such endpoint"), (
+        "POST /notifications/tick is not routed. An external scheduler is the "
+        "only thing that runs the digests, and it has just been given a 404.")

@@ -1325,3 +1325,84 @@ def test_the_screens_and_their_fonts_are_still_served(running):
             assert expected in response.headers["content-type"], (
                 f"{path} came back as {response.headers['content-type']}, "
                 f"not {expected}")
+
+
+# ── Every dispatched route is asked for by name, somewhere (2026-08-08) ─────
+
+
+def test_every_specially_dispatched_route_is_driven_through_the_router():
+    """THE MIRROR OF THE SESSION SWEEP ABOVE, and it was missing.
+
+    That sweep proves all 139 routes REQUIRE a session. Nothing proved any of
+    them ANSWERS. A route that 404s is perfectly gated, and four of them were
+    never asked for by anything in the repository:
+
+        POST /notifications/tick
+        POST /negotiations/analyse
+        POST /negotiations/analyse/supplier
+        POST /concessions/assess-risk
+
+    Their handlers are well tested — test_notifications.py calls
+    `notifications.tick(...)` directly eleven times — but every one of those
+    tests calls the FUNCTION. Nothing asked the ROUTER. Renaming all four keys
+    to nonsense in app.py left 139 tests green.
+
+    WHY IT MATTERS MOST FOR THE TICK. notifications.py's header says an external
+    scheduler POSTs /notifications/tick, and that there is deliberately no timer
+    inside the service. So that string IS the feature: mistype it and every
+    digest stops, nobody is told anything is waiting on them, the scheduler
+    quietly collects 404s, and the suite stays green.
+
+    THE FIRST VERSION OF THIS GUARD WAS NEARLY TAUTOLOGICAL, and it is worth
+    recording because it passed its own bite test by accident. It parsed the
+    keys out of app.py and then asked App.handle for each one — so renaming a
+    key renamed it in BOTH halves and the test still passed. A guard that reads
+    only the file it is guarding cannot see a rename; it can only see a key that
+    was never wired at all.
+
+    So this compares TWO SOURCES: the keys app.py dispatches, and the route
+    strings the test suite actually drives. A key renamed in app.py alone stops
+    matching any test and fails here by name. That is the same reasoning as the
+    session sweep's — check where the mistake happens, not where it is
+    convenient — applied one file over.
+    """
+    import re
+
+    here = Path(__file__).parent
+    source = (here / "app.py").read_text(encoding="utf-8")
+    body = source[source.index("    def handle("):]
+    keys = sorted(set(re.findall(r'key == "((?:GET|POST) /[a-z0-9/-]+)"', body)))
+
+    # The vacuity guard, the same shape as the sweep above and for the same
+    # reason: a regex that stopped matching would make this true of nothing.
+    assert len(keys) >= 14, (
+        f"only {len(keys)} specially-dispatched routes were parsed out of "
+        "app.py; this test is not looking at the service it claims to cover")
+
+    # Every test file, INCLUDING this one — four routes are legitimately driven
+    # only from here. What is cut out is this function's own text, and that is
+    # what keeps the check from being circular: the keys are quoted in the
+    # docstring and the failure message below, so leaving them in would match
+    # every key by construction and pass over anything.
+    mine = Path(__file__).read_text(encoding="utf-8")
+    start = mine.index("def test_every_specially_dispatched_route_is_driven")
+    driven = "\n".join(
+        (path.read_text(encoding="utf-8", errors="ignore")
+         if path.name != Path(__file__).name else mine[:start])
+        for path in sorted(here.glob("test_*.py")))
+
+    # The path as it appears anywhere in a test, NOT as a whole quoted string:
+    # this file drives four of them over a socket as "/api/runs/contract?run=…",
+    # so requiring the quotes back would report those four as unasked and the
+    # real four would be lost in the noise. The negative lookahead keeps
+    # /negotiations/analyse from being satisfied by /negotiations/analyse/supplier.
+    unasked = [key for key in keys
+               if not re.search(
+                   re.escape(key.split(" ", 1)[1]) + r"(?![a-z0-9/-])", driven)]
+
+    assert not unasked, (
+        f"{unasked} are dispatched in App.handle and no test names them. The "
+        "string is written twice — once in app.py and once in whatever asks "
+        "for it — and only one copy is checked, so a typo makes the endpoint "
+        "404 for everybody forever while the handler’s own tests go on "
+        "passing, because they call the function and never the route.")
