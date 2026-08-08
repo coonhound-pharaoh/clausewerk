@@ -210,6 +210,19 @@ await test('both U15 rows are on the record, decided by the owner', async () => 
 
 console.log('\nreading one back out is itself recorded (0065, NI-4)');
 
+// A REAL ROUND FOR THE READ TO BE ABOUT (0072). Until then this section called
+// cw.record_document_read with invented ids and the function wrote them down;
+// now it verifies what it is told, so the test needs a round that exists.
+await db.exec(`
+  select set_config('cw.actor','${RITA}',false);
+  insert into cw.negotiation (agreement_id, paper, opened_by, baseline_chosen_by)
+    values ('AG-701','theirs','${RITA}','${RITA}');
+  insert into cw.negotiation_round
+    (negotiation_id, round_no, direction, document_sha256, storage_uri, sent_on, actor)
+    values (1, 1, 'received', '${PAPER_SHA}', 'cw://received-document/1',
+            current_date, '${RITA}');
+`);
+
 await test('a recorded read names the role that made it', async () => {
   // THE AUDITOR'S NARROW DOOR. Handing a document out is appended to the chain
   // before the bytes leave, and the chain's general append policy names the
@@ -223,7 +236,7 @@ await test('a recorded read names the role that made it', async () => {
   // download as roleless would make the ledger useless in the exact case it
   // was built for.
   await queryAs('auditor', `select cw.record_document_read(
-    1, 1, 1, repeat('a', 64), 4200, 'received')`, [], 'ava@cw');
+    1, 1, 1, '${PAPER_SHA}', ${PAPER.length}, 'received')`, [], 'ava@cw');
 
   const [entry] = await rows(
     `select actor, actor_role, event_type, payload from cw.audit_event
@@ -232,7 +245,66 @@ await test('a recorded read names the role that made it', async () => {
   eq(entry.actor, 'ava@cw');
   eq(entry.actor_role, 'auditor',
      'the chain recorded the read without the role that made it');
-  eq(entry.payload.byte_size, 4200);
+  eq(entry.payload.byte_size, PAPER.length);
+});
+
+// ── The arguments are a claim, not a record (0072) ─────────────────────────
+//
+// THIS SECTION EXISTS BECAUSE THE TEST ABOVE USED TO PIN THE BUG. It called the
+// function with negotiation 1, round 1, document 1 and byte size 4200 — none of
+// which existed or agreed with anything — and asserted that 4200 came back out
+// of the chain. It passed. What it was actually proving was that whatever the
+// caller said got written down.
+//
+// 0065 described the function as writing fields "either derived here or bounded
+// by its own arguments". An argument is not a bound; it is whatever the caller
+// says. Demonstrated before the fix: a requester wrote a read of another
+// requester's negotiation, naming a round that did not exist, a document that
+// did not exist and an invented hash — and cw.audit_verify() returned clean,
+// because the chain guarantees nothing was ALTERED, never that anything is TRUE.
+
+await test('a requester cannot record a read of somebody else’s round', async () => {
+  // THE ONE THAT WAS THE HOLE. AG-701's negotiation belongs to Rita; Bo is a
+  // requester on nothing. Refused by the round's own read policy, restated
+  // inside the function because SECURITY DEFINER bypasses it.
+  await throws(() => queryAs('requester',
+    `select cw.record_document_read(1, 1, 1, '${PAPER_SHA}', ${PAPER.length}, 'received')`,
+    [], 'bo@cw'),
+    'not yours to read',
+    'a requester recorded a read of a negotiation they cannot see');
+
+  const n = await one(`select count(*)::int as n from cw.audit_event
+    where event_type='received_document_read' and actor='bo@cw'`);
+  eq(n.n, 0, 'the refusal still left something on the chain');
+});
+
+await test('a round that does not exist cannot be read', async () => {
+  await throws(() => queryAs('auditor',
+    `select cw.record_document_read(1, 99, 1, '${PAPER_SHA}', 1, 'received')`,
+    [], 'ava@cw'),
+    'no round 99',
+    'a read was recorded against a round nobody has ever exchanged');
+});
+
+await test('the claimed hash, size and direction are ignored — the record wins', async () => {
+  // NOT REFUSED, AND THAT IS THE DELIBERATE CHOICE. Refusing on a mismatched
+  // claim would let a caller break their own legitimate download with a typo.
+  // An argument that cannot be believed should not be able to stop anything
+  // either — so it is dropped and the database's own answer is recorded.
+  await queryAs('legal_admin',
+    `select cw.record_document_read(1, 1, 1, repeat('f', 64), 999999, 'sent')`,
+    [], LEAH);
+
+  const [entry] = await rows(
+    `select payload from cw.audit_event
+      where event_type='received_document_read' and actor='${LEAH}'`);
+  assert(entry, 'the read was not recorded');
+  eq(entry.payload.sha256, PAPER_SHA,
+     'the caller’s invented hash reached the chain');
+  eq(entry.payload.byte_size, PAPER.length,
+     'the caller’s invented byte size reached the chain');
+  eq(entry.payload.direction, 'received',
+     'the caller’s invented direction reached the chain');
 });
 
 await test('the door writes that one event and nothing else', async () => {

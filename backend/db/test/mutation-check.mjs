@@ -1959,6 +1959,22 @@ create view cw.unclassified_probe as select ticket_id from cw.review_ticket;
 grant select on cw.unclassified_probe to cw_requester;`,
     expect: 'every view any role can read has been classified' },
 
+  { suite: 'received-documents.test.mjs',
+    // 0072. The chain's one narrow door, and it is narrow in EVENT TYPE only
+    // until somebody checks the caller may read what they are recording a read
+    // of. It shipped without that check: a requester wrote a read of another
+    // requester's negotiation, naming a round and a document that did not
+    // exist, and cw.audit_verify() stayed clean — the chain proves nothing was
+    // ALTERED, never that anything is TRUE.
+    //
+    // Softening this back to `true` is one edit, and it leaves a function that
+    // still looks role-aware because it reads current_setting('role') to LABEL
+    // the event. That is exactly how it hid the first time.
+    name: 'the document-read door stops asking whose round it is',
+    find: `  if not (raw_role in ('cw_legal_reviewer','cw_legal_admin','cw_auditor')`,
+    repl: `  if not (true or raw_role in ('cw_legal_reviewer','cw_legal_admin','cw_auditor')`,
+    expect: 'a requester cannot record a read of somebody else’s round' },
+
   { suite: 'views-are-not-policies.test.mjs',
     // The other half, and the one that would have caught the five views 0071
     // scoped had anybody classified them. 'privileged' means unscoped over
